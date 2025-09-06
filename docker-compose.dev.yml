@@ -1,0 +1,366 @@
+version: '3.8'
+
+# Development-specific Docker Compose configuration
+# This extends the base docker-compose.yml with development-friendly settings
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: qa-postgres-dev
+    environment:
+      POSTGRES_DB: qa_command_center
+      POSTGRES_USER: qa_user
+      POSTGRES_PASSWORD: qa_password
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --lc-collate=en_US.UTF-8 --lc-ctype=en_US.UTF-8"
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_dev_data:/var/lib/postgresql/data
+      - ./database/init:/docker-entrypoint-initdb.d
+      - ./database/backups:/backups
+    networks:
+      - qa-dev-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U qa_user -d qa_command_center"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    command: >
+      postgres
+        -c log_statement=all
+        -c log_destination=stderr
+        -c log_min_messages=info
+        -c log_line_prefix='%t [%p]: [%l-1] user=%u,db=%d,app=%a,client=%h '
+        -c max_connections=100
+        -c shared_buffers=256MB
+        -c effective_cache_size=1GB
+        -c work_mem=4MB
+        -c maintenance_work_mem=64MB
+
+  redis:
+    image: redis:7-alpine
+    container_name: qa-redis-dev
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_dev_data:/data
+      - ./redis/redis-dev.conf:/usr/local/etc/redis/redis.conf
+    networks:
+      - qa-dev-network
+    command: redis-server /usr/local/etc/redis/redis.conf
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.dev
+      target: development
+    container_name: qa-backend-dev
+    env_file:
+      - ./.env
+    environment:
+      NODE_ENV: development
+      DATABASE_URL: postgresql://qa_user:qa_password@postgres:5432/qa_command_center
+      REDIS_URL: redis://redis:6379
+      JWT_SECRET: dev_jwt_secret_12345
+      REFRESH_TOKEN_SECRET: dev_refresh_secret_12345
+      PORT: 3000
+      LOG_LEVEL: debug
+      ENABLE_SWAGGER: "true"
+      ENABLE_PLAYGROUND: "true"
+      ENABLE_DEBUG_LOGGING: "true"
+      CORS_ORIGIN: "http://localhost:3001,chrome-extension://development-extension-id"
+      # Add any additional dev environment variables
+      MOCK_EXTERNAL_APIS: "false"
+      ENABLE_HOT_RELOAD: "true"
+      # OpenAI (fallbacks to values from .env via env_file)
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4.1-mini}
+    ports:
+      - "3000:3000"
+      - "9229:9229" # Node.js debugging port
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+      - ./logs:/app/logs
+      - ./uploads:/app/uploads
+      - ./temp:/app/temp
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - qa-dev-network
+    command: npm run dev:debug
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    restart: unless-stopped
+
+  # Frontend development server (optional)
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.dev
+    container_name: qa-frontend-dev
+    environment:
+      NODE_ENV: development
+      REACT_APP_API_URL: http://localhost:3000/api
+      REACT_APP_WS_URL: ws://localhost:3001
+      CHOKIDAR_USEPOLLING: "true"
+    ports:
+      - "3001:3000"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    networks:
+      - qa-dev-network
+    command: npm start
+    depends_on:
+      - backend
+    profiles:
+      - frontend
+
+  # Database administration tool
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: qa-pgadmin-dev
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@qa-command-center.com
+      PGADMIN_DEFAULT_PASSWORD: admin123
+      PGADMIN_CONFIG_SERVER_MODE: 'False'
+      PGADMIN_CONFIG_MASTER_PASSWORD_REQUIRED: 'False'
+    ports:
+      - "5050:80"
+    volumes:
+      - pgadmin_dev_data:/var/lib/pgadmin
+      - ./database/pgadmin-servers.json:/pgadmin4/servers.json
+    networks:
+      - qa-dev-network
+    depends_on:
+      - postgres
+    profiles:
+      - tools
+
+  # Redis administration tool
+  redis-commander:
+    image: rediscommander/redis-commander:latest
+    container_name: qa-redis-commander-dev
+    environment:
+      REDIS_HOSTS: local:redis:6379
+      HTTP_USER: admin
+      HTTP_PASSWORD: admin123
+    ports:
+      - "8081:8081"
+    networks:
+      - qa-dev-network
+    depends_on:
+      - redis
+    profiles:
+      - tools
+
+  # Mailhog for email testing
+  mailhog:
+    image: mailhog/mailhog:latest
+    container_name: qa-mailhog-dev
+    ports:
+      - "1025:1025" # SMTP port
+      - "8025:8025" # Web UI port
+    networks:
+      - qa-dev-network
+    profiles:
+      - tools
+
+  # Nginx for development proxy (optional)
+  nginx:
+    image: nginx:alpine
+    container_name: qa-nginx-dev
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/dev.conf:/etc/nginx/nginx.conf
+      - ./nginx/ssl:/etc/nginx/ssl
+    networks:
+      - qa-dev-network
+    depends_on:
+      - backend
+    profiles:
+      - proxy
+
+  # Prometheus for metrics (development monitoring)
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: qa-prometheus-dev
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus-dev.yml:/etc/prometheus/prometheus.yml
+      - prometheus_dev_data:/prometheus
+    networks:
+      - qa-dev-network
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--web.enable-lifecycle'
+    profiles:
+      - monitoring
+
+  # Grafana for metrics visualization
+  grafana:
+    image: grafana/grafana:latest
+    container_name: qa-grafana-dev
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: admin123
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    ports:
+      - "3002:3000"
+    volumes:
+      - grafana_dev_data:/var/lib/grafana
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards
+    networks:
+      - qa-dev-network
+    depends_on:
+      - prometheus
+    profiles:
+      - monitoring
+
+  # Jaeger for distributed tracing
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    container_name: qa-jaeger-dev
+    environment:
+      COLLECTOR_ZIPKIN_HOST_PORT: "9411"
+    ports:
+      - "5775:5775/udp"
+      - "6831:6831/udp"
+      - "6832:6832/udp"
+      - "5778:5778"
+      - "16686:16686"
+      - "14268:14268"
+      - "14250:14250"
+      - "9411:9411"
+    networks:
+      - qa-dev-network
+    profiles:
+      - tracing
+
+  # Testing environment
+  test-runner:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.test
+    container_name: qa-test-runner-dev
+    environment:
+      NODE_ENV: test
+      DATABASE_URL: postgresql://qa_user:qa_password@postgres-test:5432/qa_command_center_test
+      REDIS_URL: redis://redis-test:6379
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+      - ./test-results:/app/test-results
+      - ./coverage:/app/coverage
+    networks:
+      - qa-dev-network
+    depends_on:
+      - postgres-test
+      - redis-test
+    profiles:
+      - testing
+    command: npm run test:watch
+
+  # Test database
+  postgres-test:
+    image: postgres:15-alpine
+    container_name: qa-postgres-test-dev
+    environment:
+      POSTGRES_DB: qa_command_center_test
+      POSTGRES_USER: qa_user
+      POSTGRES_PASSWORD: qa_password
+    ports:
+      - "5433:5432"
+    volumes:
+      - ./database/init:/docker-entrypoint-initdb.d
+    networks:
+      - qa-dev-network
+    profiles:
+      - testing
+
+  # Test Redis
+  redis-test:
+    image: redis:7-alpine
+    container_name: qa-redis-test-dev
+    ports:
+      - "6380:6379"
+    networks:
+      - qa-dev-network
+    profiles:
+      - testing
+
+volumes:
+  postgres_dev_data:
+    driver: local
+  redis_dev_data:
+    driver: local
+  pgadmin_dev_data:
+    driver: local
+  prometheus_dev_data:
+    driver: local
+  grafana_dev_data:
+    driver: local
+
+networks:
+  qa-dev-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+
+# Development-specific configurations
+x-logging: &default-logging
+  driver: "json-file"
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+# Apply logging configuration to all services
+services:
+  postgres:
+    logging: *default-logging
+  redis:
+    logging: *default-logging
+  backend:
+    logging: *default-logging
+  frontend:
+    logging: *default-logging
+  pgadmin:
+    logging: *default-logging
+  redis-commander:
+    logging: *default-logging
+  mailhog:
+    logging: *default-logging
+  nginx:
+    logging: *default-logging
+  prometheus:
+    logging: *default-logging
+  grafana:
+    logging: *default-logging
+  jaeger:
+    logging: *default-logging
+  test-runner:
+    logging: *default-logging
+  postgres-test:
+    logging: *default-logging
+  redis-test:
+    logging: *default-logging

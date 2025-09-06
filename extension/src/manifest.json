@@ -1,0 +1,90 @@
+{
+  "manifest_version": 3,
+  "name": "QA Command Center",
+  "version": "1.0.0",
+  "description": "AI-powered issue creation, automated test recording, and seamless GitLab-Slack integration",
+  "permissions": [
+    "activeTab",
+    "storage",
+    "scripting",
+    "webNavigation",
+    "webRequest",
+    "tabs",
+    "cookies",
+    "contextMenus",
+    "notifications"
+  ],
+  "host_permissions": [
+    "<all_urls>",
+    "http://localhost:3000/*",
+    "https://gitlab.com/*",
+    "https://*.gitlab.io/*",
+    "https://slack.com/*",
+    "https://*.slack.com/*",
+    "https://api.openai.com/*"
+  ],
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"],
+      "run_at": "document_end",
+      "all_frames": false,
+      "match_about_blank": false
+    }
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "QA Command Center",
+    "default_icon": {
+      "16": "icons/icon-16.png",
+      "32": "icons/icon-32.png",
+      "48": "icons/icon-48.png"
+    }
+  },
+  "options_page": "options.html",
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "assets/*",
+        "scripts/*",
+        "styles/*",
+        "*.js",
+        "*.css"
+      ],
+      "matches": ["<all_urls>"]
+    }
+  ],
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self';"
+  },
+  "icons": {
+    "16": "icons/icon-16.png",
+    "32": "icons/icon-32.png",
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png"
+  },
+  "commands": {
+    "start-recording": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+R"
+      },
+      "description": "Start/stop recording user interactions"
+    },
+    "create-issue": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+I"
+      },
+      "description": "Create issue from current context"
+    }
+  },
+  "externally_connectable": {
+    "matches": [
+      "http://localhost:3000/*",
+      "https://your-domain.com/*"
+    ]
+  },
+  "minimum_chrome_version": "88"
+}
