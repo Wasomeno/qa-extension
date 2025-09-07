@@ -65,11 +65,7 @@ import { Markdown } from 'tiptap-markdown';
 import MarkdownIt from 'markdown-it';
 import taskLists from 'markdown-it-task-lists';
 import { useQuery } from '@tanstack/react-query';
-import { MdLabelOutline } from 'react-icons/md';
-import { MdOutlineFormatAlignJustify } from 'react-icons/md';
-import { BsPeople } from 'react-icons/bs';
-import { FaSlack } from 'react-icons/fa';
-import { IoFileTrayStackedOutline } from 'react-icons/io5';
+// pill icons removed to match requested format
 
 interface CompactIssueCreatorProps {
   initialData?: Partial<IssueData>;
@@ -111,6 +107,22 @@ export const CompactIssueCreator: React.FC<CompactIssueCreatorProps> = ({
   const [slackEnabled, setSlackEnabled] = React.useState(
     !!(initialData as any)?.slackChannelId
   );
+
+  // Track open state for each pill popover to prevent click-through
+  const [openProject, setOpenProject] = React.useState(false);
+  const [openLabels, setOpenLabels] = React.useState(false);
+  const [openFormat, setOpenFormat] = React.useState(false);
+  const [openAssignee, setOpenAssignee] = React.useState(false);
+  const [openSlack, setOpenSlack] = React.useState(false);
+  const anyPillOpen =
+    openProject || openLabels || openFormat || openAssignee || openSlack;
+  const closeAllPills = () => {
+    setOpenProject(false);
+    setOpenLabels(false);
+    setOpenFormat(false);
+    setOpenAssignee(false);
+    setOpenSlack(false);
+  };
 
   // Markdown helpers for toolbar
   const getSel = () => {
@@ -560,10 +572,18 @@ export const CompactIssueCreator: React.FC<CompactIssueCreatorProps> = ({
       </AnimatePresence>
 
       <form onSubmit={handleSubmit} className="space-y-4">
+        {/* Pointer blocker overlay to prevent clicking covered pills */}
+        {anyPillOpen && (
+          <div
+            className="fixed inset-0 z-[9999998] bg-transparent"
+            onMouseDown={closeAllPills}
+            onClick={closeAllPills}
+          />
+        )}
         {/* Context bar: compact pills for key fields */}
         <div className="flex flex-wrap items-center gap-2">
           {/* Project pill */}
-          <Popover>
+          <Popover open={openProject} onOpenChange={setOpenProject}>
             <PopoverTrigger asChild>
               <Button
                 type="button"
@@ -573,12 +593,18 @@ export const CompactIssueCreator: React.FC<CompactIssueCreatorProps> = ({
                 disabled={isLoading}
                 title="Select project"
               >
-                <IoFileTrayStackedOutline />
+                <span className="text-[12px] text-neutral-600">
+                  Project <span className="text-neutral-400">▾</span>
+                </span>
                 {(() => {
                   const p = projects.find(
                     p => p.id === watchedValues.projectId
                   );
-                  return <span>{p ? p.name : 'Project'}</span>;
+                  return (
+                    <span className="ml-2 text-[12px] text-neutral-900 truncate max-w-[140px]">
+                      {p ? p.name : 'Select Project'}
+                    </span>
+                  );
                 })()}
               </Button>
             </PopoverTrigger>
@@ -622,8 +648,8 @@ export const CompactIssueCreator: React.FC<CompactIssueCreatorProps> = ({
             </PopoverContent>
           </Popover>
 
-          {/* Label pill */}
-          <Popover>
+          {/* Label(s) pill */}
+          <Popover open={openLabels} onOpenChange={setOpenLabels}>
             <PopoverTrigger asChild>
               <Button
                 type="button"
@@ -633,23 +659,25 @@ export const CompactIssueCreator: React.FC<CompactIssueCreatorProps> = ({
                 disabled={isLoading || !watchedValues.projectId}
                 title="Select label"
               >
-                <MdLabelOutline />
+                <span className="text-[12px] text-neutral-600">
+                  Labels <span className="text-neutral-400">▾</span>
+                </span>
                 {(() => {
                   const selected = labelOptions?.find(
                     l => l.value.toString() === (watchedValues.labelId || '')
                   );
                   return (
-                    <span className="inline-flex items-center gap-1">
+                    <span className="ml-2 inline-flex items-center gap-1 text-[12px] text-neutral-900 truncate max-w-[180px]">
                       {selected ? (
                         <>
                           <span
                             className="inline-block w-2 h-2 rounded-full border"
                             style={{ backgroundColor: selected.color }}
                           />
-                          {selected.label}
+                          <span className="truncate">{selected.label}</span>
                         </>
                       ) : (
-                        'Label'
+                        <span className="text-neutral-900">Select Label</span>
                       )}
                     </span>
                   );
@@ -705,7 +733,7 @@ export const CompactIssueCreator: React.FC<CompactIssueCreatorProps> = ({
           </Popover>
 
           {/* Format pill */}
-          <Popover>
+          <Popover open={openFormat} onOpenChange={setOpenFormat}>
             <PopoverTrigger asChild>
               <Button
                 type="button"
@@ -715,8 +743,18 @@ export const CompactIssueCreator: React.FC<CompactIssueCreatorProps> = ({
                 disabled={isLoading}
                 title="Issue format"
               >
-                <MdOutlineFormatAlignJustify />
-                <span>{watchedValues.issueFormat ?? 'Issue Format'}</span>
+                <span className="text-[12px] text-neutral-600">
+                  Format <span className="text-neutral-400">▾</span>
+                </span>
+                <span className="ml-2 text-[12px] text-neutral-900 truncate max-w-[140px]">
+                  {(() => {
+                    const f = watchedValues.issueFormat;
+                    if (!f) return 'Select Format';
+                    if (f === 'single') return 'Single';
+                    if (f === 'multiple') return 'Multiple';
+                    return String(f);
+                  })()}
+                </span>
               </Button>
             </PopoverTrigger>
             <PopoverContent
@@ -751,7 +789,7 @@ export const CompactIssueCreator: React.FC<CompactIssueCreatorProps> = ({
           </Popover>
 
           {/* Assignee pill */}
-          <Popover>
+          <Popover open={openAssignee} onOpenChange={setOpenAssignee}>
             <PopoverTrigger asChild>
               <Button
                 type="button"
@@ -761,10 +799,16 @@ export const CompactIssueCreator: React.FC<CompactIssueCreatorProps> = ({
                 disabled={isLoading || !watchedValues.projectId}
                 title="Assign"
               >
-                <BsPeople />
+                <span className="text-[12px] text-neutral-600">
+                  Assignee <span className="text-neutral-400">▾</span>
+                </span>
                 {(() => {
                   const u = users.find(u => u.id === watchedValues.assigneeId);
-                  return <span>{u ? u.name : 'Assignee'}</span>;
+                  return (
+                    <span className="ml-2 text-[12px] text-neutral-900 truncate max-w-[140px]">
+                      {u ? u.name : 'Unassigned'}
+                    </span>
+                  );
                 })()}
               </Button>
             </PopoverTrigger>
@@ -833,7 +877,7 @@ export const CompactIssueCreator: React.FC<CompactIssueCreatorProps> = ({
             </PopoverContent>
           </Popover>
           {/* Slack pill */}
-          <Popover>
+          <Popover open={openSlack} onOpenChange={setOpenSlack}>
             <PopoverTrigger asChild>
               <Button
                 type="button"
@@ -843,17 +887,30 @@ export const CompactIssueCreator: React.FC<CompactIssueCreatorProps> = ({
                 disabled={isLoading}
                 title="Slack notification"
               >
-                <FaSlack />
+                <span className="text-[12px] text-neutral-600">
+                  Slack <span className="text-neutral-400">▾</span>
+                </span>
                 {(() => {
                   const enabled = slackEnabled;
-                  let label = 'Slack: Off';
-                  if (enabled) {
-                    const ch = (slackChannelsQuery.data || []).find(
-                      (c: any) => c.id === watchedValues.slackChannelId
-                    );
-                    label = ch ? `Slack: #${ch.name}` : 'Slack: On';
-                  }
-                  return <span>{label}</span>;
+                  const ch = (slackChannelsQuery.data || []).find(
+                    (c: any) => c.id === watchedValues.slackChannelId
+                  );
+                  return (
+                    <span className="ml-2 text-[12px] text-neutral-900 truncate max-w-[160px]">
+                      {enabled ? (
+                        ch ? (
+                          <>
+                            On <span className="text-neutral-400">•</span> #
+                            {ch.name}
+                          </>
+                        ) : (
+                          'On'
+                        )
+                      ) : (
+                        'Off'
+                      )}
+                    </span>
+                  );
                 })()}
               </Button>
             </PopoverTrigger>

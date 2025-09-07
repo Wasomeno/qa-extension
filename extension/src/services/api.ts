@@ -938,6 +938,7 @@ class ApiService {
       labels?: string[];
       addLabels?: string[];
       removeLabels?: string[];
+      description?: string;
     }
   ): Promise<ApiResponse<GitLabIssueDetail>> {
     const endpoint = `/api/projects/${encodeURIComponent(String(projectId))}/gitlab/issues/${issueIid}`;

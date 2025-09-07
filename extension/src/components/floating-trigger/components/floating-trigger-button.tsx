@@ -10,6 +10,7 @@ interface FloatingTriggerButtonProps {
   onMouseDown: (e: React.MouseEvent) => void;
   viewState: ViewState;
   position: { x: number; y: number };
+  selectedFeature?: string | null;
   children?: React.ReactNode;
 }
 
@@ -17,6 +18,7 @@ const FloatingTriggerButton: React.FC<FloatingTriggerButtonProps> = ({
   onMouseDown,
   viewState,
   position,
+  selectedFeature,
   children,
 }) => {
   const keyboardIsolation = useKeyboardIsolation();
@@ -30,7 +32,7 @@ const FloatingTriggerButton: React.FC<FloatingTriggerButtonProps> = ({
   React.useEffect(() => {
     const getSizeForState = (state: ViewState) => {
       if (state === 'closed') return { w: 45, h: 45 };
-      if (state === 'features') return { w: 280, h: 360 };
+      if (state === 'features') return { w: 340, h: 320 };
       return { w: 560, h: 640 };
     };
 
@@ -126,7 +128,6 @@ const FloatingTriggerButton: React.FC<FloatingTriggerButtonProps> = ({
         top: position.y,
         zIndex: 999999,
         pointerEvents: 'auto',
-        overflow: 'hidden',
         backdropFilter: viewState === 'closed' ? 'blur(12px)' : 'blur(16px)',
         background:
           viewState === 'closed' ? 'var(--qa-glass)' : 'var(--qa-glass)',
@@ -139,16 +140,23 @@ const FloatingTriggerButton: React.FC<FloatingTriggerButtonProps> = ({
       }}
       animate={{
         width:
-          viewState === 'closed' ? 45 : viewState === 'features' ? 200 : 400,
+          viewState === 'closed' ? 45 : viewState === 'features' ? 260 : 400,
         height:
-          viewState === 'closed' ? 45 : viewState === 'features' ? 230 : 480,
+          viewState === 'closed'
+            ? 45
+            : viewState === 'features'
+              ? 300
+              : selectedFeature === 'pinned'
+                ? 340
+                : 480,
         borderRadius: viewState === 'closed' ? 30 : 16,
         scale: viewState === 'closed' ? 1 : 1,
       }}
       transition={{
         type: 'spring',
-        duration: 0.5,
-        bounce: 0.3,
+        stiffness: 120,
+        damping: 12,
+        mass: 0.75,
         ease: 'easeInOut',
       }}
       {...keyboardIsolation}

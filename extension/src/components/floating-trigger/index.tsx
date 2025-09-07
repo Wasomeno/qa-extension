@@ -41,13 +41,15 @@ const FloatingTrigger: React.FC<FloatingTriggerProps> = () => {
 
   // Ensure popup stays within viewport bounds when view size changes
   useEffect(() => {
-    const getSizeForState = (state: ViewState) => {
+    const getSizeForState = (state: ViewState, feature?: string | null) => {
       if (state === 'closed') return { w: 45, h: 45 };
-      if (state === 'features') return { w: 280, h: 360 };
-      return { w: 560, h: 640 }; // feature-detail larger for issue creator
+      if (state === 'features') return { w: 260, h: 300 };
+      // feature-detail
+      if (feature === 'pinned') return { w: 400, h: 340 };
+      return { w: 400, h: 480 };
     };
 
-    const { w, h } = getSizeForState(viewState);
+    const { w, h } = getSizeForState(viewState, selectedFeature);
     const margin = 10; // small margin from edges
     setPosition(prev => {
       const maxX = Math.max(0, window.innerWidth - w - margin);
@@ -59,7 +61,7 @@ const FloatingTrigger: React.FC<FloatingTriggerProps> = () => {
       }
       return prev;
     });
-  }, [viewState]);
+  }, [viewState, selectedFeature]);
 
   const handleMouseDown = (e: React.MouseEvent) => {
     // Allow dragging from anywhere on the popup, but track what was clicked
@@ -214,6 +216,7 @@ const FloatingTrigger: React.FC<FloatingTriggerProps> = () => {
       onMouseDown={handleMouseDown}
       viewState={viewState}
       position={position}
+      selectedFeature={selectedFeature}
     >
       <FloatingTriggerPopup
         viewState={viewState}

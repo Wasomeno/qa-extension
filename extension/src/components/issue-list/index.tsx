@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { QueryClient, useQueries } from '@tanstack/react-query';
+import { useQueries, useQueryClient } from '@tanstack/react-query';
 import { useDebounce } from '@/utils/useDebounce';
 import useInfiniteIssues from '@/hooks/useInfiniteIssues';
 import api, { GitLabUser, Project } from '@/services/api';
@@ -25,7 +25,7 @@ import {
 } from '@/src/components/ui/ui/dialog';
 import AvatarGroup from '@/components/issue-list/AvatarGroup';
 import { Label } from '@/src/components/ui/ui/label';
-import { FiRefreshCcw, FiStar } from 'react-icons/fi';
+import { FiStar } from 'react-icons/fi';
 import { AiFillStar } from 'react-icons/ai';
 import { storageService } from '@/services/storage';
 import dayjs from 'dayjs';
@@ -44,6 +44,7 @@ const IssueListInner: React.FC<IssueListProps> = ({
   onSelect,
   portalContainer,
 }) => {
+  const queryClient = useQueryClient();
   const keyboardIsolation = useKeyboardIsolation();
   const sentinelRef = React.useRef<HTMLDivElement | null>(null);
 
@@ -120,6 +121,24 @@ const IssueListInner: React.FC<IssueListProps> = ({
     limit: 5,
     sort,
   });
+
+  // Build the same query key used in useInfiniteIssues for cache updates
+  const issuesQueryKey = React.useMemo(
+    () => [
+      'issues',
+      {
+        search: (debouncedSearch || '') as string,
+        projectId: (projectId || '') as string,
+        labels: '',
+        assigneeId: (assigneeId || '') as string,
+        createdBy: createdBy || 'me',
+        status: '',
+        limit: 5,
+        sort: sort || 'newest',
+      },
+    ],
+    [debouncedSearch, projectId, assigneeId, createdBy, sort]
+  );
 
   // Fetch project label palettes to color label dots (GitLab-like)
   const projectIds = React.useMemo(
@@ -254,15 +273,6 @@ const IssueListInner: React.FC<IssueListProps> = ({
             placeholder="Search issues..."
             className="text-sm glass-input text-white placeholder:text-white"
           />
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={() => refetch()}
-            disabled={isFetching}
-            className="glass-button"
-          >
-            <FiRefreshCcw className="w-4 h-4" />
-          </Button>
         </div>
         <div className="grid grid-cols-3 gap-2">
           <div className="space-y-1">
@@ -400,190 +410,232 @@ const IssueListInner: React.FC<IssueListProps> = ({
               className="group glass-card shadow-none w-full text-left rounded-md border border-gray-200 px-4 py-3 hover:bg-gray-50/25"
               aria-label={`Open issue ${item.title}`}
             >
-              <div className="flex items-start justify-between gap-2">
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2 min-w-0">
-                    <div className="truncate max-w-[200px] text-[13px] font-semibold text-white hover:text-blue-300">
-                      {item.title}
-                    </div>
-                    <div className="shrink-0 text-[12px] text-white/70">
-                      #{item.number ?? '—'}
+              <div className="flex flex-col gap-2">
+                {/* Row 1: Title left, number + status right */}
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-col min-w-0">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <div className="truncate max-w-[260px] text-[13px] font-semibold text-black hover:text-blue-600">
+                          {item.title}
+                        </div>
+                      </div>
+                      <div className="mt-0.5 text-[12px] text-black/70 truncate">
+                        {item.project?.name ?? 'Project'}
+                      </div>
                     </div>
                   </div>
-                  <div className="mt-1 text-[12px] text-white/70">
-                    <span className="truncate">
-                      {item.project?.name ?? 'Project'}
-                    </span>
-                    <span className="mx-1">·</span>
-                    {openedAgo ? <span>opened {openedAgo}</span> : null}
-                    {item.author?.name ? (
-                      <>
-                        <span className="mx-1">·</span>
-                        <span>by {item.author.name}</span>
-                      </>
-                    ) : null}
-                  </div>
-                  <div
-                    className="mt-2"
-                    onClick={e => {
-                      e.stopPropagation();
-                    }}
-                  >
+                  <div className="shrink-0 flex items-center gap-3">
+                    <div className="text-[12px] text-black/70">#{item.number ?? '—'}</div>
                     {(() => {
                       const projectId = item.project?.id as string | undefined;
-
-                      const palette = projectId
-                        ? labelPalettes[projectId]
-                        : undefined;
-                      const labelsArray = palette
-                        ? Array.from(palette.values())
-                        : [];
-                      const selectedLabel =
-                        item.labels && item.labels.length
-                          ? item.labels[0]
-                          : undefined;
                       const iid = item.number as number | undefined;
-                      const handleSelect = async (val: string) => {
+                      const isClosed = (item as any)?.state === 'closed';
+                      const value = isClosed ? 'closed' : 'open';
+                      const handleChange = async (val: string) => {
                         if (!projectId || !iid) return;
                         try {
                           await api.updateGitLabIssue(projectId, iid, {
-                            labels: [val],
+                            state: val === 'closed' ? 'close' : 'reopen',
                           });
                           await refetch();
-                        } catch (e) {
+                        } catch (_) {
                           await refetch();
                         }
                       };
                       return (
-                        <Select
-                          value={selectedLabel}
-                          onValueChange={handleSelect}
-                        >
-                          <SelectTrigger className="h-7 w-36 text-[12px] glass-input">
-                            {selectedLabel && palette ? (
-                              <div className="flex items-center gap-2 truncate">
-                                {palette.get(selectedLabel)?.color ? (
-                                  <span
-                                    className="inline-block w-2.5 h-2.5 rounded-full border border-gray-300"
-                                    style={{
-                                      backgroundColor: (
-                                        palette.get(selectedLabel) as any
-                                      ).color,
-                                    }}
-                                  />
-                                ) : null}
-                                <span className="truncate">
-                                  {selectedLabel}
-                                </span>
+                        <div onClick={e => e.stopPropagation()}>
+                          <Select value={value} onValueChange={handleChange}>
+                            <SelectTrigger className="h-7 w-[100px] text-[12px] glass-input">
+                              <div className="flex items-center gap-2">
+                                <span
+                                  className={cn(
+                                    'inline-block w-2.5 h-2.5 rounded-full',
+                                    isClosed ? 'bg-gray-400' : 'bg-emerald-500'
+                                  )}
+                                />
+                                <span className="capitalize">{value}</span>
                               </div>
-                            ) : (
-                              <SelectValue placeholder="Set label" />
-                            )}
-                          </SelectTrigger>
-                          <SelectContent
-                            container={portalContainer || undefined}
-                            sideOffset={6}
-                            className="glass-modal rounded-lg"
-                          >
-                            {labelsArray.map((l: any) => (
-                              <SelectItem key={l.id} value={l.name}>
-                                <div className="flex items-center gap-2">
-                                  <span
-                                    className="inline-block w-2.5 h-2.5 rounded-full border border-gray-300"
-                                    style={{ backgroundColor: l.color }}
-                                  />
-                                  <span>{l.name}</span>
-                                </div>
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                            </SelectTrigger>
+                            <SelectContent
+                              container={portalContainer || undefined}
+                              sideOffset={6}
+                              className="glass-modal rounded-lg"
+                            >
+                              <SelectItem value="open">Open</SelectItem>
+                              <SelectItem value="closed">Closed</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
                       );
                     })()}
                   </div>
                 </div>
-                <div className="flex items-center gap-2 ml-2">
-                  {/* Open/Closed dropdown */}
+
+                {/* Row 2: Opened by ... | star + more */}
+                <div className="flex items-center justify-between gap-2">
+                  <div className="text-[12px] text-black/70 truncate">
+                    {openedAgo ? <span>Opened {openedAgo}</span> : null}
+                    {item.author?.name ? (
+                      <>
+                        <span className="mx-1">•</span>
+                        <span>by {item.author.name}</span>
+                      </>
+                    ) : null}
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 glass-button"
+                      title={
+                        pinnedIds.has(item.id)
+                          ? 'Unpin'
+                          : pinnedCount >= 5
+                            ? 'Pinned limit reached'
+                            : 'Pin'
+                      }
+                      onClick={e => {
+                        e.stopPropagation();
+                        togglePin(item.id, item);
+                      }}
+                      disabled={!pinnedIds.has(item.id) && pinnedCount >= 5}
+                    >
+                      {pinnedIds.has(item.id) ? (
+                        <AiFillStar className="w-4 h-4 text-amber-500" />
+                      ) : (
+                        <FiStar className="w-4 h-4 text-gray-400" />
+                      )}
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 glass-button text-black/60"
+                      title="More"
+                      onClick={e => e.stopPropagation()}
+                    >
+                      ⋯
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Row 3: spacer */}
+                <div className="h-1" />
+
+                {/* Row 4: Labels heading + selector */}
+                <div className="space-y-1" onClick={e => e.stopPropagation()}>
+                  <div className="text-[11px] font-medium text-black/70">Labels</div>
                   {(() => {
                     const projectId = item.project?.id as string | undefined;
+                    const palette = projectId ? labelPalettes[projectId] : undefined;
+                    const labelsArray = palette ? Array.from(palette.values()) : [];
+                    const selectedLabel =
+                      item.labels && item.labels.length ? item.labels[0] : undefined;
                     const iid = item.number as number | undefined;
-                    const isClosed = (item as any)?.state === 'closed';
-                    const value = isClosed ? 'closed' : 'open';
-                    const handleChange = async (val: string) => {
+                    const handleSelect = async (val: string) => {
                       if (!projectId || !iid) return;
+                      await queryClient.cancelQueries({ queryKey: issuesQueryKey });
+                      const prev = queryClient.getQueryData(issuesQueryKey) as any;
+                      queryClient.setQueryData(issuesQueryKey, (old: any) => {
+                        if (!old || !old.pages) return old;
+                        return {
+                          ...old,
+                          pages: old.pages.map((p: any) => ({
+                            ...p,
+                            items: (p.items || []).map((it: any) =>
+                              String(it?.project?.id) === String(projectId) &&
+                              Number(it?.number) === Number(iid)
+                                ? { ...it, labels: [val] }
+                                : it
+                            ),
+                          })),
+                        };
+                      });
+                      setSelectedIssue((prevSelected: any | null) => {
+                        if (!prevSelected) return prevSelected;
+                        const sameIssue =
+                          String((prevSelected as any)?.project?.id) === String(projectId) &&
+                          Number((prevSelected as any)?.number) === Number(iid);
+                        return sameIssue ? { ...prevSelected, labels: [val] } : prevSelected;
+                      });
                       try {
-                        await api.updateGitLabIssue(projectId, iid, {
-                          state: val === 'closed' ? 'close' : 'reopen',
+                        const res = await api.updateGitLabIssue(projectId, iid, {
+                          labels: [val],
                         });
-                        await refetch();
-                      } catch (_) {
-                        await refetch();
+                        const serverLabels: string[] | undefined = Array.isArray(
+                          (res.data as any)?.labels
+                        )
+                          ? ((res.data as any).labels as string[])
+                          : undefined;
+                        if (serverLabels && serverLabels.length) {
+                          queryClient.setQueryData(issuesQueryKey, (old: any) => {
+                            if (!old || !old.pages) return old;
+                            return {
+                              ...old,
+                              pages: old.pages.map((p: any) => ({
+                                ...p,
+                                items: (p.items || []).map((it: any) =>
+                                  String(it?.project?.id) === String(projectId) &&
+                                  Number(it?.number) === Number(iid)
+                                    ? { ...it, labels: serverLabels }
+                                    : it
+                                ),
+                              })),
+                            };
+                          });
+                          setSelectedIssue((prevSelected: any | null) => {
+                            if (!prevSelected) return prevSelected;
+                            const sameIssue =
+                              String((prevSelected as any)?.project?.id) === String(projectId) &&
+                              Number((prevSelected as any)?.number) === Number(iid);
+                            return sameIssue
+                              ? { ...prevSelected, labels: serverLabels }
+                              : prevSelected;
+                          });
+                        }
+                      } catch (e) {
+                        queryClient.setQueryData(issuesQueryKey, prev);
                       }
                     };
                     return (
-                      <div
-                        onClick={e => {
-                          e.stopPropagation();
-                        }}
-                      >
-                        <Select value={value} onValueChange={handleChange}>
-                          <SelectTrigger className="h-7 min-w-[110px] text-[12px] glass-input">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent
-                            container={portalContainer || undefined}
-                            sideOffset={6}
-                            className="glass-modal rounded-lg"
-                          >
-                            <SelectItem value="open">
+                      <Select value={selectedLabel} onValueChange={handleSelect}>
+                        <SelectTrigger className="h-7 w-40 text-[12px] glass-input">
+                          {selectedLabel && palette ? (
+                            <div className="flex items-center gap-2 truncate">
+                              {palette.get(selectedLabel)?.color ? (
+                                <span
+                                  className="inline-block w-2.5 h-2.5 rounded-full border border-gray-300"
+                                  style={{
+                                    backgroundColor: (palette.get(selectedLabel) as any).color,
+                                  }}
+                                />
+                              ) : null}
+                              <span className="truncate">{selectedLabel}</span>
+                            </div>
+                          ) : (
+                            <SelectValue placeholder="Select label" />
+                          )}
+                        </SelectTrigger>
+                        <SelectContent
+                          container={portalContainer || undefined}
+                          sideOffset={6}
+                          className="glass-modal rounded-lg"
+                        >
+                          {labelsArray.map((l: any) => (
+                            <SelectItem key={l.id} value={l.name}>
                               <div className="flex items-center gap-2">
                                 <span
                                   className="inline-block w-2.5 h-2.5 rounded-full border border-gray-300"
-                                  style={{ backgroundColor: '#16a34a' }}
+                                  style={{ backgroundColor: l.color }}
                                 />
-                                <span>Open</span>
+                                <span>{l.name}</span>
                               </div>
                             </SelectItem>
-                            <SelectItem value="closed">
-                              <div className="flex items-center gap-2">
-                                <span
-                                  className="inline-block w-2.5 h-2.5 rounded-full border border-gray-300"
-                                  style={{ backgroundColor: '#9ca3af' }}
-                                />
-                                <span>Closed</span>
-                              </div>
-                            </SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     );
                   })()}
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-7 w-7 glass-button opacity-0 group-hover:opacity-100 glass-button"
-                    title={
-                      pinnedIds.has(item.id)
-                        ? 'Unpin'
-                        : pinnedCount >= 5
-                          ? 'Pinned limit reached'
-                          : 'Pin'
-                    }
-                    onClick={e => {
-                      e.stopPropagation();
-                      togglePin(item.id, item);
-                    }}
-                    disabled={!pinnedIds.has(item.id) && pinnedCount >= 5}
-                  >
-                    {pinnedIds.has(item.id) ? (
-                      <AiFillStar className="w-4 h-4 text-amber-500" />
-                    ) : (
-                      <FiStar className="w-4 h-4 text-gray-400" />
-                    )}
-                  </Button>
-                  {assignees.length ? (
-                    <AvatarGroup users={assignees as any} size={20} />
-                  ) : null}
                 </div>
               </div>
             </button>
