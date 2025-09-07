@@ -50,7 +50,7 @@ const updateProfileSchema = Joi.object({
       slack: Joi.boolean(),
       browser: Joi.boolean(),
       issues: Joi.boolean(),
-      recordings: Joi.boolean(),
+      // recordings removed
       mentions: Joi.boolean()
     })
   })
@@ -439,17 +439,11 @@ router.get('/:id/activity',
         .limit(10)
         .select(['id', 'title', 'status', 'created_at']);
 
-      // Get recent recordings
-      const recentRecordings = await db.recordings()
-        .where('user_id', targetUserId)
-        .orderBy('created_at', 'desc')
-        .limit(10)
-        .select(['id', 'title', 'status', 'created_at']);
+      // Recording feature removed
 
       sendResponse(res, 200, true, 'User activity retrieved successfully', {
         activity: {
-          recentIssues,
-          recentRecordings
+          recentIssues
         }
       });
     } catch (error) {
@@ -501,12 +495,12 @@ async function getUserStats(userId: string, publicOnly: boolean = false) {
   try {
     const stats: any = {
       issuesCreated: await db.issues().where('user_id', userId).count('* as count').first(),
-      recordingsCreated: await db.recordings().where('user_id', userId).count('* as count').first()
+      // recordingsCreated removed
     };
 
     // Convert count results
     stats.issuesCreated = parseInt(stats.issuesCreated.count);
-    stats.recordingsCreated = parseInt(stats.recordingsCreated.count);
+    // recordingsCreated removed
 
     if (!publicOnly) {
       // Add more detailed stats for full profile access
@@ -521,16 +515,7 @@ async function getUserStats(userId: string, publicOnly: boolean = false) {
         return acc;
       }, {});
 
-      const recordingsByStatus = await db.recordings()
-        .where('user_id', userId)
-        .groupBy('status')
-        .select('status')
-        .count('* as count');
-
-      stats.recordingsByStatus = recordingsByStatus.reduce((acc: any, item: any) => {
-        acc[item.status] = parseInt(item.count);
-        return acc;
-      }, {});
+      // recordingsByStatus removed
     }
 
     return stats;

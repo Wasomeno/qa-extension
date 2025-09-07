@@ -252,18 +252,7 @@ export class RedisService {
     });
   }
 
-  // Recording synchronization
-  public async setRecordingState(userId: string, recordingData: any): Promise<void> {
-    await this.set(`recording:${userId}`, recordingData, 3600); // 1 hour TTL
-  }
-
-  public async getRecordingState(userId: string): Promise<any | null> {
-    return this.get(`recording:${userId}`);
-  }
-
-  public async deleteRecordingState(userId: string): Promise<void> {
-    await this.del(`recording:${userId}`);
-  }
+  // Recording synchronization removed
 
   // WebSocket session tracking
   public async addWebSocketSession(userId: string, socketId: string): Promise<void> {

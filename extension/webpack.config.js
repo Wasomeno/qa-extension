@@ -117,10 +117,7 @@ module.exports = (env, argv) => {
           from: './src/test-content.js',
           to: 'test-content.js',
         },
-        {
-          from: './src/scripts',
-          to: 'scripts',
-        },
+        // Scripts for recording removed
         {
           from: './src/test-minimal.js',
           to: 'test-minimal.js',

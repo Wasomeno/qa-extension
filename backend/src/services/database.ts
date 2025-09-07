@@ -201,9 +201,7 @@ export class DatabaseService {
     return this.getConnection()('issues');
   }
 
-  public recordings() {
-    return this.getConnection()('recordings');
-  }
+  // recordings table removed
 
   public issueComments() {
     return this.getConnection()('issue_comments');

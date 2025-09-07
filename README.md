@@ -1,6 +1,6 @@
 # QA Command Center
 
-An AI-powered quality assurance platform that revolutionizes bug reporting and testing workflows through intelligent automation, seamless integrations, and comprehensive test recording capabilities.
+An AI-powered quality assurance platform that revolutionizes bug reporting and testing workflows through intelligent automation and seamless integrations.
 
 ![QA Command Center](https://img.shields.io/badge/status-active-brightgreen)
 ![Version](https://img.shields.io/badge/version-1.0.0-blue)
@@ -14,11 +14,7 @@ An AI-powered quality assurance platform that revolutionizes bug reporting and t
 - **Intelligent Classification**: Auto-assign severity, priority, and relevant labels
 - **Acceptance Criteria**: Generate testable acceptance criteria for every issue
 
-### 📹 Advanced Recording System
-- **User Interaction Recording**: Capture clicks, inputs, scrolls, and navigation
-- **Real-time Processing**: Live analysis of user actions with intelligent filtering
-- **Multi-format Export**: Save recordings in various formats for different testing frameworks
-- **Smart Replay**: Intelligent replay with error detection and recovery
+ 
 
 ### 🔗 Seamless Integrations
 - **GitLab Integration**: Automatic issue creation, project synchronization, and webhook support
@@ -27,7 +23,7 @@ An AI-powered quality assurance platform that revolutionizes bug reporting and t
 - **API-First Design**: RESTful API with comprehensive webhook support
 
 ### 🤖 AI-Driven Automation
-- **Issue Generation**: Transform recordings into detailed bug reports
+- **Issue Generation**: Transform captured context into detailed bug reports
 - **Test Script Creation**: Generate Playwright, Cypress, or Selenium test scripts
 - **Smart Classification**: Automatic severity and priority assignment
 - **Content Enhancement**: Improve existing issue descriptions with AI insights

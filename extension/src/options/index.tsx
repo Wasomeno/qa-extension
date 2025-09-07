@@ -392,21 +392,7 @@ const OptionsApp: React.FC = () => {
         </select>
       </div>
 
-      <div className="form-group">
-        <label className="form-label">Auto-Record</label>
-        <div className="toggle-wrapper">
-          <input
-            type="checkbox"
-            checked={tempSettings.autoRecord || false}
-            onChange={(e) => setTempSettings(prev => ({ ...prev, autoRecord: e.target.checked }))}
-            className="toggle-input"
-            id="auto-record"
-          />
-          <label htmlFor="auto-record" className="toggle-label">
-            Automatically start recording when visiting pages
-          </label>
-        </div>
-      </div>
+      {/* Recording feature removed: auto-record setting no longer applicable */}
 
       <div className="form-group">
         <label className="form-label">Default Project</label>
@@ -421,79 +407,7 @@ const OptionsApp: React.FC = () => {
     </div>
   );
 
-  const renderRecordingSection = (): JSX.Element => (
-    <div className="section active">
-      <h2 className="section-title">Recording Settings</h2>
-      <p className="section-description">
-        Configure how user interactions are recorded
-      </p>
-
-      <div className="form-group">
-        <label className="form-label">Recording Quality</label>
-        <select
-          value={tempSettings.recordingQuality || 'medium'}
-          onChange={(e) => setTempSettings(prev => ({ ...prev, recordingQuality: e.target.value as 'low' | 'medium' | 'high' }))}
-          className="form-select"
-        >
-          <option value="low">Low (Faster, less detailed)</option>
-          <option value="medium">Medium (Balanced)</option>
-          <option value="high">High (Slower, more detailed)</option>
-        </select>
-      </div>
-
-      <div className="form-group">
-        <label className="form-label">Max Recording Duration (seconds)</label>
-        <input
-          type="number"
-          value={tempSettings.maxRecordingDuration || 300}
-          onChange={(e) => setTempSettings(prev => ({ ...prev, maxRecordingDuration: parseInt(e.target.value) || 300 }))}
-          className="form-input"
-          min="30"
-          max="3600"
-        />
-        <small className="form-help">Maximum duration for a single recording session</small>
-      </div>
-
-      <div className="form-group">
-        <label className="form-label">Keyboard Shortcuts</label>
-        <div className="shortcuts-grid">
-          <div className="shortcut-item">
-            <label>Start/Stop Recording</label>
-            <input
-              type="text"
-              value={tempSettings.shortcuts?.startRecording || 'Ctrl+Shift+R'}
-              onChange={(e) => setTempSettings(prev => ({
-                ...prev,
-                shortcuts: { 
-                  startRecording: e.target.value,
-                  createIssue: prev.shortcuts?.createIssue || 'Ctrl+Shift+I',
-                }
-              }))}
-              className="form-input"
-              placeholder="Ctrl+Shift+R"
-            />
-          </div>
-          <div className="shortcut-item">
-            <label>Create Issue</label>
-            <input
-              type="text"
-              value={tempSettings.shortcuts?.createIssue || 'Ctrl+Shift+I'}
-              onChange={(e) => setTempSettings(prev => ({
-                ...prev,
-                shortcuts: { 
-                  startRecording: prev.shortcuts?.startRecording || 'Ctrl+Shift+R',
-                  createIssue: e.target.value,
-                }
-              }))}
-              className="form-input"
-              placeholder="Ctrl+Shift+I"
-            />
-          </div>
-          
-        </div>
-      </div>
-    </div>
-  );
+  // Recording settings removed
 
   const renderIntegrationsSection = (): JSX.Element => (
     <div className="section active">
@@ -763,7 +677,7 @@ const OptionsApp: React.FC = () => {
               Store data locally only
             </label>
           </div>
-          <small className="form-help">All recordings and settings are stored locally in your browser</small>
+          <small className="form-help">All settings are stored locally in your browser</small>
         </div>
 
         <div className="form-group">
@@ -888,7 +802,6 @@ const OptionsApp: React.FC = () => {
             <ul className="nav-menu">
               {[
                 { id: 'general', label: 'General', icon: <FiSettings /> },
-                { id: 'recording', label: 'Recording', icon: <FiSettings /> },
                 { id: 'integrations', label: 'Integrations', icon: <FiGitlab /> },
                 { id: 'notifications', label: 'Notifications', icon: <FiBell /> },
                 { id: 'data', label: 'Data & Privacy', icon: <FiShield /> },
@@ -938,7 +851,6 @@ const OptionsApp: React.FC = () => {
 
           {/* Content Sections */}
           {state.currentSection === 'general' && renderGeneralSection()}
-          {state.currentSection === 'recording' && renderRecordingSection()}
           {state.currentSection === 'integrations' && renderIntegrationsSection()}
           {state.currentSection === 'notifications' && renderNotificationsSection()}
           {state.currentSection === 'data' && renderDataSection()}

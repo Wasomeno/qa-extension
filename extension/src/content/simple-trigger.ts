@@ -5,7 +5,6 @@ import { MessageType } from '@/types/messages';
 import { getViewportInfo, getInteractiveElements } from '@/utils/dom';
 import { shadowDOMManager } from '@/utils/shadow-dom';
 import { loadShadowDOMCSS } from '@/utils/css-loader';
-import rrwebRecorder from '@/services/rrweb-recorder';
 
 class SimpleTrigger {
   private floatingTriggerContainer: HTMLDivElement | null = null;
@@ -17,7 +16,6 @@ class SimpleTrigger {
   constructor() {
     this.setupMessageListener();
     this.setupKeyboardShortcuts();
-    this.setupConsoleEventRelay();
     this.ensureKeepalive();
 
     // Auto-activate on allowed domains
@@ -45,49 +43,7 @@ class SimpleTrigger {
     } catch {}
   }
 
-  private setupConsoleEventRelay(): void {
-    // Listen for page-level console events posted by injected script
-    window.addEventListener('message', (event: MessageEvent) => {
-      try {
-        const data: any = (event as any).data;
-        if (!data || !data.__qa_cc) return;
-        if (data.type === 'QA_CC_CONSOLE_EVENT') {
-          // Forward into rrweb as a custom event when recording
-          try {
-            rrwebRecorder.emitCustomEvent('console', {
-              level: data.level,
-              args: data.args,
-              ts: data.ts,
-              kind: data.kind,
-              url: window.location.href,
-            });
-          } catch {}
-          return;
-        }
-        if (data.type === 'QA_CC_NETWORK_EVENT') {
-          // Forward to background for persistence
-          try {
-            const sessionId = rrwebRecorder.currentMeta?.id;
-            if (!sessionId) return;
-            chrome.runtime.sendMessage({
-              type: MessageType.TRACK_NETWORK_EVENT,
-              data: { sessionId, event: {
-                kind: data.kind,
-                phase: data.phase,
-                method: data.method,
-                url: data.url,
-                status: data.status,
-                error: data.error,
-                ts: data.ts,
-                duration: data.duration,
-              }},
-            }, () => { void chrome.runtime.lastError; });
-          } catch {}
-          return;
-        }
-      } catch {}
-    });
-  }
+  // Removed console event relay as recording feature is no longer supported
 
   private shouldShowFloatingTrigger(): boolean {
     // Show on all non-internal pages; actual injection guard exists in injectFloatingTrigger
@@ -131,35 +87,7 @@ class SimpleTrigger {
         return true;
       }
 
-      if (message.type === MessageType.START_RECORDING) {
-        rrwebRecorder
-          .start()
-          .then(meta => {
-            sendResponse({ success: true, data: { meta } });
-          })
-          .catch(err => {
-            sendResponse({ success: false, error: err?.message || 'Failed to start recording' });
-          });
-        return true;
-      }
-
-      if (message.type === MessageType.STOP_RECORDING) {
-        rrwebRecorder
-          .stop({ persist: true })
-          .then(payload => {
-            sendResponse({ success: true, data: { meta: payload?.id ? { ...payload, events: undefined } : null, id: payload?.id } });
-          })
-          .catch(err => {
-            sendResponse({ success: false, error: err?.message || 'Failed to stop recording' });
-          });
-        return true;
-      }
-
-      if ((message.type as any) === 'GET_RECORDING_STATUS') {
-        const meta = rrwebRecorder.currentMeta;
-        sendResponse({ success: true, data: { isRecording: rrwebRecorder.isRecording, meta } });
-        return true;
-      }
+      // Recording-related messages are no longer supported
     });
   }
 

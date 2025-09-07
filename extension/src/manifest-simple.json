@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "QA Command Center",
   "version": "1.0.0",
-  "description": "AI-powered issue creation, automated test recording, and seamless GitLab-Slack integration",
+  "description": "AI-powered issue creation with seamless GitLab-Slack integration",
   "permissions": ["storage", "scripting", "tabs"],
   "host_permissions": ["<all_urls>"],
   "content_scripts": [

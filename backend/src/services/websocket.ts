@@ -17,12 +17,6 @@ export interface AuthenticatedSocket extends Socket {
   userId?: string;
 }
 
-export interface RecordingEvent {
-  type: 'interaction' | 'screenshot' | 'error' | 'status';
-  recordingId: string;
-  data: any;
-  timestamp: number;
-}
 
 export interface IssueEvent {
   type: 'created' | 'updated' | 'assigned' | 'commented';
@@ -163,22 +157,7 @@ export class WebSocketService {
   private setupEventHandlers(socket: AuthenticatedSocket): void {
     const userId = socket.userId!;
 
-    // Recording events
-    socket.on('recording:start', (data) => {
-      this.handleRecordingStart(socket, data);
-    });
-
-    socket.on('recording:interaction', (data) => {
-      this.handleRecordingInteraction(socket, data);
-    });
-
-    socket.on('recording:screenshot', (data) => {
-      this.handleRecordingScreenshot(socket, data);
-    });
-
-    socket.on('recording:stop', (data) => {
-      this.handleRecordingStop(socket, data);
-    });
+    // Recording events removed
 
     // Issue events
     socket.on('issue:subscribe', (issueId) => {
@@ -229,83 +208,7 @@ export class WebSocketService {
     });
   }
 
-  private handleRecordingStart(socket: AuthenticatedSocket, data: any): void {
-    const userId = socket.userId!;
-    
-    logger.info(`Recording started by user ${userId}: ${data.recordingId}`);
-    
-    // Join recording room
-    socket.join(`recording:${data.recordingId}`);
-    
-    // Notify project members if applicable
-    if (data.projectId) {
-      socket.to(`project:${data.projectId}`).emit('recording:started', {
-        recordingId: data.recordingId,
-        userId,
-        username: socket.user!.username,
-        projectId: data.projectId,
-        timestamp: Date.now()
-      });
-    }
-  }
-
-  private handleRecordingInteraction(socket: AuthenticatedSocket, data: any): void {
-    const userId = socket.userId!;
-    
-    // Broadcast to recording room (for real-time collaboration)
-    socket.to(`recording:${data.recordingId}`).emit('recording:interaction', {
-      ...data,
-      userId,
-      timestamp: Date.now()
-    });
-
-    // Update recording activity in Redis
-    this.redis.set(
-      `recording_activity:${data.recordingId}`,
-      JSON.stringify({
-        lastActivity: Date.now(),
-        userId,
-        interactionCount: (data.interactionCount || 0) + 1
-      }),
-      300 // 5 minutes
-    );
-  }
-
-  private handleRecordingScreenshot(socket: AuthenticatedSocket, data: any): void {
-    const userId = socket.userId!;
-    
-    // Broadcast screenshot notification to recording room
-    socket.to(`recording:${data.recordingId}`).emit('recording:screenshot', {
-      recordingId: data.recordingId,
-      screenshotId: data.screenshotId,
-      userId,
-      timestamp: Date.now()
-    });
-  }
-
-  private handleRecordingStop(socket: AuthenticatedSocket, data: any): void {
-    const userId = socket.userId!;
-    
-    logger.info(`Recording stopped by user ${userId}: ${data.recordingId}`);
-    
-    // Leave recording room
-    socket.leave(`recording:${data.recordingId}`);
-    
-    // Notify project members
-    if (data.projectId) {
-      socket.to(`project:${data.projectId}`).emit('recording:stopped', {
-        recordingId: data.recordingId,
-        userId,
-        username: socket.user!.username,
-        projectId: data.projectId,
-        duration: data.duration,
-        timestamp: Date.now()
-      });
-    }
-
-    // Clean up recording activity
-    this.redis.del(`recording_activity:${data.recordingId}`);
-  }
+  // Recording handlers removed
 
   private handleDisconnection(socket: AuthenticatedSocket): void {
     const userId = socket.userId!;
@@ -399,9 +302,7 @@ export class WebSocketService {
     });
   }
 
-  public async broadcastRecordingEvent(recordingEvent: RecordingEvent): Promise<void> {
-    this.io.to(`recording:${recordingEvent.recordingId}`).emit('recording:event', recordingEvent);
-  }
+  // Recording broadcast removed
 
   public async broadcastIssueEvent(issueEvent: IssueEvent): Promise<void> {
     // Emit to issue subscribers
@@ -485,15 +386,7 @@ export class WebSocketService {
     return this.connectedUsers.has(userId);
   }
 
-  public async getActiveRecordings(): Promise<string[]> {
-    try {
-      const keys = await this.redis.keys('recording_activity:*');
-      return keys.map((key: string) => key.replace('recording_activity:', ''));
-    } catch (error) {
-      logger.error('Failed to get active recordings:', error);
-      return [];
-    }
-  }
+  // Active recordings query removed
 
   private generateNotificationId(): string {
     const crypto = require('crypto');
@@ -501,22 +394,7 @@ export class WebSocketService {
   }
 
   public async cleanup(): Promise<void> {
-    // Clean up expired recording activities
-    try {
-      const keys = await this.redis.keys('recording_activity:*');
-      const now = Date.now();
-      
-      for (const key of keys) {
-        const activity = await this.redis.get(key);
-        if (activity) {
-          const data = JSON.parse(activity);
-          if (now - data.lastActivity > 300000) { // 5 minutes
-            await this.redis.del(key);
-          }
-        }
-      }
-    } catch (error) {
-      logger.error('Failed to cleanup recording activities:', error);
-    }
+    // No-op cleanup (recording activities removed)
+    return;
   }
 }

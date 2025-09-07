@@ -376,7 +376,7 @@ async function performDatabaseCheck() {
     await db.raw('SELECT 1');
     
     // Check if main tables exist
-    const tables = ['users', 'teams', 'projects', 'issues', 'recordings'];
+    const tables = ['users', 'teams', 'projects', 'issues'];
     for (const table of tables) {
       await db.raw(`SELECT 1 FROM ${table} LIMIT 1`);
     }

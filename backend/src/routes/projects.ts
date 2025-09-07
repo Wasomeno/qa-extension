@@ -366,7 +366,7 @@ router.post(
 
         const createdIssue = await gitlab.createIssue(pid, payload);
         await Promise.all(
-          childDescriptions.map(description =>
+          childDescriptions.map((description: string) =>
             gitlab.addIssueComment(pid, createdIssue.iid, description)
           )
         );
@@ -1057,7 +1057,6 @@ router.get(
         source: 'gitlab',
         stats: {
           issues: { total: 0 },
-          recordings: { total: 0 },
           recentIssues: 0,
         },
       }));
@@ -1347,7 +1346,6 @@ router.get(
           source: 'gitlab',
           stats: {
             issues: { total: 0 },
-            recordings: { total: 0 },
             recentIssues: 0,
           },
           members: gitlabMembers.map(member => ({
@@ -1976,18 +1974,10 @@ async function getUserProjectRole(
 
 async function getProjectStats(projectId: string) {
   try {
-    const [issueStats, recordingStats, recentActivity] = await Promise.all([
+    const [issueStats, recentActivity] = await Promise.all([
       // Issue statistics
       db
         .issues()
-        .where('project_id', projectId)
-        .select('status')
-        .count('* as count')
-        .groupBy('status'),
-
-      // Recording statistics
-      db
-        .recordings()
         .where('project_id', projectId)
         .select('status')
         .count('* as count')
@@ -2011,10 +2001,6 @@ async function getProjectStats(projectId: string) {
         acc[item.status] = parseInt(item.count);
         return acc;
       }, {}),
-      recordings: recordingStats.reduce((acc: any, item: any) => {
-        acc[item.status] = parseInt(item.count);
-        return acc;
-      }, {}),
       recentIssues: parseInt(recentActivity?.count as string),
     };
 
@@ -2023,10 +2009,7 @@ async function getProjectStats(projectId: string) {
       (a: any, b: any) => a + b,
       0
     );
-    stats.recordings.total = Object.values(stats.recordings).reduce(
-      (a: any, b: any) => a + b,
-      0
-    );
+    // recordings total removed
 
     return stats;
   } catch (error) {

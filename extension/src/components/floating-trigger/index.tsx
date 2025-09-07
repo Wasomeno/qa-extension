@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import FloatingTriggerButton from './components/floating-trigger-button';
 import FloatingTriggerPopup from './components/floating-trigger-popup';
-import rrwebRecorder from '@/services/rrweb-recorder';
 
 type ViewState = 'closed' | 'features' | 'feature-detail';
 
@@ -192,18 +191,8 @@ const FloatingTrigger: React.FC<FloatingTriggerProps> = () => {
   const handleQuickAction = async (action: string) => {
     try {
       switch (action) {
-        case 'record':
-          // Start recording directly in content script for reliability
-          if (!rrwebRecorder.isRecording) {
-            await rrwebRecorder.start();
-          }
-          setViewState('closed');
-          break;
-        case 'stop':
-          if (rrwebRecorder.isRecording) {
-            await rrwebRecorder.stop({ persist: true });
-          }
-          setViewState('closed');
+        default:
+          // No quick actions currently
           break;
       }
     } catch (error) {

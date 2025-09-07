@@ -342,7 +342,7 @@ Rules:
     }
   }
 
-  public async generateIssueFromRecording(
+  public async generateIssueFromContext(
     request: IssueGenerationRequest
   ): Promise<GeneratedIssue> {
     this.ensureOpenAIAvailable();
@@ -377,11 +377,11 @@ Rules:
       // Cache the result for 1 hour
       await this.redis.set(cacheKey, JSON.stringify(generatedIssue), 3600);
 
-      logger.info('Successfully generated issue from recording');
+      logger.info('Successfully generated issue from context');
       await this.trackUsage('issue_generation', response.length);
       return generatedIssue;
     } catch (error) {
-      logger.error('Failed to generate issue from recording:', error);
+      logger.error('Failed to generate issue from context:', error);
       throw new Error('Failed to generate issue description');
     }
   }
@@ -618,7 +618,7 @@ ${additionalContext ? `Additional Context: ${JSON.stringify(additionalContext, n
   }
 
   private buildIssueGenerationSystemPrompt(): string {
-    return `You are a QA expert who creates detailed bug reports from user recordings and error information.
+    return `You are a QA expert who creates detailed bug reports from user context and error information.
 
 Generate a comprehensive issue report with:
 - Clear, descriptive title
@@ -730,14 +730,7 @@ Issue Description: ${request.issueData.description}`;
 Page Title: ${request.browserInfo.title}`;
     }
 
-    if (request.recordingSteps && request.recordingSteps.length > 0) {
-      prompt += `\n\nRecorded User Actions:\n${request.recordingSteps
-        .map(
-          (step, i) =>
-            `${i + 1}. ${step.type}: ${step.selector || step.description || JSON.stringify(step)}`
-        )
-        .join('\n')}`;
-    }
+    // Recorded user actions removed
 
     if (request.issueData.acceptance_criteria) {
       prompt += `\n\nAcceptance Criteria:\n${request.issueData.acceptance_criteria

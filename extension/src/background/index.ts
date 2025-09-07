@@ -4,20 +4,6 @@ import { storageService } from '../services/storage';
 
 class BackgroundService {
   private store = storageService;
-  // Active recording sessions per tab
-  private activeSessions = new Map<number, { sessionId: string; t0: number }>();
-  // In-flight network requests by webRequest.requestId
-  private inflight = new Map<string, {
-    tabId: number;
-    sessionId: string;
-    url: string;
-    method: string;
-    type?: string;
-    tStart: number; // epoch ms
-    redirects: Array<{ from: string; to: string; status?: number; timeStamp: number }>
-  }>();
-  // Buffered finalized network events per session
-  private buffers = new Map<string, any[]>();
   // Refresh single-flight state
   private refreshPromise: Promise<boolean> | null = null;
 
@@ -231,29 +217,7 @@ class BackgroundService {
 
     this.setupContextMenus();
 
-    // Set up network capture listeners (observe only)
-    const filter = { urls: ['<all_urls>'] } as chrome.webRequest.RequestFilter;
-    try {
-      chrome.webRequest.onBeforeRequest.addListener(
-        (d) => this.onBeforeRequest(d),
-        filter
-      );
-      chrome.webRequest.onBeforeRedirect.addListener(
-        (d) => this.onBeforeRedirect(d),
-        filter
-      );
-      chrome.webRequest.onCompleted.addListener(
-        (d) => this.onCompleted(d),
-        filter
-      );
-      chrome.webRequest.onErrorOccurred.addListener(
-        (d) => this.onErrorOccurred(d),
-        filter
-      );
-      console.log('webRequest listeners registered');
-    } catch (e) {
-      console.warn('Failed to register webRequest listeners (permissions?):', e);
-    }
+    // Recording/network capture removed; no webRequest listeners needed
   }
 
   private isTabEligible(tab?: chrome.tabs.Tab | null): boolean {
@@ -616,237 +580,49 @@ class BackgroundService {
           sendResponse({ success: true });
           break;
 
-        case MessageType.CONSOLE_HOOK_INSTALL: {
-          try {
-            const tabId = sender.tab?.id;
-            if (tabId == null) throw new Error('No tab to inject');
-            await chrome.scripting.executeScript({
-              target: { tabId },
-              world: 'MAIN',
-              func: () => {
-                try {
-                  // Install console hook in page main world if not already
-                  // @ts-ignore
-                  if ((window as any).__QA_CC_CONSOLE_HOOKED__) return;
-                  Object.defineProperty(window, '__QA_CC_CONSOLE_HOOKED__', { value: true, configurable: false });
-                  const levels = ['log','info','warn','error','debug'] as const;
-                  const originals: any = {};
-                  const serialize = (args: any[]) => {
-                    try {
-                      return JSON.parse(JSON.stringify(args, (k,v) => {
-                        if (typeof v === 'function') return '[function]';
-                        if (v instanceof Element) { try { return '<' + v.tagName.toLowerCase() + '>' } catch { return '[element]' } }
-                        if (v && (v as any).window === v) return '[window]';
-                        if (v instanceof Error) return { name: v.name, message: v.message, stack: v.stack };
-                        return v;
-                      }));
-                    } catch {
-                      try { return (Array.isArray(args) ? args : [args]).map((x) => { try { return String(x) } catch { return '[unserializable]' } }); } catch { return ['[unserialializable]']; }
-                    }
-                  };
-                  levels.forEach((lvl) => {
-                    originals[lvl] = (console as any)[lvl];
-                    (console as any)[lvl] = function(...args: any[]) {
-                      try {
-                        window.postMessage({ __qa_cc: true, type: 'QA_CC_CONSOLE_EVENT', level: lvl, args: serialize(args), ts: Date.now() }, '*');
-                      } catch {}
-                      try { return originals[lvl].apply(this, args); } catch { return undefined; }
-                    };
-                  });
-                  window.addEventListener('error', function(e: any) {
-                    try {
-                      const info = { message: e.message, filename: e.filename, lineno: e.lineno, colno: e.colno, error: e.error && (e.error.stack || e.error.message) };
-                      window.postMessage({ __qa_cc: true, type: 'QA_CC_CONSOLE_EVENT', level: 'error', args: [info], ts: Date.now(), kind: 'error' }, '*');
-                    } catch {}
-                  }, true);
-                  window.addEventListener('unhandledrejection', function(e: any) {
-                    try {
-                      const r = e.reason;
-                      const info = r && (r.stack || r.message) ? { message: r.message, stack: r.stack } : { message: String(r) };
-                      window.postMessage({ __qa_cc: true, type: 'QA_CC_CONSOLE_EVENT', level: 'error', args: [info], ts: Date.now(), kind: 'unhandledrejection' }, '*');
-                    } catch {}
-                  }, true);
-                  try { window.postMessage({ __qa_cc: true, type: 'QA_CC_CONSOLE_EVENT', level: 'debug', args: ['hook-installed'], ts: Date.now(), kind: 'install' }, '*'); } catch {}
-                } catch {}
-              }
-            });
-            sendResponse({ success: true });
-          } catch (e: any) {
-            sendResponse({ success: false, error: e?.message || 'Console hook inject failed' });
-          }
-          break;
-        }
+        // Recording-related console hook removed
 
-        case MessageType.START_RECORDING: {
+        // Recording feature removed: START_RECORDING
+        case undefined as any: {
           const tab = await this.getActiveTab();
           if (!tab?.id) throw new Error('No active tab');
           try {
             await this.ensureContentScript(tab.id);
-            const res = await this.sendMessageToTab(tab.id, { type: MessageType.START_RECORDING, data: message.data });
+            const res = await this.sendMessageToTab(tab.id, { type: undefined as any, data: message.data });
             if (res?.success) {
-              // Register session for network capture
-              try {
-                const meta = res?.data?.meta;
-                if (meta?.id && typeof meta?.startedAt === 'number') {
-                  this.registerSession(tab.id, meta.id, meta.startedAt);
-                  try {
-                    await chrome.scripting.executeScript({
-                      target: { tabId: tab.id },
-                      world: 'MAIN',
-                      files: ['scripts/main-console-hook.js', 'scripts/main-network-hook.js'],
-                    } as any);
-                  } catch (e) {
-                    console.warn('Failed to inject main-world hooks:', e);
-                  }
-                }
-              } catch {}
-              this.showNotification('Recording started', 'User interactions are now being recorded');
+              // no-op
             } else {
-              this.showNotification('Recording failed', res?.error || 'Could not start recording on this page');
+              // no-op
             }
             sendResponse(res);
           } catch (e: any) {
             const msg = e?.message || 'Could not reach content script on this page';
-            this.showNotification('Recording failed', msg);
             sendResponse({ success: false, error: msg });
           }
           break;
         }
 
-        case MessageType.STOP_RECORDING: {
+        // Recording feature removed: STOP_RECORDING
+        case undefined as any: {
           const tab = await this.getActiveTab();
           if (!tab?.id) throw new Error('No active tab');
           try {
             await this.ensureContentScript(tab.id);
-            const res = await this.sendMessageToTab(tab.id, { type: MessageType.STOP_RECORDING, data: message.data });
+            const res = await this.sendMessageToTab(tab.id, { type: undefined as any, data: message.data });
             if (res?.success) {
-              // Flush network buffer for this session if available
-              try {
-                const meta = res?.data?.meta;
-                const id: string | undefined = meta?.id || res?.data?.id;
-                if (id) this.flushSession(id);
-                // Clear tab mapping
-                this.activeSessions.delete(tab.id);
-              } catch {}
-              this.showNotification('Recording stopped', 'Session saved in extension storage');
+              // no-op
             } else {
-              this.showNotification('Stop failed', res?.error || 'Could not stop recording');
+              // no-op
             }
             sendResponse(res);
           } catch (e: any) {
             const msg = e?.message || 'Could not reach content script on this page';
-            this.showNotification('Stop failed', msg);
             sendResponse({ success: false, error: msg });
           }
           break;
         }
 
-        // When content script starts/stops rrweb on its own (e.g., UI button)
-        case MessageType.NETWORK_CAPTURE_START: {
-          let tabId = sender.tab?.id as number | undefined;
-          const sessionId = message?.data?.sessionId as string | undefined;
-          const startedAt = message?.data?.startedAt as number | undefined;
-          const pageUrl = message?.data?.url as string | undefined;
-          if (tabId == null && pageUrl) {
-            try {
-              const tabs = await chrome.tabs.query({});
-              const match = tabs.find(t => t?.url === pageUrl);
-              if (match?.id != null) tabId = match.id;
-            } catch {}
-          }
-          if (tabId != null && sessionId && typeof startedAt === 'number') {
-            this.registerSession(tabId, sessionId, startedAt);
-            // Inject MAIN-world hooks at start
-            try {
-              await chrome.scripting.executeScript({
-                target: { tabId },
-                world: 'MAIN',
-                files: ['scripts/main-console-hook.js', 'scripts/main-network-hook.js'],
-              } as any);
-            } catch (e) {
-              console.warn('MAIN-world hooks injection failed:', e);
-            }
-            sendResponse({ success: true });
-          } else {
-            sendResponse({ success: false, error: 'Missing tab/session info' });
-          }
-          break;
-        }
-        case MessageType.NETWORK_CAPTURE_STOP: {
-          const sessionId = message?.data?.sessionId as string | undefined;
-          if (sessionId) {
-            // Compute count from persisted storage (most reliable under MV3)
-            let networkCount = 0;
-            try {
-              const key = `recording:${sessionId}:network`;
-              const existing = await chrome.storage.local.get(key);
-              const arr = existing && existing[key];
-              if (Array.isArray(arr)) networkCount = arr.length;
-              else {
-                // fallback to in-memory buffer length
-                const buf = this.buffers.get(sessionId) || [];
-                networkCount = Array.isArray(buf) ? buf.length : 0;
-              }
-            } catch {}
-            await this.flushSession(sessionId);
-            // Also remove any tab mapping pointing to this session
-            for (const [tabId, ctx] of this.activeSessions.entries()) {
-              if (ctx.sessionId === sessionId) this.activeSessions.delete(tabId);
-            }
-            sendResponse({ success: true, data: { networkCount } });
-          } else {
-            sendResponse({ success: false, error: 'Missing sessionId' });
-          }
-          break;
-        }
-
-        case MessageType.GET_RECORDING_STATUS: {
-          const tab = await this.getActiveTab();
-          if (!tab?.id) throw new Error('No active tab');
-          const res = await this.sendMessageToTab(tab.id, { type: MessageType.GET_RECORDING_STATUS });
-          sendResponse(res);
-          break;
-        }
-
-        case MessageType.TRACK_NETWORK_EVENT: {
-          try {
-            const { sessionId, event } = (message?.data || {}) as { sessionId?: string; event?: any };
-            const sid = sessionId || (() => {
-              const tabId = sender.tab?.id;
-              if (tabId == null) return undefined;
-              const ctx = this.activeSessions.get(tabId);
-              return ctx?.sessionId;
-            })();
-            if (!sid || !event) {
-              sendResponse({ success: false, error: 'Missing sessionId or event' });
-              break;
-            }
-            const evt = {
-              id: `hook-${Date.now()}-${Math.random().toString(36).slice(2,8)}`,
-              tabId: sender.tab?.id ?? -1,
-              sessionId: sid,
-              type: event.kind,
-              method: event.method,
-              url: event.url,
-              status: event.status,
-              error: event.error,
-              tStart: event.ts,
-              tEnd: typeof event.duration === 'number' ? event.ts + event.duration : undefined,
-              duration: event.duration,
-              redirects: [],
-              source: 'hook',
-            };
-            await this.persistNetworkEvent(sid, this.redactEvent(evt));
-            // Also mirror into in-memory buffer for immediate count
-            const arr = this.buffers.get(sid) || [];
-            arr.push(this.redactEvent(evt));
-            this.buffers.set(sid, arr);
-            sendResponse({ success: true });
-          } catch (e: any) {
-            sendResponse({ success: false, error: e?.message || 'TRACK_NETWORK_EVENT failed' });
-          }
-          break;
-        }
+        // Recording-related message types removed
 
         
 
@@ -866,25 +642,6 @@ class BackgroundService {
       case 'create-issue':
         await this.openIssueCreator();
         break;
-      case 'start-recording': {
-        // Toggle start/stop depending on current status
-        try {
-          const tab = await this.getActiveTab();
-          if (!tab?.id) return;
-          await this.ensureContentScript(tab.id);
-          const status = await this.sendMessageToTab(tab.id, { type: MessageType.GET_RECORDING_STATUS });
-          if (status?.data?.isRecording) {
-            await this.sendMessageToTab(tab.id, { type: MessageType.STOP_RECORDING });
-            this.showNotification('Recording stopped', 'Session saved in extension storage');
-          } else {
-            await this.sendMessageToTab(tab.id, { type: MessageType.START_RECORDING });
-            this.showNotification('Recording started', 'User interactions are now being recorded');
-          }
-        } catch (e) {
-          console.error('Recording toggle failed:', e);
-        }
-        break;
-      }
     }
   }
 
@@ -1025,131 +782,7 @@ class BackgroundService {
     });
   }
 
-  private registerSession(tabId: number, sessionId: string, t0: number) {
-    this.activeSessions.set(tabId, { sessionId, t0 });
-    if (!this.buffers.has(sessionId)) this.buffers.set(sessionId, []);
-  }
-
-  private async flushSession(sessionId: string) {
-    const buf = this.buffers.get(sessionId) || [];
-    try {
-      // If we already have persisted events, avoid overwriting; otherwise persist buffer
-      const existing = await chrome.storage.local.get(`recording:${sessionId}:network`);
-      const arr = existing && existing[`recording:${sessionId}:network`];
-      if (!Array.isArray(arr) && buf.length) {
-        await chrome.storage.local.set({ [`recording:${sessionId}:network`]: buf });
-      } else if (Array.isArray(arr) && buf.length) {
-        // Merge any in-memory residuals to persisted
-        const merged = arr.concat(buf);
-        await chrome.storage.local.set({ [`recording:${sessionId}:network`]: merged });
-      }
-      this.buffers.set(sessionId, []);
-    } catch (e) {
-      console.error('Failed to persist network events:', e);
-    }
-  }
-
-  private onBeforeRequest(d: chrome.webRequest.WebRequestBodyDetails) {
-    if (d.tabId == null || d.tabId < 0) return;
-    const ctx = this.activeSessions.get(d.tabId);
-    if (!ctx) return;
-    const tStart = d.timeStamp; // epoch ms
-    const rec = {
-      tabId: d.tabId,
-      sessionId: ctx.sessionId,
-      url: d.url,
-      method: (d as any).method || 'GET',
-      type: d.type,
-      tStart,
-      redirects: [] as Array<{ from: string; to: string; status?: number; timeStamp: number }>,
-    };
-    this.inflight.set(d.requestId, rec);
-  }
-
-  private onBeforeRedirect(d: chrome.webRequest.WebRedirectionResponseDetails) {
-    const rec = this.inflight.get(d.requestId);
-    if (!rec) return;
-    try {
-      rec.redirects.push({ from: d.initiator || rec.url, to: d.redirectUrl, status: d.statusCode, timeStamp: d.timeStamp });
-    } catch {}
-  }
-
-  private onCompleted(d: chrome.webRequest.WebResponseCacheDetails) {
-    const rec = this.inflight.get(d.requestId);
-    if (!rec) return;
-    const tEnd = d.timeStamp;
-    const evt = {
-      id: d.requestId,
-      tabId: rec.tabId,
-      sessionId: rec.sessionId,
-      type: rec.type,
-      method: rec.method,
-      url: rec.url,
-      status: d.statusCode,
-      fromCache: d.fromCache,
-      tStart: rec.tStart,
-      tEnd,
-      duration: Math.max(0, tEnd - rec.tStart),
-      redirects: rec.redirects,
-    };
-    this.bufferEvent(evt);
-    this.inflight.delete(d.requestId);
-  }
-
-  private onErrorOccurred(d: chrome.webRequest.WebResponseErrorDetails) {
-    const rec = this.inflight.get(d.requestId);
-    if (!rec) return;
-    const tEnd = d.timeStamp;
-    const evt = {
-      id: d.requestId,
-      tabId: rec.tabId,
-      sessionId: rec.sessionId,
-      type: rec.type,
-      method: rec.method,
-      url: rec.url,
-      status: undefined,
-      error: d.error,
-      tStart: rec.tStart,
-      tEnd,
-      duration: Math.max(0, tEnd - rec.tStart),
-      redirects: rec.redirects,
-    };
-    this.bufferEvent(evt);
-    this.inflight.delete(d.requestId);
-  }
-
-  private bufferEvent(evt: any) {
-    const arr = this.buffers.get(evt.sessionId) || [];
-    arr.push(this.redactEvent(evt));
-    this.buffers.set(evt.sessionId, arr);
-    // Persist incrementally to survive service worker restarts
-    this.persistNetworkEvent(evt.sessionId, this.redactEvent(evt)).catch(() => {});
-  }
-
-  private async persistNetworkEvent(sessionId: string, evt: any) {
-    try {
-      const key = `recording:${sessionId}:network`;
-      const existing = await chrome.storage.local.get(key);
-      const arr = (existing && existing[key]) || [];
-      arr.push(evt);
-      await chrome.storage.local.set({ [key]: arr });
-    } catch (e) {
-      // best-effort; ignore
-    }
-  }
-
-  private redactEvent(evt: any) {
-    try {
-      const u = new URL(evt.url);
-      // redact common sensitive query params
-      ['token', 'auth', 'authorization', 'password', 'key', 'code'].forEach((k) => {
-        if (u.searchParams.has(k)) u.searchParams.set(k, 'REDACTED');
-      });
-      return { ...evt, url: u.toString() };
-    } catch {
-      return evt;
-    }
-  }
+  // Recording-related helpers removed
 }
 
 // Initialize the background service

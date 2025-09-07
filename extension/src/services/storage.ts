@@ -34,9 +34,6 @@ export interface PendingAction<T = any> {
 }
 
 export interface ExtensionSettings {
-  autoRecord: boolean;
-  recordingQuality: 'low' | 'medium' | 'high';
-  maxRecordingDuration: number;
   notificationSettings: {
     desktop: boolean;
     sound: boolean;
@@ -44,7 +41,6 @@ export interface ExtensionSettings {
   };
   theme: 'light' | 'dark' | 'auto';
   shortcuts: {
-    startRecording: string;
     createIssue: string;
   };
   defaultProject?: string;
@@ -75,14 +71,10 @@ export interface StorageData {
   pendingActions?: PendingAction[];
   pinnedRefs?: Record<string, { projectId: string | number; iid: number; webUrl?: string }>;
   pinnedSnapshots?: Record<string, PinnedIssueSnapshot>;
-  // Recording index: metadata only. Events are stored under key `recording:<id>`
-  recordings?: Record<string, { id: string; url: string; title: string; startedAt: number; endedAt?: number; eventCount: number }>;
+  // Recording index removed
 }
 
 const DEFAULT_SETTINGS: ExtensionSettings = {
-  autoRecord: false,
-  recordingQuality: 'medium',
-  maxRecordingDuration: 300, // 5 minutes
   notificationSettings: {
     desktop: true,
     sound: true,
@@ -90,7 +82,6 @@ const DEFAULT_SETTINGS: ExtensionSettings = {
   },
   theme: 'auto',
   shortcuts: {
-    startRecording: 'Ctrl+Shift+R',
     createIssue: 'Ctrl+Shift+I',
   },
   apiEndpoint: 'http://localhost:3000',

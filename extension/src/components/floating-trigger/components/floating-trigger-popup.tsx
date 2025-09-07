@@ -6,7 +6,6 @@ import {
   X,
   WorkflowIcon,
   Pin,
-  Video,
   ListCheck,
   ChevronRight,
 } from 'lucide-react';
@@ -17,13 +16,12 @@ import ErrorBoundary from '@/components/common/error-boundary';
 import { useKeyboardIsolation } from '@/hooks/useKeyboardIsolation';
 import WorkflowList from '@/components/workflows';
 import PinnedIssues from '@/components/pinned-issues';
-import RecordingsList from '@/components/recordings-list';
-import rrwebRecorder from '@/services/rrweb-recorder';
-import { storageService } from '@/services/storage';
+// Recording feature removed
 import { Button } from '@/src/components/ui/ui/button';
 import useAuth from '@/hooks/useAuth';
 import { authService } from '@/services/auth';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { storageService } from '@/services/storage';
 
 // Unified header bar matching Workflows style
 function HeaderBar(props: {
@@ -91,15 +89,7 @@ const FloatingTriggerPopup: React.FC<FloatingTriggerPopupProps> = ({
   const keyboardIsolation = useKeyboardIsolation();
   const portalRef = useRef<HTMLDivElement>(null);
   const [pinnedCount, setPinnedCount] = React.useState<number>(0);
-  const [isRecording, setIsRecording] = React.useState<boolean>(
-    rrwebRecorder.isRecording
-  );
-  const [recordingsCount, setRecordingsCount] = React.useState<number>(0);
-  const [lastRecording, setLastRecording] = React.useState<{
-    title?: string;
-    url?: string;
-    startedAt?: number;
-  } | null>(null);
+  // Recording state removed
   const { isAuthenticated } = useAuth();
   const [authBusy, setAuthBusy] = React.useState(false);
   const [authError, setAuthError] = React.useState<string | null>(null);
@@ -119,42 +109,7 @@ const FloatingTriggerPopup: React.FC<FloatingTriggerPopupProps> = ({
     };
   }, []);
 
-  // Poll recording state for quick toggle label
-  React.useEffect(() => {
-    const t = setInterval(() => {
-      setIsRecording(rrwebRecorder.isRecording);
-    }, 500);
-    return () => clearInterval(t);
-  }, []);
-
-  // Load recordings summary for the Quick Actions card
-  React.useEffect(() => {
-    const loadSummary = async () => {
-      try {
-        const list = await rrwebRecorder.listRecordings();
-        setRecordingsCount(list.length);
-        const latest = list
-          .slice()
-          .sort((a, b) => (b.startedAt || 0) - (a.startedAt || 0))[0];
-        setLastRecording(
-          latest
-            ? {
-                title: latest.title,
-                url: latest.url,
-                startedAt: latest.startedAt,
-              }
-            : null
-        );
-      } catch {}
-    };
-    loadSummary();
-    const unsub = storageService.onChanged('recordings' as any, () => {
-      loadSummary();
-    });
-    return () => {
-      unsub && unsub();
-    };
-  }, []);
+  // Recording summary removed
 
   const renderFeatureList = () => {
     const formatAgo = (ts?: number) => {
@@ -169,11 +124,7 @@ const FloatingTriggerPopup: React.FC<FloatingTriggerPopupProps> = ({
       return `${days}d ago`;
     };
 
-    const lastRecLabel = lastRecording
-      ? `Last: “${(lastRecording.title || lastRecording.url || 'Session').slice(0, 28)}” • ${formatAgo(
-          lastRecording.startedAt
-        )}`
-      : 'No recent sessions';
+    // Recording label removed
 
     return (
       <div
@@ -274,27 +225,7 @@ const FloatingTriggerPopup: React.FC<FloatingTriggerPopupProps> = ({
           </div>
         </button>
 
-        {/* Recording */}
-        <button
-          onClick={() => onFeatureSelect('recordings')}
-          className="group w-full text-left hover:bg-neutral-100/60 rounded-lg px-3 py-2 transition-colors pointer-events-auto"
-        >
-          <div className="flex items-center">
-            <Video className="w-4 h-4 mr-3 mt-0.5 text-neutral-700" />
-            <div className="flex-1 min-w-0">
-              <div className="text-sm font-medium text-neutral-900">
-                Recording{' '}
-                <span className="text-neutral-500">
-                  {recordingsCount > 0 ? `${recordingsCount} sessions` : ''}
-                </span>
-              </div>
-              <div className="text-xs text-neutral-500 truncate">
-                {lastRecLabel}
-              </div>
-            </div>
-            <ChevronRight className="w-4 h-4 mt-0.5 opacity-60 group-hover:opacity-100" />
-          </div>
-        </button>
+        {/* Recording feature removed */}
 
         {/* Pinned */}
         <button
@@ -392,23 +323,7 @@ const FloatingTriggerPopup: React.FC<FloatingTriggerPopupProps> = ({
             </div>
           </div>
         );
-      case 'recordings':
-        return (
-          <div className="flex flex-col w-[400px] h-full">
-            <HeaderBar
-              title="Recording"
-              onBack={onBack}
-              onClose={onClose}
-              onMouseDown={onMouseDown}
-            />
-            {/* Controls */}
-            <RecordingControls />
-            {/* List */}
-            <div className="flex-1 min-h-0 overflow-auto">
-              <RecordingsList className="p-2" />
-            </div>
-          </div>
-        );
+      // Recording detail removed
       case 'pinned':
         return (
           <div className="flex flex-col h-full">
@@ -529,113 +444,3 @@ const FloatingTriggerPopup: React.FC<FloatingTriggerPopupProps> = ({
 };
 
 export default FloatingTriggerPopup;
-
-// Inline RecordingControls component
-const RecordingControls: React.FC = () => {
-  const [isRecording, setIsRecording] = React.useState(
-    rrwebRecorder.isRecording
-  );
-  const [startedAt, setStartedAt] = React.useState<number | undefined>(
-    rrwebRecorder.currentMeta?.startedAt
-  );
-  const [eventCount, setEventCount] = React.useState<number>(
-    rrwebRecorder.currentMeta?.eventCount || 0
-  );
-  const [now, setNow] = React.useState(Date.now());
-
-  React.useEffect(() => {
-    try {
-      console.log('[QA Extension] Rendering RecordingControls');
-    } catch {}
-    const t = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(t);
-  }, []);
-
-  // Poll rrwebRecorder meta since we don't have events from it
-  React.useEffect(() => {
-    const t = setInterval(() => {
-      setIsRecording(rrwebRecorder.isRecording);
-      setStartedAt(rrwebRecorder.currentMeta?.startedAt);
-      setEventCount(rrwebRecorder.currentMeta?.eventCount || 0);
-    }, 500);
-    return () => clearInterval(t);
-  }, []);
-
-  const durationSec =
-    isRecording && startedAt
-      ? Math.max(0, Math.round((now - startedAt) / 1000))
-      : 0;
-
-  const handleStart = async () => {
-    if (!rrwebRecorder.isRecording) {
-      await rrwebRecorder.start();
-      setIsRecording(true);
-      setStartedAt(rrwebRecorder.currentMeta?.startedAt);
-    }
-  };
-
-  const handleStop = async () => {
-    if (rrwebRecorder.isRecording) {
-      try {
-        const saved = await rrwebRecorder.stop({ persist: true });
-        try {
-          console.log(
-            '[QA Extension] Recording saved:',
-            saved?.id,
-            'events:',
-            saved?.events?.length
-          );
-        } catch {}
-      } catch (e) {
-        console.error('[QA Extension] Failed to save recording:', e);
-      }
-      setIsRecording(false);
-    }
-  };
-
-  return (
-    <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
-      <div className="flex items-center gap-3 min-w-0">
-        <span
-          className={`inline-block w-2 h-2 rounded-full ${isRecording ? 'bg-red-500' : 'bg-gray-400'}`}
-          aria-hidden
-        />
-        <div className="min-w-0">
-          <div className="text-sm font-medium truncate">
-            {isRecording ? 'Recording…' : 'Not Recording'}
-          </div>
-          <div className="text-xs opacity-80 truncate">
-            {isRecording ? (
-              <>
-                Duration: {durationSec}s • Events: {eventCount}
-              </>
-            ) : (
-              'Click Start to begin a new session'
-            )}
-          </div>
-        </div>
-      </div>
-      <div className="flex items-center gap-2">
-        {isRecording ? (
-          <Button
-            size="sm"
-            variant="outline"
-            className="pointer-events-auto"
-            onClick={handleStop}
-          >
-            Stop
-          </Button>
-        ) : (
-          <Button
-            size="sm"
-            variant="secondary"
-            className="pointer-events-auto"
-            onClick={handleStart}
-          >
-            Start
-          </Button>
-        )}
-      </div>
-    </div>
-  );
-};

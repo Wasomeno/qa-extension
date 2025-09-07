@@ -2,13 +2,13 @@
   "manifest_version": 3,
   "name": "QA Command Center",
   "version": "1.0.0",
-  "description": "AI-powered issue creation, automated test recording, and seamless GitLab-Slack integration",
+  "description": "AI-powered issue creation with seamless GitLab-Slack integration",
   "permissions": [
     "activeTab",
     "storage",
     "scripting",
     "webNavigation",
-    "webRequest",
+    
     "tabs",
     "cookies",
     "contextMenus",
@@ -49,7 +49,6 @@
     {
       "resources": [
         "assets/*",
-        "scripts/*",
         "styles/*",
         "*.js",
         "*.css"
@@ -67,12 +66,6 @@
     "128": "icons/icon-128.png"
   },
   "commands": {
-    "start-recording": {
-      "suggested_key": {
-        "default": "Ctrl+Shift+R"
-      },
-      "description": "Start/stop recording user interactions"
-    },
     "create-issue": {
       "suggested_key": {
         "default": "Ctrl+Shift+I"

@@ -55,7 +55,7 @@ const createIssueSchema = Joi.object({
   title: Joi.string().min(5).max(200).required(),
   description: Joi.string().min(10).max(5000).required(),
   projectId: Joi.string().uuid().required(),
-  recordingId: Joi.string().uuid(),
+  // recordingId removed
   severity: Joi.string().valid('critical', 'high', 'medium', 'low'),
   priority: Joi.string().valid('urgent', 'high', 'normal', 'low'),
   acceptanceCriteria: Joi.array().items(Joi.string().max(500)),
@@ -194,7 +194,7 @@ router.post(
           };
 
           const generatedIssue =
-            await openaiService.generateIssueFromRecording(aiRequest);
+            await openaiService.generateIssueFromContext(aiRequest);
 
           // Use AI suggestions if user didn't specify values
           aiGeneratedData = {
@@ -929,7 +929,7 @@ router.post(
       };
 
       const generatedIssue =
-        await openaiService.generateIssueFromRecording(issueRequest);
+        await openaiService.generateIssueFromContext(issueRequest);
 
       logger.logUserAction('Issue generated from context', userId, {
         url: contextData.url,
