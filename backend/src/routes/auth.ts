@@ -3,11 +3,7 @@ import Joi from 'joi';
 import { AuthService } from '../services/auth';
 import { GitLabService } from '../services/gitlab';
 import { authMiddleware, AuthenticatedRequest } from '../middleware/auth';
-import {
-  authRateLimiter,
-  passwordResetRateLimiter,
-  rateLimiter,
-} from '../middleware/rateLimiter';
+// Rate limiting middleware removed to rely on upstream GitLab limits
 import {
   asyncHandler,
   validateRequest,
@@ -36,7 +32,6 @@ const refreshTokenSchema = Joi.object({
 // Refresh access token
 router.post(
   '/refresh',
-  rateLimiter,
   validateRequest(refreshTokenSchema),
   asyncHandler(async (req: Request, res: Response) => {
     const refreshToken = req.body.refreshToken || req.cookies.refreshToken;
@@ -124,7 +119,6 @@ router.get(
 // GitLab OAuth initiation
 router.get(
   '/gitlab',
-  rateLimiter,
   asyncHandler(async (req: Request, res: Response) => {
     try {
       const { sessionId } = req.query;
@@ -154,7 +148,6 @@ router.get(
 // GitLab OAuth callback (GET - for redirect from GitLab)
 router.get(
   '/gitlab/callback',
-  authRateLimiter,
   asyncHandler(async (req: Request, res: Response) => {
     const { code, state } = req.query;
 
@@ -362,7 +355,6 @@ router.get(
 // GitLab OAuth callback (POST - for manual API calls)
 router.post(
   '/gitlab/callback',
-  authRateLimiter,
   asyncHandler(async (req: Request, res: Response) => {
     const { code, state } = req.body;
 
@@ -497,7 +489,6 @@ router.get(
 // OAuth session retrieval endpoint
 router.get(
   '/oauth/session/:sessionId',
-  rateLimiter,
   asyncHandler(async (req: Request, res: Response) => {
     const { sessionId } = req.params;
     

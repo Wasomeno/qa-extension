@@ -3,7 +3,7 @@ import Joi from 'joi';
 import { databaseService } from '../services/database';
 import { GitLabService } from '../services/gitlab';
 import { authMiddleware, AuthenticatedRequest } from '../middleware/auth';
-import { rateLimiter } from '../middleware/rateLimiter';
+// Rate limiting middleware removed to rely on upstream GitLab limits
 import {
   asyncHandler,
   validateRequest,
@@ -90,7 +90,6 @@ const updateMemberSchema = Joi.object({
 router.post(
   '/',
   authMiddleware.authenticate,
-  rateLimiter,
   validateRequest(createProjectSchema),
   asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
     const { name, description, gitlabProjectId, settings } = req.body;
@@ -287,7 +286,6 @@ router.get(
 router.post(
   '/:projectId/gitlab/issues',
   authMiddleware.authenticate,
-  rateLimiter,
   validateRequest(
     Joi.object({
       title: Joi.string().min(3).max(200).required(),
@@ -576,6 +574,11 @@ router.patch(
         } else if (typeof body.assigneeId === 'number') {
           update.assignee_ids = [body.assigneeId];
         }
+      }
+
+      // Description
+      if (typeof body.description === 'string') {
+        update.description = body.description;
       }
 
       // Labels: if explicit labels provided, replace. Otherwise support add/remove.
@@ -1375,7 +1378,6 @@ router.get(
 router.post(
   '/import/:gitlabProjectId',
   authMiddleware.authenticate,
-  rateLimiter,
   asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
     const { gitlabProjectId } = req.params;
     const userId = req.user!.id;
@@ -1490,7 +1492,6 @@ router.post(
 router.put(
   '/:id',
   authMiddleware.authenticate,
-  rateLimiter,
   validateRequest(updateProjectSchema),
   asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
     const { id: projectId } = req.params;
@@ -1698,7 +1699,6 @@ router.get(
 router.post(
   '/:id/members',
   authMiddleware.authenticate,
-  rateLimiter,
   validateRequest(addMemberSchema),
   asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
     const { id: projectId } = req.params;

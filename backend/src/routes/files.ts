@@ -5,7 +5,7 @@ import fs from 'fs/promises';
 import sharp from 'sharp';
 import { randomUUID } from 'crypto';
 import { authMiddleware, AuthenticatedRequest } from '../middleware/auth';
-import { uploadRateLimiter } from '../middleware/rateLimiter';
+// Rate limiting middleware removed to rely on upstream GitLab limits
 import {
   asyncHandler,
   ValidationError,
@@ -99,7 +99,6 @@ const upload = multer({
 router.post(
   '/upload',
   authMiddleware.authenticate,
-  uploadRateLimiter,
   upload.single('file'),
   asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
     if (!req.file) throw new ValidationError('File is required');

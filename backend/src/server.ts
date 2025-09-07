@@ -10,7 +10,6 @@ import { createServer } from 'http';
 import { Server as SocketIOServer } from 'socket.io';
 
 import { errorHandler } from './middleware/errorHandler';
-import { rateLimiter } from './middleware/rateLimiter';
 import { authRouter } from './routes/auth';
 import { userRouter } from './routes/users';
 import { projectRouter } from './routes/projects';
@@ -110,8 +109,7 @@ class App {
       stream: { write: (message) => logger.info(message.trim()) }
     }));
 
-    // Rate limiting
-    this.app.use(rateLimiter);
+    // Note: Application-level rate limiting removed. GitLab API limits apply upstream.
 
     // Body parsing
     this.app.use(express.json({ limit: '10mb' }));

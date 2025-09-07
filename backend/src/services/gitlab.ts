@@ -93,14 +93,7 @@ export class GitLabService {
       async (config) => {
         // Add request ID for tracking
         config.headers['X-Request-ID'] = this.generateRequestId();
-        
-        // Rate limiting check (if Redis is available)
-        try {
-          await this.checkRateLimit();
-        } catch (error) {
-          logger.debug('Rate limiting check failed, proceeding without rate limiting:', (error as Error).message);
-        }
-        
+        // Local rate limiting removed; rely on GitLab's upstream limits.
         logger.debug(`GitLab API Request: ${config.method?.toUpperCase()} ${config.url}`);
         return config;
       },
@@ -130,7 +123,7 @@ export class GitLabService {
           data: error.response?.data
         });
 
-        // Handle rate limiting
+        // Handle upstream GitLab rate limiting gracefully
         if (error.response?.status === 429) {
           const retryAfter = error.response.headers['retry-after'] || 60;
           logger.warn(`GitLab API rate limited. Retrying after ${retryAfter}s`);
@@ -297,12 +290,15 @@ export class GitLabService {
     }
   ): Promise<GitLabIssue> {
     try {
+      const pid = (typeof projectId === 'number' || /^\d+$/.test(String(projectId)))
+        ? String(projectId)
+        : encodeURIComponent(String(projectId));
       const payload: any = { ...updateData };
       // Normalize labels to comma-separated string if array is provided (GitLab accepts either, but normalize for safety)
       if (Array.isArray(payload.labels)) {
         payload.labels = payload.labels.join(',');
       }
-      const response = await this.client.put(`/projects/${projectId}/issues/${issueIid}`, payload);
+      const response = await this.client.put(`/projects/${pid}/issues/${issueIid}`, payload);
       const issue = response.data;
 
       logger.info(`Updated GitLab issue: ${issue.web_url}`);
@@ -634,20 +630,6 @@ export class GitLabService {
     } catch (error) {
       logger.error('Failed to upload file to GitLab:', error);
       throw new Error('Failed to upload file to GitLab');
-    }
-  }
-
-  private async checkRateLimit(): Promise<void> {
-    const rateLimitKey = 'gitlab_api_rate_limit';
-    const windowSize = 60; // 1 minute
-    const maxRequests = 2000; // GitLab's default rate limit
-
-    const result = await this.redis.incrementRateLimit(rateLimitKey, windowSize, maxRequests);
-    
-    if (!result.allowed) {
-      const waitTime = result.resetTime - Date.now();
-      logger.warn(`GitLab API rate limit exceeded. Waiting ${waitTime}ms`);
-      await this.sleep(waitTime);
     }
   }
 

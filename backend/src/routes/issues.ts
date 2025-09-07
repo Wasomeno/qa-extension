@@ -9,10 +9,7 @@ import { WebSocketService } from '../services/websocket';
 import { AssignmentService } from '../services/assignment';
 import { DuplicateDetectionService } from '../services/duplicateDetection';
 import { authMiddleware, AuthenticatedRequest } from '../middleware/auth';
-import {
-  rateLimiter,
-  issueCreationRateLimiter,
-} from '../middleware/rateLimiter';
+// Rate limiting middleware removed to rely on upstream GitLab limits
 import {
   asyncHandler,
   validateRequest,
@@ -158,7 +155,6 @@ const generateFromContextSchema = Joi.object({
 router.post(
   '/',
   authMiddleware.authenticate,
-  issueCreationRateLimiter,
   upload.array('attachments', 5),
   validateRequest(createIssueSchema),
   asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
@@ -447,7 +443,6 @@ router.post(
 router.post(
   '/:id/submit',
   authMiddleware.authenticate,
-  rateLimiter,
   asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
     const { id: issueId } = req.params;
     const userId = req.user!.id;
@@ -657,7 +652,6 @@ router.get(
 router.put(
   '/:id',
   authMiddleware.authenticate,
-  rateLimiter,
   validateRequest(updateIssueSchema),
   asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
     const { id: issueId } = req.params;
@@ -733,7 +727,6 @@ router.put(
 router.post(
   '/:id/comments',
   authMiddleware.authenticate,
-  rateLimiter,
   validateRequest(commentSchema),
   asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
     const { id: issueId } = req.params;
@@ -793,7 +786,6 @@ router.post(
 router.post(
   '/:id/ai-suggestions',
   authMiddleware.authenticate,
-  rateLimiter,
   asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
     const { id: issueId } = req.params;
     const userId = req.user!.id;
@@ -858,7 +850,6 @@ router.post(
 router.post(
   '/transcribe-voice',
   authMiddleware.authenticate,
-  rateLimiter,
   upload.single('audio'),
   asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
     const userId = req.user!.id;
@@ -909,7 +900,6 @@ router.post(
 router.post(
   '/generate-from-context',
   authMiddleware.authenticate,
-  rateLimiter,
   validateRequest(generateFromContextSchema),
   asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
     const userId = req.user!.id;
@@ -961,7 +951,6 @@ router.post(
 router.post(
   '/generate-from-template',
   authMiddleware.authenticate,
-  rateLimiter,
   asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
     const userId = req.user!.id;
     const { userDescription, issueFormat } = req.body || {};
@@ -1047,7 +1036,6 @@ router.post(
 router.post(
   '/check-duplicates',
   authMiddleware.authenticate,
-  rateLimiter,
   asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
     const userId = req.user!.id;
     const { title, description, projectId, errorDetails, browserInfo, labels } =
@@ -1099,7 +1087,6 @@ router.post(
 router.post(
   '/:id/mark-duplicate',
   authMiddleware.authenticate,
-  rateLimiter,
   asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
     const { id: duplicateId } = req.params;
     const { originalId } = req.body;

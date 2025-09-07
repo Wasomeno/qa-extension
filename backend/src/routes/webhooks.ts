@@ -4,7 +4,7 @@ import { DatabaseService } from '../services/database';
 import { GitLabService } from '../services/gitlab';
 import { SlackService } from '../services/slack';
 import { WebSocketService } from '../services/websocket';
-import { webhookRateLimiter } from '../middleware/rateLimiter';
+// Rate limiting middleware removed to rely on upstream limits
 import { 
   asyncHandler, 
   sendResponse,
@@ -21,7 +21,6 @@ let websocketService: WebSocketService | null = null;
 
 // GitLab webhook endpoint
 router.post('/gitlab',
-  webhookRateLimiter,
   asyncHandler(async (req: Request, res: Response) => {
     const signature = req.headers['x-gitlab-token'] as string;
     const event = req.headers['x-gitlab-event'] as string;
@@ -74,7 +73,6 @@ router.post('/gitlab',
 
 // Slack webhook endpoint
 router.post('/slack',
-  webhookRateLimiter,
   asyncHandler(async (req: Request, res: Response) => {
     const signature = req.headers['x-slack-signature'] as string;
     const timestamp = req.headers['x-slack-request-timestamp'] as string;
@@ -115,7 +113,6 @@ router.post('/slack',
 
 // Generic webhook endpoint for testing
 router.post('/test',
-  webhookRateLimiter,
   asyncHandler(async (req: Request, res: Response) => {
     const { secret } = req.query;
     

@@ -4,7 +4,7 @@ import multer from 'multer';
 import sharp from 'sharp';
 import { DatabaseService } from '../services/database';
 import { authMiddleware, AuthenticatedRequest } from '../middleware/auth';
-import { rateLimiter, uploadRateLimiter } from '../middleware/rateLimiter';
+// Rate limiting middleware removed to rely on upstream GitLab limits
 import { 
   asyncHandler, 
   validateRequest,
@@ -115,7 +115,6 @@ router.get('/me',
 // Update current user profile
 router.put('/me',
   authMiddleware.authenticate,
-  rateLimiter,
   validateRequest(updateProfileSchema),
   asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
     const userId = req.user!.id;
@@ -153,7 +152,6 @@ router.put('/me',
 // Upload avatar
 router.post('/me/avatar',
   authMiddleware.authenticate,
-  uploadRateLimiter,
   upload.single('avatar'),
   asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
     const userId = req.user!.id;
