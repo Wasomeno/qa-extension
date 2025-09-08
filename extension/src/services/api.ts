@@ -218,15 +218,27 @@ class ApiService {
 
   private async request<T>(
     endpoint: string,
-    options: RequestInit = {}
+    options: RequestInit = {},
+    timeoutOverrideMs?: number
   ): Promise<ApiResponse<T>> {
     try {
       const inServiceWorker = typeof document === 'undefined';
-      const headers = await this.getAuthHeaders();
+      const rawHeaders = await this.getAuthHeaders();
+      const headers: Record<string, string> = {} as any;
+      if ((rawHeaders as any) instanceof Headers) {
+        (rawHeaders as any as Headers).forEach((v, k) => {
+          headers[k] = v;
+        });
+      } else if (Array.isArray(rawHeaders as any)) {
+        for (const [k, v] of rawHeaders as any as Array<[string, string]>)
+          headers[k] = String(v);
+      } else {
+        Object.assign(headers, rawHeaders as any);
+      }
       const method = (options.method || 'GET').toUpperCase();
-      const timeoutMs = ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)
-        ? 20000
-        : 10000;
+      const timeoutMs =
+        timeoutOverrideMs ??
+        (['POST', 'PUT', 'PATCH', 'DELETE'].includes(method) ? 20000 : 10000);
 
       // Service worker can fetch directly; UI contexts use background bridge
       if (inServiceWorker) {
@@ -365,6 +377,92 @@ class ApiService {
             ? error.message
             : 'Network error',
       };
+    }
+  }
+
+  // Scenario Generation APIs
+  async getScenarioTemplate() {
+    return this.request<any>('/api/scenarios/template');
+  }
+
+  async previewScenarios(url: string) {
+    const q = new URLSearchParams({ url });
+    // LLM generation can exceed 10s; allow more time for this endpoint
+    return this.request<{ scenarios: any[]; meta: any }>(
+      `/api/scenarios/preview?${q.toString()}`,
+      {},
+      30000
+    );
+  }
+
+  async generateScenarios(payload: {
+    url: string;
+    template?: any;
+    options?: any;
+  }) {
+    return this.request<any[]>('/api/scenarios/generate', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  }
+
+  async exportScenariosXlsx(payload: {
+    scenarios: any[];
+    template?: any;
+    title?: string;
+  }): Promise<{ ok: boolean; filename?: string; blob?: Blob; error?: string }> {
+    try {
+      const rawHeaders = await this.getAuthHeaders();
+      const headers: Record<string, string> = {} as any;
+      if ((rawHeaders as any) instanceof Headers) {
+        (rawHeaders as any as Headers).forEach((v, k) => {
+          headers[k] = v;
+        });
+      } else if (Array.isArray(rawHeaders as any)) {
+        for (const [k, v] of rawHeaders as any as Array<[string, string]>)
+          headers[k] = String(v);
+      } else {
+        Object.assign(headers, rawHeaders as any);
+      }
+      const resp = await bridgeFetch<{ dummy?: string }>({
+        url: `${this.baseUrl}/api/scenarios/export`,
+        init: {
+          method: 'POST',
+          headers: { ...headers, 'Content-Type': 'application/json' },
+          // Backend now always returns XLSX and ignores export.format
+          body: JSON.stringify({ scenarios: payload.scenarios }),
+        },
+        responseType: 'arrayBuffer',
+        timeoutMs: 20000,
+      });
+      if (!resp.ok) {
+        // Try to parse JSON body if present
+        try {
+          const txt = atob(String(resp.body || ''));
+          const parsed = JSON.parse(txt);
+          return { ok: false, error: parsed?.error || `HTTP ${resp.status}` };
+        } catch {
+          return { ok: false, error: resp.statusText || 'Export failed' };
+        }
+      }
+      const disp =
+        (resp.headers &&
+          (resp.headers['content-disposition'] ||
+            resp.headers['Content-Disposition'])) ||
+        '';
+      const match = /filename="?([^";]+)"?/i.exec(disp || '');
+      const filename = match ? match[1] : 'scenarios.xlsx';
+      // body is base64 of bytes per bridge
+      const b64 = String(resp.body || '');
+      const bin = atob(b64);
+      const bytes = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      const blob = new Blob([bytes.buffer], {
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      });
+      return { ok: true, filename, blob };
+    } catch (e: any) {
+      return { ok: false, error: e?.message || 'Export failed' };
     }
   }
 

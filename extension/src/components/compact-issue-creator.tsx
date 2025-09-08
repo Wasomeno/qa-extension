@@ -9,15 +9,8 @@ import {
 import {
   Bold as IconBold,
   Italic as IconItalic,
-  Strikethrough as IconStrikethrough,
   Code as IconInlineCode,
-  Code2 as IconCodeBlock,
   Link as IconLink,
-  List as IconList,
-  ListOrdered as IconListOrdered,
-  ListTodo as IconListTodo,
-  Quote as IconQuote,
-  Table as IconTable,
   Eye as IconEye,
 } from 'lucide-react';
 

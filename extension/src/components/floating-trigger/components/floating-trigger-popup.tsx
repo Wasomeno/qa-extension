@@ -22,6 +22,7 @@ import useAuth from '@/hooks/useAuth';
 import { authService } from '@/services/auth';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { storageService } from '@/services/storage';
+import { apiService } from '@/services/api';
 
 // Unified header bar matching Workflows style
 function HeaderBar(props: {
@@ -248,6 +249,26 @@ const FloatingTriggerPopup: React.FC<FloatingTriggerPopupProps> = ({
           </div>
         </button>
 
+        {/* Task Scenario Generator */}
+        <button
+          disabled={!isAuthenticated}
+          onClick={() => onFeatureSelect('scenario-generator')}
+          className="group w-full text-left hover:bg-neutral-100/60 rounded-lg px-3 py-2 transition-colors pointer-events-auto disabled:opacity-60 disabled:cursor-not-allowed"
+        >
+          <div className="flex items-center">
+            <WorkflowIcon className="w-4 h-4 mr-3 text-neutral-700" />
+            <div className="flex-1 min-w-0">
+              <div className="text-sm font-medium text-neutral-900">
+                Task Scenario Generator
+              </div>
+              <div className="text-xs text-neutral-500">
+                Generate scenarios from Google Sheet
+              </div>
+            </div>
+            <ChevronRight className="w-4 h-4 opacity-60 group-hover:opacity-100" />
+          </div>
+        </button>
+
         {/* Workflows */}
         <button
           onClick={() => onFeatureSelect('workflows')}
@@ -387,6 +408,20 @@ const FloatingTriggerPopup: React.FC<FloatingTriggerPopupProps> = ({
             </div>
           </div>
         );
+      case 'scenario-generator':
+        return (
+          <div className="flex flex-col w-[400px] h-full">
+            <HeaderBar
+              title="Task Scenario Generator"
+              onBack={onBack}
+              onClose={onClose}
+              onMouseDown={onMouseDown}
+            />
+            <div className="flex-1 min-h-0 overflow-auto p-3">
+              <ScenarioGeneratorPane />
+            </div>
+          </div>
+        );
       default:
         return renderFeatureList();
     }
@@ -444,3 +479,165 @@ const FloatingTriggerPopup: React.FC<FloatingTriggerPopupProps> = ({
 };
 
 export default FloatingTriggerPopup;
+
+// Minimal pane component for generating scenarios from a Google Sheet
+const ScenarioGeneratorPane: React.FC = () => {
+  const [url, setUrl] = React.useState('');
+  const [busy, setBusy] = React.useState<'idle' | 'generating' | 'exporting'>(
+    'idle'
+  );
+  const [rows, setRows] = React.useState<any[]>([]);
+  const [lastExportedAt, setLastExportedAt] = React.useState<number | null>(
+    null
+  );
+  const [msg, setMsg] = React.useState<{
+    type: 'error' | 'success';
+    text: string;
+  } | null>(null);
+
+  const generate = async () => {
+    setMsg(null);
+    if (!url) {
+      setMsg({ type: 'error', text: 'Please paste a Google Sheet URL' });
+      return;
+    }
+    setBusy('generating');
+    try {
+      const res = await apiService.previewScenarios(url);
+      if (res.success && (res as any).data) {
+        const data: any = (res as any).data;
+        const scenarios = data.scenarios || [];
+        setRows(scenarios);
+      } else {
+        setMsg({ type: 'error', text: res.error || 'Generation failed' });
+      }
+    } catch (e: any) {
+      setMsg({ type: 'error', text: e?.message || 'Failed to generate' });
+    } finally {
+      setBusy('idle');
+    }
+  };
+
+  const exportToXlsx = async () => {
+    if (!rows.length) {
+      setMsg({ type: 'error', text: 'Nothing to export' });
+      return;
+    }
+    setBusy('exporting');
+    try {
+      const res = await apiService.exportScenariosXlsx({ scenarios: rows });
+      if (!res.ok || !res.blob) {
+        setMsg({ type: 'error', text: res.error || 'Export failed' });
+        setBusy('idle');
+        return;
+      }
+      const blobUrl = URL.createObjectURL(res.blob);
+      const a = document.createElement('a');
+      a.href = blobUrl;
+      a.download = res.filename || 'scenarios.csv';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(blobUrl);
+      setMsg({ type: 'success', text: 'CSV exported' });
+    } catch (e: any) {
+      setMsg({ type: 'error', text: e?.message || 'Export failed' });
+    } finally {
+      setBusy('idle');
+    }
+  };
+
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="text-[11px] text-neutral-700">
+        Paste a public Google Sheet URL
+      </div>
+      <input
+        type="text"
+        className="w-full px-2 py-2 rounded-md border border-neutral-200 focus:outline-none focus:ring-2 focus:ring-neutral-300 text-xs bg-white"
+        placeholder="https://docs.google.com/spreadsheets/d/..."
+        value={url}
+        onChange={e => setUrl(e.target.value)}
+      />
+      <div className="flex flex-wrap gap-2">
+        <Button
+          size="sm"
+          onClick={generate}
+          disabled={busy !== 'idle' || !url}
+          className="pointer-events-auto"
+        >
+          {busy === 'generating' ? 'Generating…' : 'Generate'}
+        </Button>
+        <Button
+          size="sm"
+          variant="secondary"
+          onClick={generate}
+          disabled={busy !== 'idle' || !url}
+          className="pointer-events-auto"
+        >
+          Regenerate
+        </Button>
+        <Button
+          size="sm"
+          variant="default"
+          onClick={exportToXlsx}
+          disabled={busy !== 'idle' || rows.length === 0}
+          className="pointer-events-auto"
+        >
+          Export
+        </Button>
+      </div>
+      {lastExportedAt && (
+        <div className="text-[10px] text-neutral-500">
+          Last exported to Scenario Trigger{' '}
+          {new Date(lastExportedAt).toLocaleTimeString()}
+        </div>
+      )}
+      {msg && (
+        <div
+          className={`text-[11px] ${msg.type === 'error' ? 'text-red-600' : 'text-green-700'}`}
+        >
+          {msg.text}
+        </div>
+      )}
+      {rows.length > 0 && (
+        <div className="max-h-56 overflow-auto rounded-md border border-neutral-200 bg-white/80">
+          <table className="w-full text-[11px]">
+            <thead>
+              <tr>
+                {Object.keys(rows[0])
+                  .slice(0, 5)
+                  .map(k => (
+                    <th
+                      key={k}
+                      className="text-left px-2 py-1 border-b bg-neutral-50 sticky top-0"
+                    >
+                      {k}
+                    </th>
+                  ))}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.slice(0, 5).map((r, i) => (
+                <tr key={i} className="odd:bg-white even:bg-neutral-50/40">
+                  {Object.keys(rows[0])
+                    .slice(0, 5)
+                    .map(k => (
+                      <td key={k} className="px-2 py-1 align-top">
+                        {Array.isArray(r[k])
+                          ? (r[k] as any[]).join(' \n ')
+                          : String(r[k] ?? '')}
+                      </td>
+                    ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <div className="px-2 py-1 text-[10px] text-neutral-500">
+            Showing first 5 rows/columns
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};

@@ -18,6 +18,7 @@ import { webhookRouter } from './routes/webhooks';
 import { filesRouter } from './routes/files';
 import { slackRouter } from './routes/slack';
 import { healthRouter } from './routes/health';
+import { scenariosRouter } from './routes/scenarios';
 import { databaseService } from './services/database';
 import { RedisService } from './services/redis';
 import { WebSocketService } from './services/websocket';
@@ -129,6 +130,7 @@ class App {
     this.app.use('/api/projects', projectRouter);
     this.app.use('/api/issues', issueRouter);
     this.app.use('/api/integrations/slack', slackRouter);
+    this.app.use('/api/scenarios', scenariosRouter);
     this.app.use('/api/webhooks', webhookRouter);
     this.app.use('/api/files', filesRouter);
 

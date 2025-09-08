@@ -279,7 +279,25 @@ Rules:
         const res: any = await (this.client as any).responses.create(payload);
         const text = this.extractResponsesText(res);
         if (text && text.trim()) return text;
-        throw new Error('Empty responses output');
+        // Surface status/reason from Responses API when output is empty
+        const status = (res && (res.status || res.response?.status)) || 'unknown';
+        const reason =
+          res?.incomplete_details?.reason ||
+          res?.response?.incomplete_details?.reason ||
+          res?.error?.message ||
+          res?.message ||
+          'no reason provided';
+        const safety =
+          (res?.safety_ratings && JSON.stringify(res.safety_ratings)) ||
+          (res?.response?.safety_ratings && JSON.stringify(res.response.safety_ratings)) ||
+          undefined;
+        const meta: Record<string, any> = { status, reason };
+        if (safety) meta.safety = safety;
+        const err = new Error(
+          `OpenAI Responses returned no output (status=${status}, reason=${reason})`
+        );
+        (err as any).details = meta;
+        throw err;
       } catch (err: any) {
         lastErr = err;
         const msg = String(err?.message || err);
