@@ -13,6 +13,7 @@ import {
 } from '@/src/components/ui/ui/collapsible';
 import { Checkbox } from '@/src/components/ui/ui/checkbox';
 import api from '@/services/api';
+import EvidenceDialog from '@/components/evidence/EvidenceDialog';
 import {
   Select,
   SelectContent,
@@ -180,6 +181,8 @@ const PinnedIssueRow: React.FC<RowProps> = ({ id, issue, onUnpin, onOpen }) => {
   const inaccessible = issue === null;
 
   const projectId = (issue as any)?.project?.id ?? (issue as any)?.project_id;
+  const [evidenceOpen, setEvidenceOpen] = React.useState(false);
+  const [submittingEvidence, setSubmittingEvidence] = React.useState(false);
 
   React.useEffect(() => {
     // preload labels palette for compact selector
@@ -299,6 +302,53 @@ const PinnedIssueRow: React.FC<RowProps> = ({ id, issue, onUnpin, onOpen }) => {
     }
   };
 
+  const submitEvidence = async ({ file, text }: { file: File; text?: string }) => {
+    if (!projectId || !iid) return;
+    setSubmittingEvidence(true);
+    try {
+      const upload = await api.uploadFile(file, 'screenshot');
+      if (!upload.success || !upload.data?.url) throw new Error(upload.error || 'Upload failed');
+      const url = upload.data.url;
+      const body = `QA Passed${text ? `: ${text}` : ' ✅'}\n\n![](${url})`;
+      const noteRes = await api.addGitLabIssueNote(projectId, Number(iid), body);
+      if (!noteRes.success) throw new Error(noteRes.error || 'Failed to add note');
+      const entry = { at: Date.now(), text, imageUrl: url, noteUrl: undefined };
+      const prev = (issue as any)?.passedEvidence as any[] | undefined;
+      const next = [entry, ...(Array.isArray(prev) ? prev : [])].slice(0, 3);
+      await storageService.upsertPinnedSnapshot(id, {
+        passedEvidence: next,
+        updated_at: new Date().toISOString(),
+      } as any);
+      const done = await storageService.getPinnedDoneState();
+      done[id] = 'done';
+      await storageService.setPinnedDoneState(done);
+      setEvidenceOpen(false);
+    } catch (e) {
+      // fallback: persist locally and queue
+      try {
+        const upload = await api.uploadFile(file, 'screenshot');
+        const url = upload.success && upload.data?.url ? upload.data.url : '';
+        const entry = { at: Date.now(), text, imageUrl: url, localOnly: true } as any;
+        const prev = (issue as any)?.passedEvidence as any[] | undefined;
+        const next = [entry, ...(Array.isArray(prev) ? prev : [])].slice(0, 3);
+        await storageService.upsertPinnedSnapshot(id, { passedEvidence: next } as any);
+        await storageService.enqueuePendingAction({
+          id,
+          action: 'resolve',
+          payload: { projectId, iid: Number(iid), text, imageUrl: url },
+          tries: 0,
+          lastTriedAt: Date.now(),
+        } as any);
+        const done = await storageService.getPinnedDoneState();
+        done[id] = 'done';
+        await storageService.setPinnedDoneState(done);
+        setEvidenceOpen(false);
+      } catch {}
+    } finally {
+      setSubmittingEvidence(false);
+    }
+  };
+
   return (
     <Collapsible open={open} onOpenChange={onToggleOpen}>
       <div
@@ -339,9 +389,9 @@ const PinnedIssueRow: React.FC<RowProps> = ({ id, issue, onUnpin, onOpen }) => {
                 </div>
               </div>
             </div>
-            <div className="shrink-0 flex items-center gap-3">
-              <div className="text-[12px] opacity-80">#{iid || '—'}</div>
-              {(() => {
+          <div className="shrink-0 flex items-center gap-3">
+            <div className="text-[12px] opacity-80">#{iid || '—'}</div>
+            {(() => {
                 const isClosed = (issue as any)?.state === 'closed';
                 const value = isClosed ? 'closed' : 'open';
                 const handleChange = async (val: string) => {
@@ -393,6 +443,30 @@ const PinnedIssueRow: React.FC<RowProps> = ({ id, issue, onUnpin, onOpen }) => {
               )}
             </div>
             <div className="flex items-center gap-1.5 ml-2">
+              {(Array.isArray((issue as any)?.passedEvidence) && (issue as any).passedEvidence.length > 0) ? (
+                <div className="text-[11px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300">Passed</div>
+              ) : null}
+              {(() => {
+                const arr = (issue as any)?.passedEvidence as any[] | undefined;
+                const last = Array.isArray(arr) && arr.length ? arr[0] : null;
+                return last ? (
+                  <img src={last.imageUrl} alt="Evidence" className="h-5 w-5 rounded border border-white/20 object-cover" />
+                ) : null;
+              })()}
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7"
+                title="Add Evidence"
+                onClick={e => {
+                  e.stopPropagation();
+                  setEvidenceOpen(true);
+                }}
+              >
+                <svg viewBox="0 0 24 24" className="w-4 h-4 text-emerald-400" aria-hidden>
+                  <path fill="currentColor" d="M19 11h-6V5h-2v6H5v2h6v6h2v-6h6z" />
+                </svg>
+              </Button>
               <Button
                 variant="ghost"
                 size="icon"
@@ -518,6 +592,12 @@ const PinnedIssueRow: React.FC<RowProps> = ({ id, issue, onUnpin, onOpen }) => {
           </div>
         </CollapsibleContent>
       </div>
+      <EvidenceDialog
+        open={evidenceOpen}
+        onOpenChange={setEvidenceOpen}
+        onSubmit={submitEvidence}
+        busy={submittingEvidence}
+      />
     </Collapsible>
   );
 };

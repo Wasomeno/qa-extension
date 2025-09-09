@@ -22,6 +22,14 @@ export interface PinnedIssueSnapshot {
   raw?: any; // full source item for local-first needs
   // housekeeping
   lastSyncedAt: number;
+  // QA passed evidence entries (most recent first)
+  passedEvidence?: Array<{
+    at: number;
+    text?: string;
+    imageUrl: string;
+    noteUrl?: string;
+    localOnly?: boolean;
+  }>;
 }
 export type PinnedDone = 'open' | 'done'
 export type PendingActionType = 'update' | 'assign' | 'label' | 'resolve'

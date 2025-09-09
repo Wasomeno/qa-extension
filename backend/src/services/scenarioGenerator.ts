@@ -67,14 +67,24 @@ Rules:
       logger.logValidationError(
         'scenario_json',
         raw?.slice(0, 200) || '',
-        'Invalid JSON from model'
+        'Invalid JSON from model (first parse)'
       );
-      // try to coerce basic JSON array presence
+      // Try to extract and sanitize an array substring
       const start = raw.indexOf('[');
       const end = raw.lastIndexOf(']');
       if (start >= 0 && end > start) {
-        const sliced = raw.slice(start, end + 1);
-        scenarios = JSON.parse(sliced);
+        let sliced = raw.slice(start, end + 1);
+        sliced = sanitizeJsonArrayString(sliced);
+        try {
+          scenarios = JSON.parse(sliced);
+        } catch (e2) {
+          logger.logValidationError(
+            'scenario_json_sanitized',
+            sliced.slice(0, 200),
+            'Invalid JSON after sanitization'
+          );
+          throw e2;
+        }
       } else {
         throw new Error('Model did not return a JSON array');
       }
@@ -127,4 +137,26 @@ Rules:
     }
     return out;
   }
+
+}
+
+// Attempt to recover from minor JSON formatting issues common in LLM outputs
+function sanitizeJsonArrayString(input: string): string {
+  let s = input || '';
+  // Strip code fences if present
+  s = s.replace(/```json\s*|```/g, '');
+  // Replace smart quotes with straight quotes
+  s = s
+    .replace(/[\u2018\u2019\u201A\u201B]/g, "'")
+    .replace(/[\u201C\u201D\u201E\u201F]/g, '"');
+  // Remove BOM
+  s = s.replace(/^\uFEFF/, '');
+  // Remove trailing commas before object/array close
+  s = s.replace(/,(\s*[}\]])/g, '$1');
+  // Remove JavaScript-style comments (just in case)
+  s = s.replace(/\/\*[\s\S]*?\*\//g, ''); // block comments
+  s = s.replace(/^\s*\/\/.*$/gm, ''); // line comments
+  // Collapse any stray control characters
+  s = s.replace(/[\u0000-\u001F\u007F]/g, c => (c === '\n' || c === '\r' || c === '\t' ? c : ''));
+  return s;
 }

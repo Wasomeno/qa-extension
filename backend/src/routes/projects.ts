@@ -869,6 +869,106 @@ router.get(
   })
 );
 
+// Add a GitLab issue comment/note
+router.post(
+  '/:projectId/gitlab/issues/:iid/notes',
+  authMiddleware.authenticate,
+  asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+    const { projectId, iid } = req.params as any;
+    const issueIid = parseInt(iid, 10);
+    const userId = req.user!.id;
+
+    if (Number.isNaN(issueIid) || issueIid <= 0) {
+      sendResponse(res, 400, false, 'Invalid issue IID');
+      return;
+    }
+
+    const body: string | undefined = (req.body && (req.body as any).body) || undefined;
+    if (!body || typeof body !== 'string' || body.trim().length === 0) {
+      sendResponse(res, 400, false, 'Body is required');
+      return;
+    }
+
+    let gitlabProjectRef: string | number | undefined = undefined;
+    let localProject: any | null = null;
+
+    try {
+      const oauthConnection = await db
+        .getConnection()
+        .select('*')
+        .from('oauth_connections')
+        .where('user_id', userId)
+        .where('provider', 'gitlab')
+        .first();
+
+      if (!oauthConnection || !oauthConnection.access_token) {
+        sendResponse(res, 401, false, 'GitLab not connected', null, {
+          requiresGitLabAuth: true,
+        });
+        return;
+      }
+
+      gitlabProjectRef = projectId;
+      if (!/^\d+$/.test(String(projectId))) {
+        localProject = await db.projects().where('id', projectId).first();
+        if (!localProject) {
+          sendResponse(
+            res,
+            400,
+            false,
+            'Invalid project ID: project not found'
+          );
+          return;
+        }
+        gitlabProjectRef =
+          localProject.gitlab_project_id ||
+          localProject.gitlab_project_path ||
+          projectId;
+      }
+
+      const gitlab = new GitLabService(oauthConnection.access_token);
+      let note;
+      try {
+        note = await gitlab.addIssueComment(gitlabProjectRef!, issueIid, body);
+      } catch (err: any) {
+        const msg = err?.message || '';
+        if (
+          localProject &&
+          localProject.gitlab_project_path &&
+          String(gitlabProjectRef) !== String(localProject.gitlab_project_path)
+        ) {
+          note = await gitlab.addIssueComment(
+            localProject.gitlab_project_path,
+            issueIid,
+            body
+          );
+        } else {
+          throw err;
+        }
+      }
+
+      sendResponse(res, 201, true, 'GitLab note created', { note });
+    } catch (error: any) {
+      logger.error('Create GitLab issue note error:', error);
+      const msg = error?.message || 'Failed to create note in GitLab';
+      const lower = String(msg).toLowerCase();
+      const code =
+        lower.includes('authentication')
+          ? 401
+          : lower.includes('forbidden')
+            ? 403
+            : lower.includes('not found')
+              ? 404
+              : 500;
+      try {
+        sendResponse(res, code, false, msg);
+      } catch (_) {
+        sendResponse(res, code, false, msg);
+      }
+    }
+  })
+);
+
 // Get GitLab project labels
 router.get(
   '/:projectId/gitlab/labels',

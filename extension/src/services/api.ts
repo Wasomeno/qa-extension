@@ -387,13 +387,15 @@ class ApiService {
 
   async previewScenarios(url: string) {
     const q = new URLSearchParams({ url });
-    // LLM generation can exceed 10s; allow more time for this endpoint
+    // Allow long-running previews: disable timeout by passing 0
     return this.request<{ scenarios: any[]; meta: any }>(
       `/api/scenarios/preview?${q.toString()}`,
       {},
-      30000
+      0
     );
   }
+
+  // workbook-raw endpoint removed
 
   async generateScenarios(payload: {
     url: string;
@@ -407,7 +409,8 @@ class ApiService {
   }
 
   async exportScenariosXlsx(payload: {
-    scenarios: any[];
+    scenarios?: any[];
+    sheets?: Array<{ name?: string; scenarios: any[] }>;
     template?: any;
     title?: string;
   }): Promise<{ ok: boolean; filename?: string; blob?: Blob; error?: string }> {
@@ -429,8 +432,10 @@ class ApiService {
         init: {
           method: 'POST',
           headers: { ...headers, 'Content-Type': 'application/json' },
-          // Backend now always returns XLSX and ignores export.format
-          body: JSON.stringify({ scenarios: payload.scenarios }),
+          // Backend now always returns XLSX. Support multi-sheet payload.
+          body: JSON.stringify(
+            payload.sheets ? { sheets: payload.sheets } : { scenarios: payload.scenarios || [] }
+          ),
         },
         responseType: 'arrayBuffer',
         timeoutMs: 20000,
@@ -471,11 +476,9 @@ class ApiService {
     init: RequestInit,
     timeoutMs: number
   ): Promise<{ ok: boolean; status: number; statusText: string; body: any }> {
-    const controller = new AbortController();
-    const t = setTimeout(() => controller.abort(), timeoutMs);
     try {
-      const resp = await fetch(url, { ...init, signal: controller.signal });
-      clearTimeout(t);
+      // No timeout: never abort direct fetches
+      const resp = await fetch(url, { ...init });
       let body: any = undefined;
       try {
         body = await resp.json();
@@ -487,7 +490,6 @@ class ApiService {
         body,
       };
     } catch (e) {
-      clearTimeout(t);
       throw e;
     }
   }
@@ -1072,6 +1074,18 @@ class ApiService {
   ): Promise<ApiResponse<{ items: GitLabIssueNote[] }>> {
     const endpoint = `/api/projects/${encodeURIComponent(String(projectId))}/gitlab/issues/${issueIid}/notes`;
     return this.request<{ items: GitLabIssueNote[] }>(endpoint);
+  }
+
+  async addGitLabIssueNote(
+    projectId: string | number,
+    issueIid: number,
+    body: string
+  ): Promise<ApiResponse<{ note: any }>> {
+    const endpoint = `/api/projects/${encodeURIComponent(String(projectId))}/gitlab/issues/${issueIid}/notes`;
+    return this.request<{ note: any }>(endpoint, {
+      method: 'POST',
+      body: JSON.stringify({ body }),
+    });
   }
 
   /**

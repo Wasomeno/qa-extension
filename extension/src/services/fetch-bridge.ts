@@ -46,12 +46,9 @@ export async function bridgeFetch<T = any>(req: BackgroundFetchRequest): Promise
     }
   }
 
-  const timeoutMs = Math.max(1, req.timeoutMs || 30000);
-  const controller = new AbortController();
-  const t = setTimeout(() => controller.abort(), timeoutMs);
+  // No client-side timeout: never abort requests here.
   try {
-    const resp = await fetch(req.url, { ...(req.init as RequestInit), signal: controller.signal });
-    clearTimeout(t);
+    const resp = await fetch(req.url, { ...(req.init as RequestInit) });
     const ct = resp.headers.get('content-type') || '';
     const want = req.responseType || (ct.includes('application/json') ? 'json' : (ct.startsWith('text/') ? 'text' : 'arrayBuffer'));
     let body: any = undefined;
@@ -77,7 +74,6 @@ export async function bridgeFetch<T = any>(req: BackgroundFetchRequest): Promise
       body,
     } as BackgroundFetchResponse<T>;
   } catch (e) {
-    clearTimeout(t);
     // Surface as a network-like response for uniform handling
     return {
       ok: false,

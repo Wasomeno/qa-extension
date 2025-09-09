@@ -28,6 +28,7 @@ import { Label } from '@/src/components/ui/ui/label';
 import { FiStar } from 'react-icons/fi';
 import { AiFillStar } from 'react-icons/ai';
 import { storageService } from '@/services/storage';
+import EvidenceDialog from '@/components/evidence/EvidenceDialog';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
 
@@ -64,6 +65,9 @@ const IssueListInner: React.FC<IssueListProps> = ({
   const [loadingMeta, setLoadingMeta] = React.useState(false);
   const [authError, setAuthError] = React.useState<string | null>(null);
   const [selectedIssue, setSelectedIssue] = React.useState<any | null>(null);
+  const [evidenceTarget, setEvidenceTarget] = React.useState<null | { projectId: string | number; iid: number; id: string }>(null);
+  const [submittingEvidence, setSubmittingEvidence] = React.useState(false);
+  const [justPassed, setJustPassed] = React.useState<Set<string>>(new Set());
 
   React.useEffect(() => {
     let mounted = true;
@@ -484,6 +488,26 @@ const IssueListInner: React.FC<IssueListProps> = ({
                     ) : null}
                   </div>
                   <div className="flex items-center gap-1.5">
+                    {justPassed.has(item.id) ? (
+                      <div className="text-[11px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-600">Passed</div>
+                    ) : null}
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 glass-button"
+                      title="Add Passed Evidence"
+                      onClick={e => {
+                        e.stopPropagation();
+                        const projectId = item.project?.id as string | number | undefined;
+                        const iid = item.number as number | undefined;
+                        if (!projectId || !iid) return;
+                        setEvidenceTarget({ projectId, iid, id: item.id });
+                      }}
+                    >
+                      <svg viewBox="0 0 24 24" className="w-4 h-4 text-emerald-600" aria-hidden>
+                        <path fill="currentColor" d="M19 11h-6V5h-2v6H5v2h6v6h2v-6h6z" />
+                      </svg>
+                    </Button>
                     <Button
                       variant="ghost"
                       size="icon"
@@ -648,6 +672,34 @@ const IssueListInner: React.FC<IssueListProps> = ({
           <div className="text-xs text-white/70">Loading more…</div>
         )}
       </div>
+      <EvidenceDialog
+        open={!!evidenceTarget}
+        onOpenChange={open => { if (!open) setEvidenceTarget(null); }}
+        onSubmit={async ({ file, text }) => {
+          const tgt = evidenceTarget;
+          if (!tgt) return;
+          setSubmittingEvidence(true);
+          try {
+            const upload = await api.uploadFile(file, 'screenshot');
+            if (!upload.success || !upload.data?.url) throw new Error(upload.error || 'Upload failed');
+            const url = upload.data.url;
+            const body = `QA Passed${text ? `: ${text}` : ' ✅'}\n\n![](${url})`;
+            const noteRes = await api.addGitLabIssueNote(tgt.projectId, Number(tgt.iid), body);
+            if (!noteRes.success) throw new Error(noteRes.error || 'Failed to add note');
+            setJustPassed(prev => {
+              const next = new Set(prev);
+              next.add(tgt.id);
+              return next;
+            });
+            setEvidenceTarget(null);
+          } catch (e) {
+            // no-op; user can retry
+          } finally {
+            setSubmittingEvidence(false);
+          }
+        }}
+        busy={submittingEvidence}
+      />
       {/* Detail dialog */}
       {!onSelect && (
         <Dialog

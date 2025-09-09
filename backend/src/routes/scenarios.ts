@@ -2,9 +2,11 @@ import { Router, Request, Response } from 'express';
 import { GoogleSheetReader } from '../services/sheets';
 import { ScenarioGeneratorService } from '../services/scenarioGenerator';
 import { XlsxExporter } from '../services/exporter';
-import { DefaultScenarioTemplate } from '../templates/defaultScenarioTemplate';
-import { GoogleScenarioTemplate } from '../templates/googleScenarioTemplate';
-import { mapAcceptanceToGoogleScenarios } from '../services/acceptanceMapper';
+import {
+  DefaultScenarioTemplate,
+  ScenarioTemplate,
+} from '../templates/defaultScenarioTemplate';
+// Google template and mapper removed; using default template + LLM only.
 import { logger } from '../utils/logger';
 import { EnvConfig } from '../config/env';
 
@@ -55,16 +57,10 @@ const buildErrorPayload = (e: any, req: Request) => {
 
 // Simple GET to return current default template
 scenariosRouter.get('/template', (req: Request, res: Response) => {
-  // Default to Google template when not specified
-  const format = String(
-    req.query.format || req.query.template || 'google'
-  ).toLowerCase();
-  const tpl =
-    format === 'google' || format === 'qa_google_test_scenario_v1'
-      ? GoogleScenarioTemplate
-      : DefaultScenarioTemplate;
-  return res.json({ success: true, data: tpl });
+  return res.json({ success: true, data: DefaultScenarioTemplate });
 });
+
+// workbook-raw endpoint removed
 
 // Preview: reads sheet, generates small sample
 scenariosRouter.get('/preview', async (req: Request, res: Response) => {
@@ -72,46 +68,109 @@ scenariosRouter.get('/preview', async (req: Request, res: Response) => {
     const url = String(req.query.url || '');
     if (!url)
       return res.status(400).json({ success: false, error: 'Missing url' });
-    const read = await GoogleSheetReader.readPublicCsv(url);
+    const ids = GoogleSheetReader.extractIds(url);
+    // If a specific gid is provided, read only that tab as CSV (faster)
+    // Otherwise, attempt to read entire workbook (all tabs) via XLSX export.
+    let acceptanceRows: any[] = [];
+    let sheetMeta: any = {};
+    let workbook: {
+      sheets: Array<{ name: string; rows: any[] }>;
+      spreadsheetId: string;
+    } | null = null;
+    if (ids.gid) {
+      const read = await GoogleSheetReader.readPublicCsv(url);
+      acceptanceRows = read.rows;
+      sheetMeta = { id: read.spreadsheetId, gid: read.gid };
+    } else {
+      // Combine all tabs
+      const wb = await GoogleSheetReader.readPublicWorkbook(url);
+      workbook = { sheets: wb.sheets, spreadsheetId: wb.spreadsheetId };
+      console.log(
+        'WORKBOOK SHEETS',
+        wb.sheets.map(sheet => sheet.rows.map(row => row.Detail))
+      );
+      acceptanceRows = wb.sheets.flatMap(s => s.rows);
+      sheetMeta = {
+        id: wb.spreadsheetId,
+        gid: null,
+        tabs: wb.sheets.map(s => ({ name: s.name, rows: s.rows.length })),
+      };
+    }
     const generator = new ScenarioGeneratorService();
     const max = Math.min(
       50,
       Math.max(1, Number(req.query.limit || req.query.maxScenarios || 10))
     );
-    const format = String(req.query.format || req.query.template).toLowerCase();
-    const template =
-      format === 'google' || format === 'qa_google_test_scenario_v1'
-        ? GoogleScenarioTemplate
-        : DefaultScenarioTemplate;
-    const useDeterministic = template === GoogleScenarioTemplate;
+    const template = DefaultScenarioTemplate;
     let scenarios: any[] = [];
     let meta: any = {};
-    if (useDeterministic && template === GoogleScenarioTemplate) {
-      scenarios = mapAcceptanceToGoogleScenarios(read.rows, max);
-      console.log('SCENARIOS', scenarios);
-      meta = {
-        method: 'deterministic',
-        count: scenarios.length,
-        template: template.name,
-      };
-    } else {
-      const result = await generator.generate({
-        acceptanceRows: read.rows,
-        template,
-        options: { maxScenarios: max },
-      });
-      scenarios = result.scenarios;
-      meta = { ...result.meta, method: 'llm' };
-      console.log('RESULT', result);
-    }
+    // LLM path. For multi-tab inputs, run per-tab to return separate lists
+      console.log(
+        'WORKBOOK',
+        workbook?.sheets.map(sheet => sheet.rows.map(row => row.detail))
+      );
+      if (
+        workbook &&
+        Array.isArray(workbook.sheets) &&
+        workbook.sheets.length > 0
+      ) {
+        const tabs = workbook.sheets;
+        // Do not divide limit across tabs; allow multiple scenarios per tab
+        const perTabLimit = Math.max(
+          1,
+          Number(req.query.limit || req.query.maxScenarios || 10)
+        );
+        const perTab: Array<{ name: string; scenarios: any[] }> = [];
+        for (const s of tabs) {
+          const r = await generator.generate({
+            acceptanceRows: s.rows,
+            template,
+            options: { maxScenarios: perTabLimit },
+          });
+          let scen = Array.isArray(r.scenarios) ? r.scenarios : [];
+          scen = scen.map(row => ensureNonEmptyByTemplate(row, template));
+          perTab.push({ name: s.name, scenarios: scen });
+        }
+        meta = {
+          usedRows: acceptanceRows.length,
+          requested: acceptanceRows.length,
+          template: template.name,
+          method: 'llm_per_tab',
+          tabs: perTab.map(t => ({ name: t.name, count: t.scenarios.length })),
+        };
+        return res.json({
+          success: true,
+          data: {
+            sheets: perTab, // per-tab scenarios as requested
+            meta: { ...meta, sheet: sheetMeta },
+          },
+        });
+      } else {
+        const result = await generator.generate({
+          acceptanceRows,
+          template,
+          options: { maxScenarios: max },
+        });
 
-    return res.json({
-      success: true,
-      data: {
-        scenarios,
-        meta: { ...meta, sheet: { id: read.spreadsheetId, gid: read.gid } },
-      },
-    });
+        meta = { ...result.meta, method: 'llm' };
+        const singleSheet = [
+          {
+            name: 'Sheet',
+            scenarios: (Array.isArray(result.scenarios)
+              ? result.scenarios
+              : []
+            ).map(r => ensureNonEmptyByTemplate(r, template)),
+          },
+        ];
+        return res.json({
+          success: true,
+          data: {
+            sheets: singleSheet,
+            meta: { ...meta, sheet: sheetMeta },
+          },
+        });
+      }
+    // Unreachable with the early returns above
   } catch (e: any) {
     logger.logError('Scenario preview failed', e);
     return res.status(400).json(buildErrorPayload(e, req));
@@ -124,16 +183,24 @@ scenariosRouter.post('/generate', async (req: Request, res: Response) => {
     const { url, template, options } = req.body || {};
     if (!url)
       return res.status(400).json({ success: false, error: 'Missing url' });
-    const read = await GoogleSheetReader.readPublicCsv(String(url));
+    const ids = GoogleSheetReader.extractIds(String(url));
+    let acceptanceRows: any[] = [];
+    if (ids.gid) {
+      const read = await GoogleSheetReader.readPublicCsv(String(url));
+      acceptanceRows = read.rows;
+    } else {
+      const wb = await GoogleSheetReader.readPublicWorkbook(String(url));
+      acceptanceRows = wb.sheets.flatMap(s => s.rows);
+    }
     const generator = new ScenarioGeneratorService();
     const { scenarios, meta } = await generator.generate({
-      acceptanceRows: read.rows,
-      template: template || DefaultScenarioTemplate,
+      acceptanceRows,
+      template: DefaultScenarioTemplate,
       options: options || {},
     });
     return res.json({
       success: true,
-      data: scenarios,
+      data: scenarios.map(s => ensureNonEmptyByTemplate(s, DefaultScenarioTemplate)),
       meta: { ...meta, count: scenarios.length },
     });
   } catch (e: any) {
@@ -142,31 +209,59 @@ scenariosRouter.post('/generate', async (req: Request, res: Response) => {
   }
 });
 
-// Export XLSX (Google Test Scenario format)
+// Export XLSX (Default Scenario format)
 scenariosRouter.post('/export', async (req: Request, res: Response) => {
   try {
-    const { scenarios } = req.body || {};
-    if (!Array.isArray(scenarios)) {
+    const { scenarios, sheets, title } = req.body || {};
+    const hasMulti = Array.isArray(sheets) && sheets.length > 0;
+    if (!hasMulti && !Array.isArray(scenarios)) {
       return res
         .status(400)
         .json({ success: false, error: 'Missing scenarios array' });
     }
-    // Always use the Google test scenario format as requested
-    const tpl = GoogleScenarioTemplate;
+    // Use only the default template
+    const tpl = DefaultScenarioTemplate;
 
-    // Normalize rows to match chosen template shape
-    const rows = scenarios.map(s => normalizeToGoogleRow(s));
-    // Enforce required fields (no fallbacks): user_story must be present
-
-    const buf = await XlsxExporter.toXlsxBuffer(rows, tpl, {
-      sheetName: 'Scenarios',
-    });
-    const filename = `${new Date().toISOString().split('T')[0]}-${tpl.name}-scenarios.xlsx`;
+    let buf: Buffer;
+    const now = new Date();
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const timestamp = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(
+      now.getDate()
+    )}_${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
+    let filename = `test_scenarios_${timestamp}.xlsx`;
+    if (hasMulti) {
+      const normalizedSheets = (
+        sheets as Array<{ name?: string; scenarios: any[]; title?: string }>
+      ).map(s => {
+        const name = s.name || 'Test Scenarios';
+        const rows = (s.scenarios || [])
+          .map((r: any) => normalizeByTemplate(r, tpl))
+          .map((r: any) => ensureNonEmptyByTemplate(r, tpl));
+        return {
+          name,
+          rows,
+          title: typeof s.title === 'string' ? s.title : undefined,
+        };
+      });
+      buf = await XlsxExporter.toXlsxMultiSheetBuffer(normalizedSheets, tpl);
+    } else {
+      // Normalize rows to match chosen template shape
+      const rows = scenarios
+        .map((s: any) => normalizeByTemplate(s, tpl))
+        .map((r: any) => ensureNonEmptyByTemplate(r, tpl));
+      buf = await XlsxExporter.toXlsxBuffer(rows, tpl, {
+        sheetName: 'Test Scenarios',
+        title: typeof title === 'string' ? title : undefined,
+      });
+    }
     res.setHeader(
       'Content-Type',
       'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
     );
-    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="${filename}"; filename*=UTF-8''${encodeURIComponent(filename)}`
+    );
     res.setHeader('Content-Length', String(buf.length));
     return res.status(200).send(buf);
   } catch (e: any) {
@@ -175,8 +270,8 @@ scenariosRouter.post('/export', async (req: Request, res: Response) => {
   }
 });
 
-// Ensure exported rows align with GoogleScenarioTemplate keys and array formatting
-function toArray(v: any): string[] {
+// Template-agnostic normalization for export
+function toArrayGeneric(v: any): string[] {
   if (Array.isArray(v))
     return v
       .filter(x => x != null)
@@ -190,32 +285,42 @@ function toArray(v: any): string[] {
     .filter(Boolean);
 }
 
-function normalizeToGoogleRow(s: any) {
-  // Strict: user_story must be explicitly provided; no fallbacks
-  const pre = toArray(
-    s.pre_condition ?? s.preCondition ?? s.preconditions ?? s.precondition
-  );
-  const steps = toArray(s.test_step ?? s.testStep ?? s.steps ?? s.step);
-  const results = toArray(
-    s.result ?? s.expected ?? s.expected_result ?? s.expectedResult ?? s.results
-  );
-  const userStory = typeof s.user_story === 'string' ? s.user_story : '';
-  return {
-    user_story: userStory,
-    test_id: s.test_id ?? s.testId ?? s.id ?? s.kode ?? s.code ?? '',
-    test_type: s.test_type ?? s.testType ?? s.type ?? '',
-    test_scenario:
-      s.test_scenario ??
-      s.testScenario ??
-      s.scenario ??
-      s.information ??
-      s.title ??
-      '',
-    pre_condition: pre,
-    test_step: steps,
-    result: results,
-    status: s.status ?? 'NONE',
-    additional_note:
-      s.additional_note ?? s.additionalNote ?? s.note ?? s.notes ?? '',
-  };
+function normalizeByTemplate(row: any, template: ScenarioTemplate) {
+  const out: any = {};
+  for (const col of template.columns) {
+    const key = col.key;
+    const v = row?.[key];
+    if (col.type === 'array') out[key] = toArrayGeneric(v);
+    else if (col.type === 'id') out[key] = v ? String(v) : '';
+    else out[key] = typeof v === 'string' ? v : v == null ? '' : String(v);
+  }
+  return out;
+}
+
+// Ensure every column defined by the selected template is present and non-empty
+function ensureNonEmptyByTemplate(row: any, template: ScenarioTemplate): any {
+  const out: any = { ...row };
+  for (const col of template.columns) {
+    const key = col.key;
+    const val = out[key];
+    if (col.type === 'array') {
+      const arr = Array.isArray(val)
+        ? val.map((x: any) => String(x).trim()).filter(Boolean)
+        : [];
+      out[key] = arr.length > 0 ? arr : ['Tidak tersedia'];
+    } else if (col.type === 'id') {
+      const v = typeof val === 'string' ? val.trim() : '';
+      out[key] = v || 'SCN-001';
+    } else {
+      const v = typeof val === 'string' ? val.trim() : '';
+      if (!v) {
+        if (key === 'status') out[key] = 'NONE';
+        else if (key === 'test_type') out[key] = 'Positive';
+        else out[key] = 'Tidak tersedia';
+      } else {
+        out[key] = v;
+      }
+    }
+  }
+  return out;
 }

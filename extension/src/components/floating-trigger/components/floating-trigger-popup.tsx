@@ -8,6 +8,12 @@ import {
   Pin,
   ListCheck,
   ChevronRight,
+  Link as LinkIcon,
+  Loader2,
+  FileDown,
+  Copy,
+  CheckCircle2,
+  AlertCircle,
 } from 'lucide-react';
 import CompactIssueCreator from '@/components/compact-issue-creator';
 import IssueList from '@/components/issue-list';
@@ -18,6 +24,10 @@ import WorkflowList from '@/components/workflows';
 import PinnedIssues from '@/components/pinned-issues';
 // Recording feature removed
 import { Button } from '@/src/components/ui/ui/button';
+import { Input } from '@/src/components/ui/ui/input';
+import { Badge } from '@/src/components/ui/ui/badge';
+import { Alert, AlertDescription } from '@/src/components/ui/ui/alert';
+import { ScrollArea } from '@/src/components/ui/ui/scroll-area';
 import useAuth from '@/hooks/useAuth';
 import { authService } from '@/services/auth';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -418,7 +428,7 @@ const FloatingTriggerPopup: React.FC<FloatingTriggerPopupProps> = ({
               onMouseDown={onMouseDown}
             />
             <div className="flex-1 min-h-0 overflow-auto p-3">
-              <ScenarioGeneratorPane />
+              <ScenarioGeneratorPaneV2 />
             </div>
           </div>
         );
@@ -478,6 +488,327 @@ const FloatingTriggerPopup: React.FC<FloatingTriggerPopupProps> = ({
   );
 };
 
+// V2: Modern, simplified Task Scenario Generator
+const ScenarioGeneratorPaneV2: React.FC = () => {
+  const [url, setUrl] = React.useState('');
+  const [busy, setBusy] = React.useState<'idle' | 'generating' | 'exporting'>(
+    'idle'
+  );
+  const [rows, setRows] = React.useState<any[]>([]);
+  const [sheets, setSheets] = React.useState<
+    Array<{ name: string; scenarios: any[] }>
+  >([]);
+  const [selectedSheet, setSelectedSheet] = React.useState<string>('ALL');
+  const [msg, setMsg] = React.useState<{
+    type: 'error' | 'success';
+    text: string;
+  } | null>(null);
+
+  // Helpers for direct Google Sheet CSV export
+  // JSONL helpers removed
+
+  const isGoogleSheet = (val: string) =>
+    /docs\.google\.com\/spreadsheets/i.test(val);
+  const isValid = url.trim().length > 0 && isGoogleSheet(url.trim());
+
+  const handlePaste = async () => {
+    try {
+      const text = await navigator.clipboard.readText();
+      if (text) setUrl(text);
+    } catch {
+      setMsg({ type: 'error', text: 'Clipboard not available' });
+    }
+  };
+
+  const copyJson = () => {
+    try {
+      const payload =
+        sheets.length > 0
+          ? {
+              sheets: sheets.map(s => ({
+                name: s.name,
+                scenarios: s.scenarios,
+              })),
+            }
+          : { scenarios: rows };
+      navigator.clipboard.writeText(JSON.stringify(payload, null, 2));
+      setMsg({ type: 'success', text: 'Copied JSON to clipboard' });
+    } catch (e: any) {
+      setMsg({ type: 'error', text: e?.message || 'Copy failed' });
+    }
+  };
+
+  const generate = async () => {
+    setMsg(null);
+    if (!isValid) {
+      setMsg({ type: 'error', text: 'Enter a valid Google Sheet URL' });
+      return;
+    }
+    setBusy('generating');
+    try {
+      const res = await apiService.previewScenarios(url.trim());
+      if (res.success && (res as any).data) {
+        const data: any = (res as any).data;
+        const multi = Array.isArray(data.sheets)
+          ? (data.sheets as Array<{ name: string; scenarios: any[] }>)
+          : [];
+        setSheets(multi);
+        setSelectedSheet('ALL');
+        setRows(multi.flatMap(s => s.scenarios));
+        setMsg({ type: 'success', text: 'Generated preview' });
+      } else {
+        setMsg({
+          type: 'error',
+          text: (res as any).error || 'Generation failed',
+        });
+      }
+    } catch (e: any) {
+      setMsg({ type: 'error', text: e?.message || 'Failed to generate' });
+    } finally {
+      setBusy('idle');
+    }
+  };
+
+  const exportToXlsx = async () => {
+    if (!rows.length) {
+      setMsg({ type: 'error', text: 'Nothing to export' });
+      return;
+    }
+    setBusy('exporting');
+    try {
+      const res = await apiService.exportScenariosXlsx(
+        sheets.length > 0
+          ? {
+              sheets: sheets.map(s => ({
+                name: s.name,
+                scenarios: s.scenarios,
+              })),
+            }
+          : { scenarios: rows }
+      );
+      if (!res.ok || !res.blob) {
+        setMsg({ type: 'error', text: res.error || 'Export failed' });
+        setBusy('idle');
+        return;
+      }
+      const blobUrl = URL.createObjectURL(res.blob);
+      const a = document.createElement('a');
+      a.href = blobUrl;
+      a.download = `test_scenarios_${Date.now()}.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(blobUrl);
+      setMsg({ type: 'success', text: 'Exported as XLSX' });
+    } catch (e: any) {
+      setMsg({ type: 'error', text: e?.message || 'Export failed' });
+    } finally {
+      setBusy('idle');
+    }
+  };
+
+  // JSONL export feature removed
+
+  const scenariosCount = sheets.length
+    ? sheets.reduce((acc, s) => acc + (s.scenarios?.length || 0), 0)
+    : rows.length;
+
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="text-sm font-semibold">Google Sheet source</div>
+
+      <div className="relative">
+        <div className="absolute left-2 top-1/2 -translate-y-1/2 text-neutral-400">
+          <LinkIcon className="w-4 h-4" />
+        </div>
+        <Input
+          value={url}
+          onChange={e => setUrl(e.target.value)}
+          placeholder="https://docs.google.com/spreadsheets/d/..."
+          className="pl-8 pr-28 text-xs bg-white pointer-events-auto glass-input"
+        />
+        <div className="absolute right-1 top-1/2 -translate-y-1/2 flex gap-1">
+          <Button
+            size="sm"
+            variant="secondary"
+            onClick={handlePaste}
+            className="pointer-events-auto h-7 px-2 text-[11px]"
+          >
+            Paste
+          </Button>
+          {url && (
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => setUrl('')}
+              className="pointer-events-auto h-7 px-2 text-[11px]"
+            >
+              Clear
+            </Button>
+          )}
+        </div>
+      </div>
+
+      {!url && (
+        <div className="text-xs text-neutral-500">
+          Tip: paste a public sharing link to preview test scenarios.
+        </div>
+      )}
+
+      <div className="flex flex-wrap items-center gap-2">
+        <Button
+          size="sm"
+          onClick={generate}
+          disabled={busy !== 'idle' || !isValid}
+          className="pointer-events-auto text-xs glass-button text-black"
+        >
+          {busy === 'generating' ? (
+            <span className="inline-flex items-center gap-2 text-xs">
+              <Loader2 className="w-4 h-4 animate-spin" /> Generating
+            </span>
+          ) : (
+            'Generate'
+          )}
+        </Button>
+        <Button
+          size="sm"
+          onClick={exportToXlsx}
+          disabled={busy !== 'idle' || rows.length === 0}
+          className="pointer-events-auto glass-button text-black"
+        >
+          {busy === 'exporting' ? (
+            <span className="inline-flex items-center gap-2 text-xs">
+              <Loader2 className="w-4 h-4 animate-spin" /> Exporting
+            </span>
+          ) : (
+            <span className="inline-flex items-center gap-2 text-xs">
+              <FileDown className="w-4 h-4" /> Export XLSX
+            </span>
+          )}
+        </Button>
+
+        {scenariosCount > 0 && (
+          <div className="ml-auto flex items-center gap-2 text-[10px] text-neutral-600">
+            <Badge variant="secondary">{scenariosCount} scenarios</Badge>
+            {sheets.length > 0 && (
+              <Badge variant="outline">{sheets.length} tabs</Badge>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* JSONL export UI removed */}
+
+      {msg && (
+        <Alert
+          className={`py-2 ${msg.type === 'error' ? 'border-red-200/80 text-red-700 bg-red-50' : 'border-green-200/80 text-green-700 bg-green-50'}`}
+        >
+          <AlertDescription className="text-[11px] leading-relaxed">
+            <span className="inline-flex items-center gap-2">
+              {msg.type === 'error' ? (
+                <AlertCircle className="w-4 h-4" />
+              ) : (
+                <CheckCircle2 className="w-4 h-4" />
+              )}
+              {msg.text}
+            </span>
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {sheets.length > 0 && (
+        <div className="flex flex-col gap-2">
+          <div className="text-[11px] text-neutral-700">Preview</div>
+          <ScrollArea className="w-full">
+            <div className="flex gap-1 pb-2 min-w-max">
+              {['ALL', ...sheets.map(s => s.name)].map(name => {
+                const count =
+                  name === 'ALL'
+                    ? sheets.reduce((a, s) => a + (s.scenarios?.length || 0), 0)
+                    : sheets.find(s => s.name === name)?.scenarios?.length || 0;
+                const active = selectedSheet === name;
+                return (
+                  <button
+                    key={name}
+                    onClick={() => {
+                      setSelectedSheet(name);
+                      if (name === 'ALL') {
+                        setRows(sheets.flatMap(s => s.scenarios));
+                      } else {
+                        const found = sheets.find(s => s.name === name);
+                        setRows(found ? found.scenarios : []);
+                      }
+                    }}
+                    className={`pointer-events-auto rounded-full border px-2 py-1 text-[11px] transition-colors ${
+                      active
+                        ? 'bg-neutral-900 text-white border-neutral-900'
+                        : 'bg-white/80 hover:bg-neutral-100 border-neutral-200 text-neutral-700'
+                    }`}
+                  >
+                    {name}
+                    <span className="ml-1 inline-flex items-center">
+                      <Badge
+                        variant={active ? 'secondary' : 'outline'}
+                        className={`h-4 px-1 text-[10px] ${active ? 'bg-white/10 text-white border-white/10' : ''}`}
+                      >
+                        {count}
+                      </Badge>
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </ScrollArea>
+        </div>
+      )}
+
+      {rows.length === 0 ? (
+        <div className="rounded-md border border-dashed border-neutral-200 bg-white/60 p-4 text-xs text-neutral-600">
+          No preview yet. Paste a Google Sheet link and press Generate to see
+          the first rows.
+        </div>
+      ) : (
+        <div className="rounded-md border border-neutral-200 bg-white/80 overflow-hidden">
+          <div className="max-h-56 overflow-auto">
+            <table className="w-full text-[11px]">
+              <thead className="sticky top-0 z-[1]">
+                <tr className="bg-neutral-50 border-b">
+                  {Object.keys(rows[0])
+                    .slice(0, 6)
+                    .map(k => (
+                      <th key={k} className="text-left px-2 py-2 font-medium">
+                        {k}
+                      </th>
+                    ))}
+                </tr>
+              </thead>
+              <tbody>
+                {rows.slice(0, 6).map((r, i) => (
+                  <tr key={i} className="odd:bg-white even:bg-neutral-50/40">
+                    {Object.keys(rows[0])
+                      .slice(0, 6)
+                      .map(k => (
+                        <td key={k} className="px-2 py-2 align-top">
+                          {Array.isArray(r[k])
+                            ? (r[k] as any[]).join(' \n ')
+                            : String(r[k] ?? '')}
+                        </td>
+                      ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div className="px-2 py-1 text-[10px] text-neutral-500 border-t bg-white/70">
+            Showing up to 6 rows/columns{' '}
+            {sheets.length > 0 ? `(View: ${selectedSheet})` : ''}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
 export default FloatingTriggerPopup;
 
 // Minimal pane component for generating scenarios from a Google Sheet
@@ -487,6 +818,11 @@ const ScenarioGeneratorPane: React.FC = () => {
     'idle'
   );
   const [rows, setRows] = React.useState<any[]>([]);
+  const [sheets, setSheets] = React.useState<
+    Array<{ name: string; scenarios: any[] }>
+  >([]);
+  const [selectedSheet, setSelectedSheet] = React.useState<string>('ALL');
+  const [exportMulti, setExportMulti] = React.useState<boolean>(true);
   const [lastExportedAt, setLastExportedAt] = React.useState<number | null>(
     null
   );
@@ -506,8 +842,12 @@ const ScenarioGeneratorPane: React.FC = () => {
       const res = await apiService.previewScenarios(url);
       if (res.success && (res as any).data) {
         const data: any = (res as any).data;
-        const scenarios = data.scenarios || [];
-        setRows(scenarios);
+        const multi = Array.isArray(data.sheets)
+          ? (data.sheets as Array<{ name: string; scenarios: any[] }>)
+          : [];
+        setSheets(multi);
+        setSelectedSheet('ALL');
+        setRows(multi.flatMap(s => s.scenarios));
       } else {
         setMsg({ type: 'error', text: res.error || 'Generation failed' });
       }
@@ -525,7 +865,16 @@ const ScenarioGeneratorPane: React.FC = () => {
     }
     setBusy('exporting');
     try {
-      const res = await apiService.exportScenariosXlsx({ scenarios: rows });
+      const res = await apiService.exportScenariosXlsx(
+        sheets.length > 0
+          ? {
+              sheets: sheets.map(s => ({
+                name: s.name,
+                scenarios: s.scenarios,
+              })),
+            }
+          : { scenarios: rows }
+      );
       if (!res.ok || !res.blob) {
         setMsg({ type: 'error', text: res.error || 'Export failed' });
         setBusy('idle');
@@ -539,7 +888,7 @@ const ScenarioGeneratorPane: React.FC = () => {
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(blobUrl);
-      setMsg({ type: 'success', text: 'CSV exported' });
+      setMsg({ type: 'success', text: 'XLSX exported' });
     } catch (e: any) {
       setMsg({ type: 'error', text: e?.message || 'Export failed' });
     } finally {
@@ -577,6 +926,32 @@ const ScenarioGeneratorPane: React.FC = () => {
         >
           Regenerate
         </Button>
+        {sheets.length > 0 && (
+          <select
+            className="text-xs border rounded px-2 py-1 bg-white"
+            value={selectedSheet}
+            onChange={e => {
+              const val = e.target.value;
+              setSelectedSheet(val);
+              if (val === 'ALL') {
+                setRows(sheets.flatMap(s => s.scenarios));
+              } else {
+                const found = sheets.find(s => s.name === val);
+                setRows(found ? found.scenarios : []);
+              }
+            }}
+          >
+            <option value="ALL">
+              All tabs (
+              {sheets.reduce((a, s) => a + (s.scenarios?.length || 0), 0)})
+            </option>
+            {sheets.map(s => (
+              <option key={s.name} value={s.name}>
+                {s.name} ({s.scenarios?.length || 0})
+              </option>
+            ))}
+          </select>
+        )}
         <Button
           size="sm"
           variant="default"
@@ -586,6 +961,7 @@ const ScenarioGeneratorPane: React.FC = () => {
         >
           Export
         </Button>
+        {/* Always export per tab when sheets exist */}
       </div>
       {lastExportedAt && (
         <div className="text-[10px] text-neutral-500">
@@ -634,7 +1010,8 @@ const ScenarioGeneratorPane: React.FC = () => {
             </tbody>
           </table>
           <div className="px-2 py-1 text-[10px] text-neutral-500">
-            Showing first 5 rows/columns
+            Showing first 5 rows/columns{' '}
+            {sheets.length > 0 ? `(View: ${selectedSheet})` : ''}
           </div>
         </div>
       )}

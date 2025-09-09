@@ -145,19 +145,18 @@ class BackgroundService {
               return;
             }
             try { console.log('[BG] BACKGROUND_FETCH via port', _reqId, url); } catch {}
-            const controller = new AbortController();
-            const t = setTimeout(() => controller.abort(), Math.max(1, timeoutMs || 30000));
+            // No timeout: never abort background fetches
             const firstInit = await this.withAuthHeaders(init);
-            let resp = await fetch(url, { ...firstInit, signal: controller.signal } as RequestInit);
+            let resp = await fetch(url, { ...firstInit } as RequestInit);
             // If 401 and not refresh endpoint, try single-flight refresh and retry once
             if (resp.status === 401 && !/\/auth\/refresh\b/.test(url)) {
               const ok = await this.refreshTokenSingleFlight();
               if (ok) {
                 const secondInit = await this.withAuthHeaders(init, /*force*/ true);
-                try { resp = await fetch(url, { ...secondInit, signal: controller.signal } as RequestInit); } catch {}
+                try { resp = await fetch(url, { ...secondInit } as RequestInit); } catch {}
               }
             }
-            clearTimeout(t);
+            // no timeout to clear
             const ct = resp.headers.get('content-type') || '';
             const want: 'json' | 'text' | 'arrayBuffer' = responseType
               ? responseType
@@ -386,18 +385,17 @@ class BackgroundService {
           }
           try {
             try { console.log('[BG] BACKGROUND_FETCH via onMessage', url); } catch {}
-            const controller = new AbortController();
-            const t = setTimeout(() => controller.abort(), Math.max(1, timeoutMs || 30000));
+            // No timeout: never abort background fetches
             const firstInit = await this.withAuthHeaders(init);
-            let resp = await fetch(url, { ...firstInit, signal: controller.signal } as RequestInit);
+            let resp = await fetch(url, { ...firstInit } as RequestInit);
             if (resp.status === 401 && !/\/auth\/refresh\b/.test(url)) {
               const ok = await this.refreshTokenSingleFlight();
               if (ok) {
                 const secondInit = await this.withAuthHeaders(init, /*force*/ true);
-                try { resp = await fetch(url, { ...secondInit, signal: controller.signal } as RequestInit); } catch {}
+                try { resp = await fetch(url, { ...secondInit } as RequestInit); } catch {}
               }
             }
-            clearTimeout(t);
+            // no timeout to clear
 
             const ct = resp.headers.get('content-type') || '';
             const want: 'json' | 'text' | 'arrayBuffer' = responseType
