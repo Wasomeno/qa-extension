@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 
 import { IssueData } from '@/types/messages';
+import { LuFolderGit2 } from 'react-icons/lu';
 import { useIssueCreator } from '@/hooks/useIssueCreator';
 import { cn } from '@/lib/utils';
 import { useKeyboardIsolation } from '@/hooks/useKeyboardIsolation';
@@ -39,6 +40,7 @@ import {
   TooltipTrigger,
 } from '@/src/components/ui/ui/tooltip';
 import { Switch } from '@/src/components/ui/ui/switch';
+import { Skeleton } from '@/src/components/ui/ui/skeleton';
 // (no multi-select dropdown needed)
 import {
   Select,
@@ -58,7 +60,9 @@ import { Markdown } from 'tiptap-markdown';
 import MarkdownIt from 'markdown-it';
 import taskLists from 'markdown-it-task-lists';
 import { useQuery } from '@tanstack/react-query';
-// pill icons removed to match requested format
+import { IoPricetagsOutline, IoPersonOutline } from 'react-icons/io5';
+import { CgNotes } from 'react-icons/cg';
+import { PiSlackLogoLight } from 'react-icons/pi';
 
 interface CompactIssueCreatorProps {
   initialData?: Partial<IssueData>;
@@ -330,6 +334,396 @@ export const CompactIssueCreator: React.FC<CompactIssueCreatorProps> = ({
     color: label.color,
   }));
 
+  // Inline picker contents rendered within respective Popovers
+  function ProjectPickerContent() {
+    const [query, setQuery] = React.useState('');
+    const [highlight, setHighlight] = React.useState(0);
+    const inputRef = React.useRef<HTMLInputElement>(null);
+    const list = React.useMemo(() => {
+      const q = query.trim().toLowerCase();
+      return (projects || []).filter(p =>
+        !q ? true : p.name.toLowerCase().includes(q)
+      );
+    }, [projects, query]);
+
+    React.useEffect(() => {
+      inputRef.current?.focus();
+      setHighlight(0);
+      setQuery('');
+    }, []);
+
+    const selectAt = (idx: number) => {
+      const p = list[idx];
+      if (!p) return;
+      setValue('projectId', p.id, { shouldDirty: true, shouldValidate: true });
+      setOpenProject(false);
+    };
+
+    const onKeyDown = (e: React.KeyboardEvent) => {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setHighlight(h => Math.min(h + 1, Math.max(0, list.length - 1)));
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setHighlight(h => Math.max(h - 1, 0));
+      } else if (e.key === 'Enter') {
+        e.preventDefault();
+        selectAt(highlight);
+      } else if (e.key === 'Escape') {
+        setOpenProject(false);
+      }
+    };
+
+    return (
+      <div className="space-y-2">
+        {/* Search */}
+        <input
+          ref={inputRef}
+          className="text-sm w-full glass-input px-2 py-1.5 h-8"
+          placeholder="Search projects"
+          value={query}
+          onChange={e => setQuery(e.target.value)}
+          onKeyDown={onKeyDown}
+          disabled={isLoading}
+        />
+        <div className="max-h-56 overflow-auto">
+          {projects.length === 0 ? (
+            <div className="space-y-2">
+              <SkeletonRow />
+              <SkeletonRow />
+              <SkeletonRow />
+              <SkeletonRow />
+            </div>
+          ) : list.length === 0 ? (
+            <div className="text-xs text-neutral-500 px-1 py-2">
+              No options found
+            </div>
+          ) : (
+            <ul role="listbox" aria-label="Projects" className="text-sm">
+              {list.map((p, idx) => (
+                <li key={p.id} role="option" aria-selected={idx === highlight}>
+                  <button
+                    type="button"
+                    className={cn(
+                      'w-full text-left px-2 py-1.5 rounded-md hover:bg-neutral-100',
+                      idx === highlight ? 'bg-neutral-100' : ''
+                    )}
+                    onMouseEnter={() => setHighlight(idx)}
+                    onClick={() => selectAt(idx)}
+                  >
+                    {p.name}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  function LabelsPickerContent() {
+    const [query, setQuery] = React.useState('');
+    const [highlight, setHighlight] = React.useState(0);
+    const inputRef = React.useRef<HTMLInputElement>(null);
+    const list = React.useMemo(() => {
+      const q = query.trim().toLowerCase();
+      return (labelOptions || []).filter(l =>
+        !q ? true : l.label.toLowerCase().includes(q)
+      );
+    }, [labelOptions, query]);
+
+    React.useEffect(() => {
+      inputRef.current?.focus();
+      setHighlight(0);
+      setQuery('');
+    }, []);
+
+    const selectAt = (idx: number) => {
+      const l = list[idx];
+      if (!l) return;
+      setValue('labelId', l.value.toString(), {
+        shouldDirty: true,
+        shouldValidate: true,
+      });
+      setOpenLabels(false);
+    };
+
+    const onKeyDown = (e: React.KeyboardEvent) => {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setHighlight(h => Math.min(h + 1, Math.max(0, list.length - 1)));
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setHighlight(h => Math.max(h - 1, 0));
+      } else if (e.key === 'Enter') {
+        e.preventDefault();
+        selectAt(highlight);
+      } else if (e.key === 'Escape') {
+        setOpenLabels(false);
+      }
+    };
+
+    const loading = labelQueries.isLoading || labelQueries.isFetching;
+
+    return (
+      <div className="space-y-2">
+        {/* Search */}
+        <input
+          ref={inputRef}
+          className="text-sm w-full glass-input px-2 py-1.5 h-8"
+          placeholder="Search labels"
+          value={query}
+          onChange={e => setQuery(e.target.value)}
+          onKeyDown={onKeyDown}
+          disabled={isLoading || !watchedValues.projectId}
+        />
+        <div className="max-h-56 overflow-auto">
+          {loading ? (
+            <div className="space-y-2">
+              <SkeletonRow />
+              <SkeletonRow />
+              <SkeletonRow />
+            </div>
+          ) : (labelOptions || []).length === 0 ? (
+            <div className="text-xs text-neutral-500 px-1 py-2">
+              No options found
+            </div>
+          ) : list.length === 0 ? (
+            <div className="text-xs text-neutral-500 px-1 py-2">
+              No options found
+            </div>
+          ) : (
+            <ul role="listbox" aria-label="Labels" className="text-sm">
+              {list.map((l, idx) => (
+                <li
+                  key={l.value}
+                  role="option"
+                  aria-selected={idx === highlight}
+                >
+                  <button
+                    type="button"
+                    className={cn(
+                      'w-full text-left px-2 py-1.5 rounded-md hover:bg-neutral-100 flex items-center gap-2',
+                      idx === highlight ? 'bg-neutral-100' : ''
+                    )}
+                    onMouseEnter={() => setHighlight(idx)}
+                    onClick={() => selectAt(idx)}
+                  >
+                    <span
+                      className="inline-block w-2.5 h-2.5 rounded-full border border-gray-300"
+                      style={{ backgroundColor: l.color }}
+                    />
+                    {l.label}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  function FormatPickerContent() {
+    const options = [
+      { value: 'single', label: 'Single' },
+      { value: 'multiple', label: 'Multiple' },
+    ] as const;
+    const [highlight, setHighlight] = React.useState(() => {
+      const idx = options.findIndex(o => o.value === watchedValues.issueFormat);
+      return idx >= 0 ? idx : 0;
+    });
+
+    const selectAt = (idx: number) => {
+      const o = options[idx];
+      if (!o) return;
+      setValue('issueFormat', o.value as any, {
+        shouldDirty: true,
+        shouldValidate: true,
+      });
+      setOpenFormat(false);
+    };
+
+    const listRef = React.useRef<HTMLUListElement>(null);
+    React.useEffect(() => {
+      // focus list to enable keyboard navigation
+      listRef.current?.focus();
+    }, []);
+
+    const onKeyDown = (e: React.KeyboardEvent) => {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setHighlight(h => Math.min(h + 1, options.length - 1));
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setHighlight(h => Math.max(h - 1, 0));
+      } else if (e.key === 'Enter') {
+        e.preventDefault();
+        selectAt(highlight);
+      } else if (e.key === 'Escape') {
+        setOpenFormat(false);
+      }
+    };
+
+    return (
+      <div className="max-h-56 overflow-auto">
+        <ul
+          role="listbox"
+          aria-label="Format"
+          className="text-sm"
+          tabIndex={0}
+          ref={listRef}
+          onKeyDown={onKeyDown}
+        >
+          {options.map((o, idx) => (
+            <li key={o.value} role="option" aria-selected={idx === highlight}>
+              <button
+                type="button"
+                className={cn(
+                  'w-full text-left px-2 py-1.5 rounded-md hover:bg-neutral-100',
+                  idx === highlight ? 'bg-neutral-100' : ''
+                )}
+                onMouseEnter={() => setHighlight(idx)}
+                onClick={() => selectAt(idx)}
+              >
+                {o.label}
+              </button>
+            </li>
+          ))}
+        </ul>
+      </div>
+    );
+  }
+
+  function AssigneePickerContent() {
+    const [query, setQuery] = React.useState('');
+    const [highlight, setHighlight] = React.useState(0);
+    const inputRef = React.useRef<HTMLInputElement>(null);
+    const unassigned = {
+      id: 'unassigned',
+      name: 'Unassigned',
+      username: '',
+    } as any;
+    const computed = React.useMemo(() => {
+      const base = [unassigned, ...(users || [])];
+      const q = query.trim().toLowerCase();
+      const filtered = base.filter(u =>
+        !q
+          ? true
+          : u.name?.toLowerCase().includes(q) ||
+            u.username?.toLowerCase().includes(q)
+      );
+      return filtered;
+    }, [users, query]);
+
+    React.useEffect(() => {
+      inputRef.current?.focus();
+      setHighlight(0);
+      setQuery('');
+    }, []);
+
+    const selectAt = (idx: number) => {
+      const u = computed[idx];
+      if (!u) return;
+      setValue('assigneeId', u.id === 'unassigned' ? '' : u.id, {
+        shouldDirty: true,
+        shouldValidate: true,
+      });
+      setOpenAssignee(false);
+    };
+
+    const onKeyDown = (e: React.KeyboardEvent) => {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setHighlight(h => Math.min(h + 1, Math.max(0, computed.length - 1)));
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setHighlight(h => Math.max(h - 1, 0));
+      } else if (e.key === 'Enter') {
+        e.preventDefault();
+        selectAt(highlight);
+      } else if (e.key === 'Escape') {
+        setOpenAssignee(false);
+      }
+    };
+
+    const loadingUsers = !!watchedValues.projectId && users.length === 0;
+
+    return (
+      <div className="space-y-2">
+        <input
+          ref={inputRef}
+          className="text-sm w-full glass-input px-2 py-1.5 h-8"
+          placeholder="Search assignee"
+          value={query}
+          onChange={e => setQuery(e.target.value)}
+          onKeyDown={onKeyDown}
+          disabled={isLoading || !watchedValues.projectId}
+        />
+        <div className="max-h-56 overflow-auto">
+          {loadingUsers ? (
+            <div className="space-y-2">
+              <SkeletonRow />
+              <SkeletonRow />
+              <SkeletonRow />
+            </div>
+          ) : computed.length === 0 ? (
+            <div className="text-xs text-neutral-500 px-1 py-2">
+              No options found
+            </div>
+          ) : (
+            <ul role="listbox" aria-label="Assignee" className="text-sm">
+              {computed.map((u: any, idx: number) => (
+                <li
+                  key={u.id || idx}
+                  role="option"
+                  aria-selected={idx === highlight}
+                >
+                  <button
+                    type="button"
+                    className={cn(
+                      'w-full text-left px-2 py-1.5 rounded-md hover:bg-neutral-100 flex items-center gap-2',
+                      idx === highlight ? 'bg-neutral-100' : ''
+                    )}
+                    onMouseEnter={() => setHighlight(idx)}
+                    onClick={() => selectAt(idx)}
+                  >
+                    {u.avatarUrl && u.id !== 'unassigned' ? (
+                      <img
+                        src={u.avatarUrl}
+                        alt={u.name}
+                        className="w-4 h-4 rounded-full"
+                        onError={e => {
+                          (e.target as HTMLImageElement).style.display = 'none';
+                        }}
+                      />
+                    ) : (
+                      <span className="w-4 h-4 inline-block rounded-full bg-neutral-200" />
+                    )}
+                    <span>{u.name}</span>
+                    {u.username ? (
+                      <span className="text-gray-500">(@{u.username})</span>
+                    ) : null}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  function SkeletonRow() {
+    return (
+      <div className="flex items-center gap-2 px-2">
+        <Skeleton className="h-4 w-4 rounded" />
+        <Skeleton className="h-4 w-40" />
+      </div>
+    );
+  }
+
   // sync local slack-enabled state with form value
   React.useEffect(() => {
     const enabled = !!watchedValues.slackChannelId;
@@ -359,7 +753,6 @@ export const CompactIssueCreator: React.FC<CompactIssueCreatorProps> = ({
     staleTime: 300_000,
   });
 
-  // Initialize TipTap editor for description (keeps value in Markdown)
   const editor = useEditor({
     extensions: [
       StarterKit.configure({
@@ -523,7 +916,7 @@ export const CompactIssueCreator: React.FC<CompactIssueCreatorProps> = ({
   return (
     <div
       ref={containerRef}
-      className={cn('w-full space-y-3', className)}
+      className={cn('w-full space-y-3 relative', className)}
       onMouseDown={e => e.stopPropagation()}
       onMouseUp={e => e.stopPropagation()}
       onClick={e => e.stopPropagation()}
@@ -541,7 +934,7 @@ export const CompactIssueCreator: React.FC<CompactIssueCreatorProps> = ({
           >
             <div className="flex items-center gap-2">
               <FiAlertTriangle className="h-3 w-3 text-red-500" />
-              <p className="text-xs text-red-700">
+              <p className="text-sm text-red-700">
                 {typeof error === 'string'
                   ? error
                   : (error as any)?.message || JSON.stringify(error)}
@@ -558,13 +951,13 @@ export const CompactIssueCreator: React.FC<CompactIssueCreatorProps> = ({
           >
             <div className="flex items-center gap-2">
               <FiCheckCircle className="h-3 w-3 text-green-500" />
-              <p className="text-xs text-green-700">{success}</p>
+              <p className="text-sm text-green-700">{success}</p>
             </div>
           </motion.div>
         )}
       </AnimatePresence>
 
-      <form onSubmit={handleSubmit} className="space-y-4">
+      <form onSubmit={handleSubmit}>
         {/* Pointer blocker overlay to prevent clicking covered pills */}
         {anyPillOpen && (
           <div
@@ -573,721 +966,579 @@ export const CompactIssueCreator: React.FC<CompactIssueCreatorProps> = ({
             onClick={closeAllPills}
           />
         )}
-        {/* Context bar: compact pills for key fields */}
-        <div className="flex flex-wrap items-center gap-2">
-          {/* Project pill */}
-          <Popover open={openProject} onOpenChange={setOpenProject}>
-            <PopoverTrigger asChild>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="h-7 px-2 glass-input"
-                disabled={isLoading}
-                title="Select project"
-              >
-                <span className="text-[12px] text-neutral-600">
-                  Project <span className="text-neutral-400">▾</span>
-                </span>
-                {(() => {
-                  const p = projects.find(
-                    p => p.id === watchedValues.projectId
-                  );
-                  return (
-                    <span className="ml-2 text-[12px] text-neutral-900 truncate max-w-[140px]">
-                      {p ? p.name : 'Select Project'}
-                    </span>
-                  );
-                })()}
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent
-              className="p-2 w-64"
-              container={portalContainer || undefined}
-              align="start"
-            >
-              <div className="text-xs mb-2 text-neutral-500">Project *</div>
-              <Select
-                value={watchedValues.projectId}
-                onValueChange={(value: any) => setValue('projectId', value)}
-                disabled={isLoading}
-              >
-                <SelectTrigger className="text-sm glass-input h-8">
-                  <SelectValue placeholder="Select a project" />
-                </SelectTrigger>
-                <SelectContent
-                  className="text-sm rounded-lg bg-white"
-                  container={portalContainer || undefined}
-                  sideOffset={8}
-                  avoidCollisions={false}
+        <div className="space-y-4">
+          {/* Context bar: compact pills for key fields */}
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Project pill */}
+            <Popover open={openProject} onOpenChange={setOpenProject}>
+              <PopoverTrigger asChild>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-7 px-2 glass-input"
+                  disabled={isLoading}
+                  title="Select project"
                 >
-                  {projects.length === 0 ? (
-                    <SelectItem style={{ cursor: 'pointer' }} value="#">
-                      No projects
-                    </SelectItem>
-                  ) : (
-                    projects.map(project => (
-                      <SelectItem
-                        style={{ cursor: 'pointer' }}
-                        key={project.id}
-                        value={project.id}
-                      >
-                        {project.name}
-                      </SelectItem>
-                    ))
-                  )}
-                </SelectContent>
-              </Select>
-            </PopoverContent>
-          </Popover>
-
-          {/* Label(s) pill */}
-          <Popover open={openLabels} onOpenChange={setOpenLabels}>
-            <PopoverTrigger asChild>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="h-7 px-2 glass-input"
-                disabled={isLoading || !watchedValues.projectId}
-                title="Select label"
-              >
-                <span className="text-[12px] text-neutral-600">
-                  Labels <span className="text-neutral-400">▾</span>
-                </span>
-                {(() => {
-                  const selected = labelOptions?.find(
-                    l => l.value.toString() === (watchedValues.labelId || '')
-                  );
-                  return (
-                    <span className="ml-2 inline-flex items-center gap-1 text-[12px] text-neutral-900 truncate max-w-[180px]">
-                      {selected ? (
-                        <>
-                          <span
-                            className="inline-block w-2 h-2 rounded-full border"
-                            style={{ backgroundColor: selected.color }}
-                          />
-                          <span className="truncate">{selected.label}</span>
-                        </>
-                      ) : (
-                        <span className="text-neutral-900">Select Label</span>
-                      )}
-                    </span>
-                  );
-                })()}
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent
-              className="p-2 w-64"
-              container={portalContainer || undefined}
-              align="start"
-            >
-              <div className="text-xs mb-2 text-neutral-500">Label *</div>
-              <Select
-                value={watchedValues.labelId}
-                onValueChange={(value: any) => setValue('labelId', value)}
-                disabled={isLoading || !watchedValues.projectId}
-              >
-                <SelectTrigger className="text-sm glass-input h-8">
-                  <SelectValue placeholder="Select a label" />
-                </SelectTrigger>
-                <SelectContent
-                  className="text-sm rounded-lg bg-white"
-                  container={portalContainer || undefined}
-                  sideOffset={8}
-                  avoidCollisions={false}
-                >
-                  {labelOptions?.length === 0 ? (
-                    <SelectItem style={{ cursor: 'pointer' }} value="#">
-                      No Labels
-                    </SelectItem>
-                  ) : (
-                    labelOptions?.map(label => (
-                      <SelectItem
-                        style={{ cursor: 'pointer' }}
-                        key={label.value}
-                        value={label.value.toString()}
-                      >
-                        <div className="flex items-center gap-2">
-                          <span
-                            className="inline-block w-2.5 h-2.5 rounded-full border border-gray-300"
-                            style={{
-                              backgroundColor: label.color,
-                            }}
-                          />
-                          {label.label}
-                        </div>
-                      </SelectItem>
-                    ))
-                  )}
-                </SelectContent>
-              </Select>
-            </PopoverContent>
-          </Popover>
-
-          {/* Format pill */}
-          <Popover open={openFormat} onOpenChange={setOpenFormat}>
-            <PopoverTrigger asChild>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="h-7 px-2 glass-input"
-                disabled={isLoading}
-                title="Issue format"
-              >
-                <span className="text-[12px] text-neutral-600">
-                  Format <span className="text-neutral-400">▾</span>
-                </span>
-                <span className="ml-2 text-[12px] text-neutral-900 truncate max-w-[140px]">
+                  <LuFolderGit2 />
+                  <span className="text-sm text-neutral-600">
+                    Project <span className="text-neutral-400">▾</span>
+                  </span>
                   {(() => {
-                    const f = watchedValues.issueFormat;
-                    if (!f) return 'Select Format';
-                    if (f === 'single') return 'Single';
-                    if (f === 'multiple') return 'Multiple';
-                    return String(f);
+                    const p = projects.find(
+                      p => p.id === watchedValues.projectId
+                    );
+                    return (
+                      <span className="ml-2 text-sm text-neutral-900 truncate max-w-[140px]">
+                        {p ? p.name : 'Select'}
+                      </span>
+                    );
                   })()}
-                </span>
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent
-              className="p-2 w-56"
-              container={portalContainer || undefined}
-              align="start"
-            >
-              <div className="text-xs mb-2 text-neutral-500">Format *</div>
-              <Select
-                value={watchedValues.issueFormat}
-                onValueChange={(value: any) => setValue('issueFormat', value)}
-                disabled={isLoading}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent
+                className="p-2 w-64"
+                container={portalContainer || undefined}
+                align="start"
               >
-                <SelectTrigger className="text-sm glass-input h-8">
-                  <SelectValue placeholder="Select a format" />
-                </SelectTrigger>
-                <SelectContent
-                  className="text-sm rounded-lg bg-white"
-                  container={portalContainer || undefined}
-                  sideOffset={8}
-                  avoidCollisions={false}
-                >
-                  <SelectItem style={{ cursor: 'pointer' }} value="single">
-                    Single
-                  </SelectItem>
-                  <SelectItem style={{ cursor: 'pointer' }} value="multiple">
-                    Multiple
-                  </SelectItem>
-                </SelectContent>
-              </Select>
-            </PopoverContent>
-          </Popover>
+                {/* Search */}
+                <ProjectPickerContent />
+              </PopoverContent>
+            </Popover>
 
-          {/* Assignee pill */}
-          <Popover open={openAssignee} onOpenChange={setOpenAssignee}>
-            <PopoverTrigger asChild>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="h-7 px-2 glass-input"
-                disabled={isLoading || !watchedValues.projectId}
-                title="Assign"
-              >
-                <span className="text-[12px] text-neutral-600">
-                  Assignee <span className="text-neutral-400">▾</span>
-                </span>
-                {(() => {
-                  const u = users.find(u => u.id === watchedValues.assigneeId);
-                  return (
-                    <span className="ml-2 text-[12px] text-neutral-900 truncate max-w-[140px]">
-                      {u ? u.name : 'Unassigned'}
-                    </span>
-                  );
-                })()}
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent
-              className="p-2 w-72"
-              container={portalContainer || undefined}
-              align="start"
-            >
-              <div className="text-xs mb-2 text-neutral-500">Assignee</div>
-              <Select
-                value={watchedValues.assigneeId || ''}
-                onValueChange={(value: any) =>
-                  setValue('assigneeId', value === 'unassigned' ? '' : value)
-                }
-                disabled={isLoading || !watchedValues.projectId}
-              >
-                <SelectTrigger className="text-sm glass-input h-8">
-                  <SelectValue placeholder="Select an assignee (optional)" />
-                </SelectTrigger>
-                <SelectContent
-                  className="text-sm rounded-lg bg-white"
-                  container={portalContainer || undefined}
+            {/* Label(s) pill */}
+            <Popover open={openLabels} onOpenChange={setOpenLabels}>
+              <PopoverTrigger asChild>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-7 px-2 glass-input"
+                  disabled={isLoading || !watchedValues.projectId}
+                  title="Select label"
                 >
-                  <SelectItem style={{ cursor: 'pointer' }} value="unassigned">
-                    Unassigned
-                  </SelectItem>
-                  {users.length === 0 ? (
-                    <SelectItem
-                      style={{ cursor: 'pointer' }}
-                      value="#"
-                      disabled
-                    >
-                      {watchedValues.projectId
-                        ? 'Loading users...'
-                        : 'Select a project first'}
-                    </SelectItem>
-                  ) : (
-                    users.map(user => (
-                      <SelectItem
-                        style={{ cursor: 'pointer' }}
-                        key={user.id}
-                        value={user.id}
-                      >
-                        <div className="flex items-center gap-2">
-                          {user.avatarUrl && (
-                            <img
-                              src={user.avatarUrl}
-                              alt={user.name}
-                              className="w-4 h-4 rounded-full"
-                              onError={e => {
-                                (e.target as HTMLImageElement).style.display =
-                                  'none';
-                              }}
-                            />
-                          )}
-                          <span>{user.name}</span>
-                          <span className="text-gray-500">
-                            (@{user.username})
-                          </span>
-                        </div>
-                      </SelectItem>
-                    ))
-                  )}
-                </SelectContent>
-              </Select>
-            </PopoverContent>
-          </Popover>
-          {/* Slack pill */}
-          <Popover open={openSlack} onOpenChange={setOpenSlack}>
-            <PopoverTrigger asChild>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="h-7 px-2 glass-input"
-                disabled={isLoading}
-                title="Slack notification"
-              >
-                <span className="text-[12px] text-neutral-600">
-                  Slack <span className="text-neutral-400">▾</span>
-                </span>
-                {(() => {
-                  const enabled = slackEnabled;
-                  const ch = (slackChannelsQuery.data || []).find(
-                    (c: any) => c.id === watchedValues.slackChannelId
-                  );
-                  return (
-                    <span className="ml-2 text-[12px] text-neutral-900 truncate max-w-[160px]">
-                      {enabled ? (
-                        ch ? (
+                  <IoPricetagsOutline />
+                  <span className="text-sm text-neutral-600">
+                    Labels <span className="text-neutral-400">▾</span>
+                  </span>
+                  {(() => {
+                    const selected = labelOptions?.find(
+                      l => l.value.toString() === (watchedValues.labelId || '')
+                    );
+                    return (
+                      <span className="ml-2 inline-flex items-center gap-1 text-sm text-neutral-900 truncate max-w-[180px]">
+                        {selected ? (
                           <>
-                            On <span className="text-neutral-400">•</span> #
-                            {ch.name}
+                            <span
+                              className="inline-block w-2 h-2 rounded-full border"
+                              style={{ backgroundColor: selected.color }}
+                            />
+                            <span className="truncate">{selected.label}</span>
                           </>
                         ) : (
-                          'On'
-                        )
-                      ) : (
-                        'Off'
-                      )}
-                    </span>
-                  );
-                })()}
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent
-              className="p-3 w-80 space-y-3"
-              container={portalContainer || undefined}
-              align="start"
-            >
-              <div className="flex items-center justify-between">
-                <div className="text-xs text-neutral-600">Notify on Slack</div>
-                <Switch
-                  checked={slackEnabled}
-                  onCheckedChange={(checked: boolean) => {
-                    setSlackEnabled(checked);
-                    if (!checked) {
-                      setValue('slackChannelId', '');
-                      setValue('slackUserIds', []);
+                          <span className="text-neutral-900">Select</span>
+                        )}
+                      </span>
+                    );
+                  })()}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent
+                className="p-2 w-64"
+                container={portalContainer || undefined}
+                align="start"
+              >
+                <LabelsPickerContent />
+              </PopoverContent>
+            </Popover>
+
+            {/* Format pill */}
+            <Popover open={openFormat} onOpenChange={setOpenFormat}>
+              <PopoverTrigger asChild>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-7 px-2 glass-input"
+                  disabled={isLoading}
+                  title="Issue format"
+                >
+                  <CgNotes />
+                  <span className="text-sm text-neutral-600">
+                    Format <span className="text-neutral-400">▾</span>
+                  </span>
+                  <span className="ml-2 text-sm text-neutral-900 truncate max-w-[140px]">
+                    {(() => {
+                      const f = watchedValues.issueFormat;
+                      if (!f) return 'Select';
+                      if (f === 'single') return 'Single';
+                      if (f === 'multiple') return 'Multiple';
+                      return String(f);
+                    })()}
+                  </span>
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent
+                className="p-2 w-56"
+                container={portalContainer || undefined}
+                align="start"
+              >
+                <FormatPickerContent />
+              </PopoverContent>
+            </Popover>
+
+            {/* Assignee pill */}
+            <Popover open={openAssignee} onOpenChange={setOpenAssignee}>
+              <PopoverTrigger asChild>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-7 px-2 glass-input"
+                  disabled={isLoading || !watchedValues.projectId}
+                  title="Assign"
+                >
+                  <IoPersonOutline />
+                  <span className="text-sm text-neutral-600">
+                    Assignee <span className="text-neutral-400">▾</span>
+                  </span>
+                  {(() => {
+                    const u = users.find(
+                      u => u.id === watchedValues.assigneeId
+                    );
+                    return (
+                      <span className="ml-2 text-sm text-neutral-900 truncate max-w-[140px]">
+                        {u ? u.name : 'Me'}
+                      </span>
+                    );
+                  })()}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent
+                className="p-2 w-72"
+                container={portalContainer || undefined}
+                align="start"
+              >
+                <AssigneePickerContent />
+              </PopoverContent>
+            </Popover>
+            {/* Slack pill */}
+            <Popover open={openSlack} onOpenChange={setOpenSlack}>
+              <PopoverTrigger asChild>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-7 px-2 glass-input"
+                  disabled={isLoading}
+                  title="Slack notification"
+                >
+                  <PiSlackLogoLight />
+                  <span className="text-sm text-neutral-600">
+                    Slack <span className="text-neutral-400">▾</span>
+                  </span>
+                  {(() => {
+                    const enabled = slackEnabled;
+                    const ch = (slackChannelsQuery.data || []).find(
+                      (c: any) => c.id === watchedValues.slackChannelId
+                    );
+                    return (
+                      <span className="ml-2 text-sm text-neutral-900 truncate max-w-[160px]">
+                        {enabled ? (
+                          ch ? (
+                            <>
+                              On <span className="text-neutral-400">•</span> #
+                              {ch.name}
+                            </>
+                          ) : (
+                            'On'
+                          )
+                        ) : (
+                          'Off'
+                        )}
+                      </span>
+                    );
+                  })()}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent
+                className="p-3 w-80 space-y-3"
+                container={portalContainer || undefined}
+                align="start"
+              >
+                <div className="flex items-center justify-between">
+                  <div className="text-sm text-neutral-600">
+                    Notify on Slack
+                  </div>
+                  <Switch
+                    checked={slackEnabled}
+                    onCheckedChange={(checked: boolean) => {
+                      setSlackEnabled(checked);
+                      if (!checked) {
+                        setValue('slackChannelId', '');
+                        setValue('slackUserIds', []);
+                      }
+                    }}
+                  />
+                </div>
+                <div>
+                  <div className="text-sm mb-1 text-neutral-500">Channel</div>
+                  <Select
+                    value={watchedValues.slackChannelId || ''}
+                    onValueChange={(value: any) =>
+                      setValue('slackChannelId', value)
                     }
-                  }}
-                />
-              </div>
-              {slackEnabled && (
-                <>
-                  <div>
-                    <div className="text-xs mb-1 text-neutral-500">Channel</div>
-                    <Select
-                      value={watchedValues.slackChannelId || ''}
-                      onValueChange={(value: any) =>
-                        setValue('slackChannelId', value)
-                      }
-                      disabled={isLoading || slackChannelsQuery.isLoading}
-                    >
-                      <SelectTrigger className="text-sm glass-input h-8">
-                        <SelectValue
-                          placeholder={
-                            slackChannelsQuery.isLoading
-                              ? 'Loading…'
-                              : 'Select a channel'
-                          }
-                        />
-                      </SelectTrigger>
-                      <SelectContent
-                        className="text-sm rounded-lg bg-white"
-                        container={portalContainer || undefined}
-                        sideOffset={8}
-                        avoidCollisions={false}
-                      >
-                        {(slackChannelsQuery.data || []).map((c: any) => (
-                          <SelectItem
-                            key={c.id}
-                            style={{ cursor: 'pointer' }}
-                            value={c.id}
-                          >
-                            #{c.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div>
-                    <div className="text-xs mb-1 text-neutral-500">
-                      Notify user
-                    </div>
-                    <Select
-                      value={
-                        (watchedValues.slackUserIds &&
-                          (watchedValues.slackUserIds as string[])[0]) ||
-                        ''
-                      }
-                      onValueChange={(value: any) =>
-                        setValue('slackUserIds', value ? [value] : [], {
-                          shouldDirty: true,
-                          shouldValidate: true,
-                        })
-                      }
-                      disabled={isLoading || slackUsersQuery.isLoading}
-                    >
-                      <SelectTrigger className="text-sm glass-input h-8">
-                        <SelectValue
-                          placeholder={
-                            slackUsersQuery.isLoading
-                              ? 'Loading…'
-                              : 'Select a user to notify'
-                          }
-                        />
-                      </SelectTrigger>
-                      <SelectContent
-                        className="text-sm rounded-lg bg-white"
-                        container={portalContainer || undefined}
-                        sideOffset={8}
-                        avoidCollisions={false}
-                      >
-                        {(slackUsersQuery.data || []).map((u: any) => (
-                          <SelectItem
-                            key={u.id}
-                            style={{ cursor: 'pointer' }}
-                            value={u.id}
-                          >
-                            {u.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </>
-              )}
-            </PopoverContent>
-          </Popover>
-        </div>
-        {/* Title */}
-        <div className="space-y-3">
-          <Label htmlFor="title" className="mb-2">
-            <div className="flex items-center gap-2">
-              <div className="w-4 h-4 rounded bg-gray-500/20 flex items-center justify-center">
-                <div className="w-2 h-2 rounded bg-gray-500"></div>
-              </div>
-              Title *
-            </div>
-          </Label>
-          <input
-            {...register('title', { required: 'Title is required' })}
-            type="text"
-            className="text-sm w-full glass-input px-3 py-2"
-            placeholder="Brief, descriptive title"
-            disabled={isLoading}
-          />
-          {errors.title && (
-            <p className="text-sm text-red-600">
-              {(errors as any).title.message}
-            </p>
-          )}
-        </div>
-        {/* Description */}
-        <div className="space-y-3">
-          <div className="flex items-center justify-between mb-1">
-            <Label htmlFor="description" className="flex items-center gap-2">
-              <div className="w-4 h-4 rounded bg-purple-500/20 flex items-center justify-center">
-                <div className="w-2 h-2 rounded bg-purple-500"></div>
-              </div>
-              Description *
-            </Label>
-            {/* Moved AI generate to toolbar as an icon */}
-          </div>
-          {/* Editor */}
-          <div
-            className={cn(
-              'w-full rounded-md border border-neutral-200 glass-input p-0 focus-within:ring-1 focus-within:ring-blue-300',
-              isLoading ? 'opacity-60 pointer-events-none' : ''
-            )}
-          >
-            {/* Toolbar (compact) */}
-            <div className="flex flex-wrap items-center justify-between gap-1 border-b border-neutral-200 glass-nav dark:bg-neutral-800/60 px-2 py-1 text-[12px]">
-              <div className="flex items-center gap-1">
-                <Button
-                  type="button"
-                  size="sm"
-                  variant={mdTab === 'preview' ? 'secondary' : 'ghost'}
-                  className="h-7 px-2"
-                  title="Preview"
-                  onClick={() =>
-                    setMdTab(mdTab === 'preview' ? 'write' : 'preview')
-                  }
-                >
-                  <IconEye className="h-3.5 w-3.5" />
-                </Button>
-                <span className="mx-1 h-5 w-px bg-neutral-200" />
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="ghost"
-                  className="h-7 px-2"
-                  title="Bold"
-                  onClick={() => wrapSelection('**', '**')}
-                >
-                  <IconBold className="h-3.5 w-3.5" />
-                </Button>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="ghost"
-                  className="h-7 px-2"
-                  title="Italic"
-                  onClick={() => wrapSelection('*', '*')}
-                >
-                  <IconItalic className="h-3.5 w-3.5" />
-                </Button>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="ghost"
-                  className="h-7 px-2"
-                  title="Inline code"
-                  onClick={() => wrapSelection('`', '`')}
-                >
-                  <IconInlineCode className="h-3.5 w-3.5" />
-                </Button>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="ghost"
-                  className="h-7 px-2"
-                  title="Link"
-                  onClick={() => insertLink()}
-                >
-                  <IconLink className="h-3.5 w-3.5" />
-                </Button>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="ghost"
-                      className="h-7 px-2"
-                      title="More"
-                    >
-                      ⋯
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent
-                    align="start"
-                    sideOffset={6}
-                    container={portalContainer || undefined}
+                    disabled={isLoading || slackChannelsQuery.isLoading}
                   >
-                    <DropdownMenuLabel>Insert</DropdownMenuLabel>
-                    <DropdownMenuItem onClick={() => prefixLine('- ')}>
-                      Bulleted list
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => prefixLine('1. ')}>
-                      Numbered list
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => prefixLine('- [ ] ')}>
-                      Task list
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => prefixLine('> ')}>
-                      Quote
-                    </DropdownMenuItem>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem onClick={() => insertTable()}>
-                      Table
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => insertCodeBlock()}>
-                      Code block
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </div>
-              <div className="flex items-center gap-1">
-                <TooltipProvider>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
+                    <SelectTrigger
+                      className="text-sm glass-input h-8"
+                      disabled={!slackEnabled}
+                    >
+                      <SelectValue
+                        placeholder={
+                          slackChannelsQuery.isLoading ? 'Loading…' : 'Select'
+                        }
+                      />
+                    </SelectTrigger>
+                    <SelectContent
+                      className="text-sm rounded-lg bg-white"
+                      container={portalContainer || undefined}
+                      sideOffset={8}
+                      avoidCollisions={false}
+                    >
+                      {(slackChannelsQuery.data || []).map((c: any) => (
+                        <SelectItem
+                          key={c.id}
+                          className="cursor-pointer text-sm"
+                          value={c.id}
+                        >
+                          #{c.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <div className="text-sm mb-1 text-neutral-500">
+                    Notify user
+                  </div>
+                  <Select
+                    value={
+                      (watchedValues.slackUserIds &&
+                        (watchedValues.slackUserIds as string[])[0]) ||
+                      ''
+                    }
+                    onValueChange={(value: any) =>
+                      setValue('slackUserIds', value ? [value] : [], {
+                        shouldDirty: true,
+                        shouldValidate: true,
+                      })
+                    }
+                    disabled={isLoading || slackUsersQuery.isLoading}
+                  >
+                    <SelectTrigger
+                      className="text-sm glass-input h-8"
+                      disabled={!slackEnabled}
+                    >
+                      <SelectValue
+                        placeholder={
+                          slackUsersQuery.isLoading ? 'Loading…' : 'Select '
+                        }
+                      />
+                    </SelectTrigger>
+                    <SelectContent
+                      className="text-sm rounded-lg bg-white"
+                      container={portalContainer || undefined}
+                      sideOffset={8}
+                      avoidCollisions={false}
+                    >
+                      {(slackUsersQuery.data || []).map((u: any) => (
+                        <SelectItem
+                          key={u.id}
+                          className="cursor-pointer text-sm"
+                          value={u.id}
+                        >
+                          {u.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </PopoverContent>
+            </Popover>
+          </div>
+          {/* Title */}
+          <div className="space-y-3">
+            <Label htmlFor="title" className="mb-2">
+              <div className="flex items-center gap-2">Title *</div>
+            </Label>
+            <input
+              {...register('title', { required: 'Title is required' })}
+              type="text"
+              className="text-sm w-full glass-input px-3 py-2"
+              placeholder="Brief, descriptive title"
+              disabled={isLoading}
+            />
+            {errors.title && (
+              <p className="text-sm text-red-600">
+                {(errors as any).title.message}
+              </p>
+            )}
+          </div>
+          {/* Description */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between mb-1">
+              <Label htmlFor="description" className="flex items-center gap-2">
+                Description *
+              </Label>
+              {/* Moved AI generate to toolbar as an icon */}
+            </div>
+            {/* Editor */}
+            <div
+              className={cn(
+                'w-full rounded-md border border-neutral-200 glass-input p-0 focus-within:ring-1 focus-within:ring-blue-300',
+                isLoading ? 'opacity-60 pointer-events-none' : ''
+              )}
+            >
+              {/* Toolbar (compact) */}
+              <div className="flex flex-wrap items-center justify-between gap-1 border-b border-neutral-200 glass-nav dark:bg-neutral-800/60 px-2 py-1 text-sm">
+                <div className="flex items-center gap-1">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={mdTab === 'preview' ? 'secondary' : 'ghost'}
+                    className="h-7 px-2"
+                    title="Preview"
+                    onClick={() =>
+                      setMdTab(mdTab === 'preview' ? 'write' : 'preview')
+                    }
+                  >
+                    <IconEye className="h-3.5 w-3.5" />
+                  </Button>
+                  <span className="mx-1 h-5 w-px bg-neutral-200" />
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    className="h-7 px-2"
+                    title="Bold"
+                    onClick={() => wrapSelection('**', '**')}
+                  >
+                    <IconBold className="h-3.5 w-3.5" />
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    className="h-7 px-2"
+                    title="Italic"
+                    onClick={() => wrapSelection('*', '*')}
+                  >
+                    <IconItalic className="h-3.5 w-3.5" />
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    className="h-7 px-2"
+                    title="Inline code"
+                    onClick={() => wrapSelection('`', '`')}
+                  >
+                    <IconInlineCode className="h-3.5 w-3.5" />
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    className="h-7 px-2"
+                    title="Link"
+                    onClick={() => insertLink()}
+                  >
+                    <IconLink className="h-3.5 w-3.5" />
+                  </Button>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
                       <Button
                         type="button"
                         size="sm"
                         variant="ghost"
                         className="h-7 px-2"
-                        title="Generate with AI"
-                        disabled={
-                          aiLoading || isLoading || !watchedValues.description
-                        }
-                        onClick={async () => {
-                          setAiError(null);
-                          setAiLoading(true);
-                          try {
-                            const resp =
-                              await apiService.generateDescriptionFromTemplate({
-                                issueFormat: watchedValues.issueFormat,
-                                userDescription: watchedValues.description,
-                              });
-                            if (resp.success && resp.data?.description) {
-                              setValue('description', resp.data.description);
-                              if (mdTab === 'preview') {
-                                try {
-                                  (editor as any)?.commands?.setMarkdown?.(
-                                    resp.data.description
-                                  );
-                                } catch {
+                        title="More"
+                      >
+                        ⋯
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent
+                      align="start"
+                      sideOffset={6}
+                      container={portalContainer || undefined}
+                    >
+                      <DropdownMenuLabel>Insert</DropdownMenuLabel>
+                      <DropdownMenuItem onClick={() => prefixLine('- ')}>
+                        Bulleted list
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => prefixLine('1. ')}>
+                        Numbered list
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => prefixLine('- [ ] ')}>
+                        Task list
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => prefixLine('> ')}>
+                        Quote
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem onClick={() => insertTable()}>
+                        Table
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => insertCodeBlock()}>
+                        Code block
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
+                <div className="flex items-center gap-1">
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="ghost"
+                          className="h-7 px-2"
+                          title="Generate with AI"
+                          disabled={
+                            aiLoading || isLoading || !watchedValues.description
+                          }
+                          onClick={async () => {
+                            setAiError(null);
+                            setAiLoading(true);
+                            try {
+                              const resp =
+                                await apiService.generateDescriptionFromTemplate(
+                                  {
+                                    issueFormat: watchedValues.issueFormat,
+                                    userDescription: watchedValues.description,
+                                  }
+                                );
+                              if (resp.success && resp.data?.description) {
+                                setValue('description', resp.data.description);
+                                if (mdTab === 'preview') {
                                   try {
-                                    editor?.commands.setContent(
+                                    (editor as any)?.commands?.setMarkdown?.(
                                       resp.data.description
                                     );
-                                  } catch {}
+                                  } catch {
+                                    try {
+                                      editor?.commands.setContent(
+                                        resp.data.description
+                                      );
+                                    } catch {}
+                                  }
                                 }
+                              } else {
+                                const errVal: any = (resp as any)?.error;
+                                const msg =
+                                  typeof errVal === 'string'
+                                    ? errVal
+                                    : errVal?.message ||
+                                      'Failed to generate description';
+                                throw new Error(msg);
                               }
-                            } else {
-                              const errVal: any = (resp as any)?.error;
-                              const msg =
-                                typeof errVal === 'string'
-                                  ? errVal
-                                  : errVal?.message ||
-                                    'Failed to generate description';
-                              throw new Error(msg);
+                            } catch (e: any) {
+                              setAiError(
+                                e?.message || 'Failed to generate description'
+                              );
+                            } finally {
+                              setAiLoading(false);
                             }
-                          } catch (e: any) {
-                            setAiError(
-                              e?.message || 'Failed to generate description'
-                            );
-                          } finally {
-                            setAiLoading(false);
-                          }
-                        }}
-                      >
-                        {aiLoading ? (
-                          <FiLoader className="h-3 w-3 animate-spin" />
-                        ) : (
-                          <FiZap className="h-3 w-3" />
-                        )}
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      Use AI template on description
-                    </TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
+                          }}
+                        >
+                          {aiLoading ? (
+                            <FiLoader className="h-3 w-3 animate-spin" />
+                          ) : (
+                            <FiZap className="h-3 w-3" />
+                          )}
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        Use AI template on description
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                </div>
               </div>
+              {mdTab === 'preview' ? (
+                <div className="px-3 py-2 text-sm max-h-[520px] overflow-y-auto overflow-x-visible bg-white">
+                  <div
+                    className="tiptap text-sm leading-5 focus:outline-none"
+                    dangerouslySetInnerHTML={{
+                      __html: md.render(watchedValues.description || ''),
+                    }}
+                  />
+                </div>
+              ) : (
+                <div className="px-3 py-2 text-sm">
+                  <textarea
+                    ref={mdTextareaRef}
+                    className="w-full min-h-[220px] font-mono text-sm leading-5 outline-none bg-transparent resize-y"
+                    placeholder="Use Markdown: steps, expected vs actual, links, code…"
+                    value={watchedValues.description || ''}
+                    onChange={e =>
+                      setValue('description', e.target.value, {
+                        shouldValidate: true,
+                        shouldDirty: true,
+                      })
+                    }
+                    onPaste={handleMarkdownPaste}
+                  />
+                  {pastingImage && (
+                    <div className="mt-2 text-sm text-neutral-600 flex items-center gap-1">
+                      <FiLoader className="h-3 w-3 animate-spin" /> Uploading
+                      image…
+                    </div>
+                  )}
+                  {pasteError && (
+                    <div className="mt-2 text-sm text-red-600">
+                      {pasteError}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
-            {mdTab === 'preview' ? (
-              <div className="px-3 py-2 text-sm max-h-[520px] overflow-y-auto overflow-x-visible bg-white">
-                <div
-                  className="tiptap text-[13px] leading-5 focus:outline-none"
-                  dangerouslySetInnerHTML={{
-                    __html: md.render(watchedValues.description || ''),
-                  }}
-                />
-              </div>
-            ) : (
-              <div className="px-3 py-2 text-sm">
-                <textarea
-                  ref={mdTextareaRef}
-                  className="w-full min-h-[220px] font-mono text-[13px] leading-5 outline-none bg-transparent resize-y"
-                  placeholder="Use Markdown: steps, expected vs actual, links, code…"
-                  value={watchedValues.description || ''}
-                  onChange={e =>
-                    setValue('description', e.target.value, {
-                      shouldValidate: true,
-                      shouldDirty: true,
-                    })
-                  }
-                  onPaste={handleMarkdownPaste}
-                />
-                {pastingImage && (
-                  <div className="mt-2 text-xs text-neutral-600 flex items-center gap-1">
-                    <FiLoader className="h-3 w-3 animate-spin" /> Uploading
-                    image…
-                  </div>
-                )}
-                {pasteError && (
-                  <div className="mt-2 text-xs text-red-600">{pasteError}</div>
-                )}
-              </div>
+            {/* Keep form validation errors */}
+            {(errors as any).description && (
+              <p className="text-sm text-red-600">
+                {(errors as any).description?.message}
+              </p>
             )}
+            {aiError && <p className="text-sm text-red-600">{aiError}</p>}
           </div>
-          {/* Keep form validation errors */}
-          {(errors as any).description && (
-            <p className="text-sm text-red-600">
-              {(errors as any).description?.message}
-            </p>
-          )}
-          {aiError && <p className="text-xs text-red-600">{aiError}</p>}
-        </div>
 
-        {/* Action Buttons */}
-        <div className="flex gap-2 pt-2 border-t border-gray-100">
-          <Button
-            type="submit"
-            variant="outline"
-            disabled={
-              isLoading ||
-              !watchedValues.description ||
-              !watchedValues.title ||
-              !watchedValues.projectId
-            }
-            className="text-center flex-1 border-neutral-200"
-            style={{ borderRadius: 'var(--radius)' }}
-            size="sm"
-          >
-            {isLoading ? (
-              <>
-                <FiLoader className="h-3 w-3 mr-1 animate-spin" />
-                Creating...
-              </>
-            ) : (
-              <>Create</>
-            )}
-          </Button>
+          {/* Action Buttons */}
+          <div className="sticky bottom-0 py-4 flex gap-2 bg-white border-t border-gray-100">
+            <Button
+              type="submit"
+              variant="outline"
+              disabled={
+                isLoading ||
+                !watchedValues.description ||
+                !watchedValues.title ||
+                !watchedValues.projectId
+              }
+              className="text-center flex-1 border-neutral-200"
+              style={{ borderRadius: 'var(--radius)' }}
+              size="sm"
+            >
+              {isLoading ? (
+                <>
+                  <FiLoader className="h-3 w-3 mr-1 animate-spin" />
+                  Creating...
+                </>
+              ) : (
+                <>Create</>
+              )}
+            </Button>
+          </div>
         </div>
       </form>
     </div>

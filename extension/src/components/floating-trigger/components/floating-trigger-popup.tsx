@@ -278,25 +278,6 @@ const FloatingTriggerPopup: React.FC<FloatingTriggerPopupProps> = ({
             <ChevronRight className="w-4 h-4 opacity-60 group-hover:opacity-100" />
           </div>
         </button>
-
-        {/* Workflows */}
-        <button
-          onClick={() => onFeatureSelect('workflows')}
-          className="group w-full text-left hover:bg-neutral-100/60 rounded-lg px-3 py-2 transition-colors pointer-events-auto"
-        >
-          <div className="flex items-center">
-            <WorkflowIcon className="w-4 h-4 mr-3 text-neutral-700" />
-            <div className="flex-1 min-w-0">
-              <div className="text-sm font-medium text-neutral-900">
-                Workflows
-              </div>
-              <div className="text-xs text-neutral-500">
-                Run or schedule automations
-              </div>
-            </div>
-            <ChevronRight className="w-4 h-4 opacity-60 group-hover:opacity-100" />
-          </div>
-        </button>
       </div>
     );
   };
@@ -321,7 +302,7 @@ const FloatingTriggerPopup: React.FC<FloatingTriggerPopupProps> = ({
                 )}
               >
                 <CompactIssueCreator
-                  className="border-0 p-4"
+                  className="border-0 pt-4 px-4"
                   portalContainer={portalRef.current}
                 />
               </ErrorBoundary>
@@ -365,7 +346,10 @@ const FloatingTriggerPopup: React.FC<FloatingTriggerPopupProps> = ({
               onMouseDown={onMouseDown}
             />
             <div className="flex-1 min-h-0">
-              <PinnedIssues className="p-2" />
+              <PinnedIssues
+                onSelect={issue => onIssueSelect && onIssueSelect(issue)}
+                portalContainer={portalRef.current}
+              />
             </div>
           </div>
         );
@@ -387,7 +371,10 @@ const FloatingTriggerPopup: React.FC<FloatingTriggerPopupProps> = ({
                     </div>
                   )}
                 >
-                  <IssueDetail issue={selectedIssue} />
+                  <IssueDetail
+                    issue={selectedIssue}
+                    portalContainer={portalRef.current}
+                  />
                 </ErrorBoundary>
               ) : (
                 <div className="p-4 text-xs opacity-80">No issue selected.</div>

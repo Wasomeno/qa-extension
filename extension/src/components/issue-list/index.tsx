@@ -23,16 +23,30 @@ import {
   DialogTitle,
   DialogDescription,
 } from '@/src/components/ui/ui/dialog';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/src/components/ui/ui/popover';
+import { Checkbox } from '@/src/components/ui/ui/checkbox';
 import AvatarGroup from '@/components/issue-list/AvatarGroup';
 import { Label } from '@/src/components/ui/ui/label';
 import { FiStar } from 'react-icons/fi';
 import { AiFillStar } from 'react-icons/ai';
 import { storageService } from '@/services/storage';
-import EvidenceDialog from '@/components/evidence/EvidenceDialog';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
 
 dayjs.extend(relativeTime);
+
+function SkeletonRow() {
+  return (
+    <div className="flex items-center gap-2 px-2">
+      <Skeleton className="h-4 w-4 rounded" />
+      <Skeleton className="h-4 w-40" />
+    </div>
+  );
+}
 
 interface IssueListProps {
   className?: string;
@@ -50,38 +64,52 @@ const IssueListInner: React.FC<IssueListProps> = ({
   const sentinelRef = React.useRef<HTMLDivElement | null>(null);
 
   const [search, setSearch] = React.useState('');
-  const [projectId, setProjectId] = React.useState<string | undefined>(
-    undefined
+  // Filters
+  const [selectedProjectIds, setSelectedProjectIds] = React.useState<string[]>(
+    []
   );
-  const [assigneeId, setAssigneeId] = React.useState<string | undefined>(
-    undefined
-  );
-  const [createdBy, setCreatedBy] = React.useState<'me' | 'any'>('me');
+  const [selectedAssigneeIds, setSelectedAssigneeIds] = React.useState<
+    string[]
+  >([]);
+  const [selectedLabels, setSelectedLabels] = React.useState<string[]>([]);
+  const [createdBy] = React.useState<'me' | 'any'>('any');
   const [sort, setSort] = React.useState<'newest' | 'oldest'>('newest');
-  const debouncedSearch = useDebounce(search, 300);
+  const debouncedSearch = useDebounce(search, 500);
+
+  // Popover/search states for filters
+  const [openProjects, setOpenProjects] = React.useState(false);
+  const [openAssignees, setOpenAssignees] = React.useState(false);
+  const [openLabels, setOpenLabels] = React.useState(false);
+  const [projectQuery, setProjectQuery] = React.useState('');
+  const [assigneeQuery, setAssigneeQuery] = React.useState('');
+  const [labelsQuery, setLabelsQuery] = React.useState('');
+  const debouncedProjectQuery = useDebounce(projectQuery, 500);
+  const debouncedAssigneeQuery = useDebounce(assigneeQuery, 500);
+  const debouncedLabelsQuery = useDebounce(labelsQuery, 500);
 
   const [projects, setProjects] = React.useState<Project[]>([]);
   const [users, setUsers] = React.useState<GitLabUser[]>([]);
-  const [loadingMeta, setLoadingMeta] = React.useState(false);
+  const [labelsOptions, setLabelsOptions] = React.useState<
+    { id: number; name: string; color: string; text_color?: string }[]
+  >([]);
+  const [loadingProjects, setLoadingProjects] = React.useState(false);
+  const [loadingUsers, setLoadingUsers] = React.useState(false);
+  const [loadingLabels, setLoadingLabels] = React.useState(false);
   const [authError, setAuthError] = React.useState<string | null>(null);
   const [selectedIssue, setSelectedIssue] = React.useState<any | null>(null);
-  const [evidenceTarget, setEvidenceTarget] = React.useState<null | { projectId: string | number; iid: number; id: string }>(null);
-  const [submittingEvidence, setSubmittingEvidence] = React.useState(false);
-  const [justPassed, setJustPassed] = React.useState<Set<string>>(new Set());
 
+  // Initial projects fetch (first page) to populate list
   React.useEffect(() => {
     let mounted = true;
     (async () => {
-      setLoadingMeta(true);
       setAuthError(null);
-      const projectsRes = await api.getProjects();
+      setLoadingProjects(true);
+      const res = await api.searchProjects({ limit: 5 });
       if (!mounted) return;
-      if (projectsRes.success && projectsRes.data) {
-        setProjects(projectsRes.data);
-      } else if (!projectsRes.success) {
-        setAuthError(projectsRes.error || 'Authentication required');
-      }
-      setLoadingMeta(false);
+      if (res.success && res.data) setProjects(res.data);
+      else if (!res.success)
+        setAuthError(res.error || 'Authentication required');
+      setLoadingProjects(false);
     })();
     return () => {
       mounted = false;
@@ -89,22 +117,68 @@ const IssueListInner: React.FC<IssueListProps> = ({
   }, []);
 
   // Load users when a project is selected
+  // Load users when a single project is selected or the assignee search changes (server fetch on demand)
   React.useEffect(() => {
     let mounted = true;
     (async () => {
-      if (!projectId) {
+      const pid = selectedProjectIds.length === 1 ? selectedProjectIds[0] : '';
+      if (!pid) {
         setUsers([]);
         return;
       }
-      const res = await api.getUsersInProject(projectId);
+      setLoadingUsers(true);
+      const res = await api.searchUsersInProject(pid, {
+        search: debouncedAssigneeQuery || undefined,
+        limit: 5,
+      });
       if (!mounted) return;
-      if (res.success && res.data) setUsers(res.data);
+      if (res.success && res.data) setUsers(res.data || []);
       else setUsers([]);
+      setLoadingUsers(false);
     })();
     return () => {
       mounted = false;
     };
-  }, [projectId]);
+  }, [selectedProjectIds, debouncedAssigneeQuery]);
+
+  // Search projects when query changes
+  React.useEffect(() => {
+    let mounted = true;
+    (async () => {
+      setLoadingProjects(true);
+      const res = await api.searchProjects({
+        search: debouncedProjectQuery || undefined,
+        limit: 5,
+      });
+      if (!mounted) return;
+      if (res.success && res.data) setProjects(res.data || []);
+      setLoadingProjects(false);
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, [debouncedProjectQuery]);
+
+  // Load labels when a single project is selected or labels popover opens
+  React.useEffect(() => {
+    let mounted = true;
+    (async () => {
+      const pid = selectedProjectIds.length === 1 ? selectedProjectIds[0] : '';
+      if (!pid || !openLabels) {
+        if (!pid) setLabelsOptions([]);
+        return;
+      }
+      setLoadingLabels(true);
+      const res = await api.getGitLabProjectLabels(pid);
+      if (!mounted) return;
+      if (res.success && res.data) setLabelsOptions(res.data.items || []);
+      else setLabelsOptions([]);
+      setLoadingLabels(false);
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, [selectedProjectIds, openLabels]);
 
   const {
     items,
@@ -115,33 +189,46 @@ const IssueListInner: React.FC<IssueListProps> = ({
     isError,
     error,
     refetch,
-    isFetching,
   } = useInfiniteIssues({
     search: debouncedSearch || undefined,
-    projectId,
-    assigneeId,
-    createdBy,
-    // omit status to show all states
+    projectId:
+      selectedProjectIds.length === 1 ? selectedProjectIds[0] : undefined,
+    assigneeId:
+      selectedAssigneeIds.length === 1 &&
+      selectedAssigneeIds[0] !== 'unassigned'
+        ? selectedAssigneeIds[0]
+        : undefined,
+    labels: selectedLabels,
     limit: 5,
     sort,
   });
 
-  // Build the same query key used in useInfiniteIssues for cache updates
   const issuesQueryKey = React.useMemo(
     () => [
       'issues',
       {
         search: (debouncedSearch || '') as string,
-        projectId: (projectId || '') as string,
-        labels: '',
-        assigneeId: (assigneeId || '') as string,
+        projectId: (selectedProjectIds.length === 1
+          ? selectedProjectIds[0]
+          : '') as string,
+        labels: selectedLabels.slice().sort().join(','),
+        assigneeId: (selectedAssigneeIds.length === 1
+          ? selectedAssigneeIds[0]
+          : '') as string,
         createdBy: createdBy || 'me',
         status: '',
         limit: 5,
         sort: sort || 'newest',
       },
     ],
-    [debouncedSearch, projectId, assigneeId, createdBy, sort]
+    [
+      debouncedSearch,
+      selectedProjectIds,
+      selectedAssigneeIds,
+      selectedLabels,
+      createdBy,
+      sort,
+    ]
   );
 
   // Fetch project label palettes to color label dots (GitLab-like)
@@ -188,6 +275,65 @@ const IssueListInner: React.FC<IssueListProps> = ({
     return map;
   }, [labelQueries, projectIds]);
 
+  // Helpers for filter UIs
+  const labelsFiltered = React.useCallback(() => {
+    const q = (debouncedLabelsQuery || '').trim().toLowerCase();
+    const list = (labelsOptions || []).filter(l =>
+      !q ? true : String(l.name).toLowerCase().includes(q)
+    );
+    return list.slice(0, 5);
+  }, [labelsOptions, debouncedLabelsQuery]);
+
+  const toggleLabel = (name: string) => {
+    setSelectedLabels(prev =>
+      prev.includes(name) ? prev.filter(l => l !== name) : [...prev, name]
+    );
+  };
+
+  const toggleProject = (id: string) => {
+    setSelectedProjectIds(prev => {
+      const next = prev.includes(id)
+        ? prev.filter(p => p !== id)
+        : [...prev, id];
+      // If moving away from a single selected project, clear labels to avoid cross-project mismatch
+      if (next.length !== 1 && selectedLabels.length) setSelectedLabels([]);
+      return next;
+    });
+  };
+
+  const toggleAssignee = (id: string) => {
+    setSelectedAssigneeIds(prev =>
+      prev.includes(id) ? prev.filter(p => p !== id) : [...prev, id]
+    );
+  };
+
+  const filteredItems = React.useCallback(() => {
+    let out = items;
+    if (selectedProjectIds.length) {
+      const set = new Set(selectedProjectIds.map(String));
+      out = out.filter(it =>
+        it.project?.id ? set.has(String(it.project.id)) : false
+      );
+    }
+    if (selectedAssigneeIds.length) {
+      const set = new Set(selectedAssigneeIds.map(String));
+      out = out.filter(it => {
+        const anyItem: any = it as any;
+        const assignees = Array.isArray(anyItem.assignees)
+          ? anyItem.assignees
+          : it.assignee
+            ? [it.assignee]
+            : [];
+        const hasUnassigned = set.has('unassigned');
+        const assignedIds = assignees.map((a: any) => String(a.id));
+        const matchAssigned = assignedIds.some((id: string) => set.has(id));
+        const isUnassigned = assignedIds.length === 0;
+        return (hasUnassigned && isUnassigned) || matchAssigned;
+      });
+    }
+    return out;
+  }, [items, selectedProjectIds, selectedAssigneeIds]);
+
   // Pinned triage state
   const [pinnedIds, setPinnedIds] = React.useState<Set<string>>(new Set());
   const [pinnedCount, setPinnedCount] = React.useState(0);
@@ -231,8 +377,6 @@ const IssueListInner: React.FC<IssueListProps> = ({
       await storageService.updatePinnedRef(id, { projectId, iid, webUrl });
     }
 
-    // Save the whole item as snapshot (no extra fetch)
-    console.log('ITEM', item);
     try {
       await storageService.upsertPinnedSnapshot(
         id,
@@ -276,88 +420,283 @@ const IssueListInner: React.FC<IssueListProps> = ({
             onChange={e => setSearch(e.target.value)}
             placeholder="Search issues..."
             className="text-sm glass-input text-white placeholder:text-white"
+            disabled={isLoading && (!search || search === '')}
           />
         </div>
         <div className="grid grid-cols-3 gap-2">
           <div className="space-y-1">
-            <Label className="text-xs">Scope</Label>
-            <Select
-              value={createdBy}
-              onValueChange={(v: any) => setCreatedBy(v)}
-            >
-              <SelectTrigger className="text-xs h-8 glass-input">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent
+            <Label className="text-xs">Project</Label>
+            <Popover open={openProjects} onOpenChange={setOpenProjects}>
+              <PopoverTrigger asChild>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="text-xs h-8 glass-input w-full justify-between"
+                  disabled={isLoading}
+                >
+                  <span className="truncate">
+                    {selectedProjectIds.length > 0
+                      ? `${selectedProjectIds.length} selected`
+                      : 'All projects'}
+                  </span>
+                  {selectedProjectIds.length > 0 && (
+                    <Badge variant="secondary" className="ml-2 text-[10px]">
+                      {selectedProjectIds.length}
+                    </Badge>
+                  )}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent
+                className="p-2 w-72"
                 container={portalContainer || undefined}
-                sideOffset={8}
-                className="glass-panel"
+                align="start"
               >
-                <SelectItem value="me">Created by me</SelectItem>
-                <SelectItem value="any">All accessible</SelectItem>
-              </SelectContent>
-            </Select>
+                <div className="space-y-2">
+                  <Input
+                    value={projectQuery}
+                    onChange={e => setProjectQuery(e.target.value)}
+                    placeholder="Search projects"
+                    className="text-xs h-8"
+                  />
+                  <div className="max-h-56 overflow-auto">
+                    {loadingProjects ? (
+                      <div className="space-y-2">
+                        <SkeletonRow />
+                        <SkeletonRow />
+                        <SkeletonRow />
+                        <SkeletonRow />
+                      </div>
+                    ) : projects.length === 0 ? (
+                      <div className="text-xs text-neutral-500 px-1 py-2">
+                        No options found
+                      </div>
+                    ) : (
+                      <ul
+                        className="text-xs"
+                        role="listbox"
+                        aria-label="Projects"
+                      >
+                        {projects.slice(0, 5).map(p => {
+                          const id = String(p.id);
+                          const checked = selectedProjectIds.includes(id);
+                          return (
+                            <li key={id} role="option" aria-selected={checked}>
+                              <button
+                                type="button"
+                                className="w-full text-left px-2 py-1.5 rounded-md hover:bg-neutral-100 flex items-center gap-2"
+                                onClick={() => toggleProject(id)}
+                              >
+                                <Checkbox className="mr-1" checked={checked} />
+                                <span className="truncate">{p.name}</span>
+                              </button>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    )}
+                  </div>
+                </div>
+              </PopoverContent>
+            </Popover>
           </div>
           <div className="space-y-1">
-            <Label className="text-xs">Project</Label>
-            <Select
-              value={projectId ?? 'all'}
-              onValueChange={(v: string) =>
-                setProjectId(v === 'all' ? undefined : v)
-              }
-            >
-              <SelectTrigger className="text-xs h-8 glass-input">
-                <SelectValue
-                  placeholder={loadingMeta ? 'Loading...' : 'All projects'}
-                />
-              </SelectTrigger>
-              <SelectContent
+            <Label className="text-xs">Labels</Label>
+            <Popover open={openLabels} onOpenChange={setOpenLabels}>
+              <PopoverTrigger asChild>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="text-xs h-8 glass-input w-full justify-between"
+                  disabled={isLoading || selectedProjectIds.length !== 1}
+                >
+                  <span className="truncate">
+                    {selectedLabels.length > 0
+                      ? `${selectedLabels.length} selected`
+                      : selectedProjectIds.length === 1
+                        ? 'Select labels'
+                        : 'Select a single project'}
+                  </span>
+                  {selectedLabels.length > 0 && (
+                    <Badge variant="secondary" className="ml-2 text-[10px]">
+                      {selectedLabels.length}
+                    </Badge>
+                  )}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent
+                className="p-2 w-64"
                 container={portalContainer || undefined}
-                sideOffset={8}
-                className="glass-panel"
+                align="start"
               >
-                <SelectItem value="all">All projects</SelectItem>
-                {projects.map(p => (
-                  <SelectItem key={p.id} value={String(p.id)}>
-                    {p.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+                <div className="space-y-2">
+                  <Input
+                    value={labelsQuery}
+                    onChange={e => setLabelsQuery(e.target.value)}
+                    placeholder="Search labels"
+                    className="text-xs h-8"
+                    disabled={loadingLabels}
+                  />
+                  <div className="max-h-56 overflow-auto">
+                    {loadingLabels ? (
+                      <div className="space-y-2">
+                        <SkeletonRow />
+                        <SkeletonRow />
+                        <SkeletonRow />
+                      </div>
+                    ) : labelsFiltered().length === 0 ? (
+                      <div className="text-xs text-neutral-500 px-1 py-2">
+                        No options found
+                      </div>
+                    ) : (
+                      <ul
+                        className="text-xs"
+                        role="listbox"
+                        aria-label="Labels"
+                      >
+                        {labelsFiltered().map(l => {
+                          const checked = selectedLabels.includes(l.name);
+                          return (
+                            <li
+                              key={l.id}
+                              role="option"
+                              aria-selected={checked}
+                            >
+                              <button
+                                type="button"
+                                className="w-full text-left px-2 py-1.5 rounded-md hover:bg-neutral-100 flex items-center gap-2"
+                                onClick={() => toggleLabel(l.name)}
+                              >
+                                <span
+                                  className="inline-block w-2.5 h-2.5 rounded-full border"
+                                  style={{ backgroundColor: l.color }}
+                                />
+                                <Checkbox className="mr-1" checked={checked} />
+                                <span className="truncate">{l.name}</span>
+                              </button>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    )}
+                  </div>
+                </div>
+              </PopoverContent>
+            </Popover>
           </div>
+
+          {/* Assignee (multi-select) */}
           <div className="space-y-1">
             <Label className="text-xs">Assignee</Label>
-            <Select
-              value={assigneeId ?? 'any'}
-              onValueChange={(v: string) =>
-                setAssigneeId(v === 'any' ? undefined : v)
-              }
-            >
-              <SelectTrigger className="text-xs h-8 glass-input">
-                <SelectValue
-                  placeholder={loadingMeta ? 'Loading...' : 'Anyone'}
-                />
-              </SelectTrigger>
-              <SelectContent
+            <Popover open={openAssignees} onOpenChange={setOpenAssignees}>
+              <PopoverTrigger asChild>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="text-xs h-8 glass-input w-full justify-between"
+                  disabled={isLoading}
+                >
+                  <span className="truncate">
+                    {selectedAssigneeIds.length > 0
+                      ? `${selectedAssigneeIds.length} selected`
+                      : 'Anyone'}
+                  </span>
+                  {selectedAssigneeIds.length > 0 && (
+                    <Badge variant="secondary" className="ml-2 text-[10px]">
+                      {selectedAssigneeIds.length}
+                    </Badge>
+                  )}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent
+                className="p-2 w-72"
                 container={portalContainer || undefined}
-                sideOffset={8}
-                className="glass-panel"
+                align="start"
               >
-                <SelectItem value="any">Anyone</SelectItem>
-                <SelectItem value="unassigned">Unassigned</SelectItem>
-                {users.map(u => (
-                  <SelectItem key={u.id} value={String(u.id)}>
-                    {u.name} @{u.username}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+                <div className="space-y-2">
+                  <Input
+                    value={assigneeQuery}
+                    onChange={e => setAssigneeQuery(e.target.value)}
+                    placeholder="Search assignees"
+                    className="text-xs h-8"
+                    disabled={selectedProjectIds.length !== 1}
+                  />
+                  <div className="max-h-56 overflow-auto">
+                    {loadingUsers ? (
+                      <div className="space-y-2">
+                        <SkeletonRow />
+                        <SkeletonRow />
+                        <SkeletonRow />
+                      </div>
+                    ) : (
+                      <ul
+                        className="text-xs"
+                        role="listbox"
+                        aria-label="Assignees"
+                      >
+                        <li>
+                          <button
+                            type="button"
+                            className="w-full text-left px-2 py-1.5 rounded-md hover:bg-neutral-100 flex items-center gap-2"
+                            onClick={() => toggleAssignee('unassigned')}
+                          >
+                            <Checkbox
+                              className="mr-1"
+                              checked={selectedAssigneeIds.includes(
+                                'unassigned'
+                              )}
+                            />
+                            Unassigned
+                          </button>
+                        </li>
+                        {(users || [])
+                          .filter(u =>
+                            !debouncedAssigneeQuery
+                              ? true
+                              : `${u.name} ${u.username}`
+                                  .toLowerCase()
+                                  .includes(
+                                    debouncedAssigneeQuery.toLowerCase()
+                                  )
+                          )
+                          .slice(0, 5)
+                          .map(u => {
+                            const id = String(u.id);
+                            const checked = selectedAssigneeIds.includes(id);
+                            return (
+                              <li
+                                key={id}
+                                role="option"
+                                aria-selected={checked}
+                              >
+                                <button
+                                  type="button"
+                                  className="w-full text-left px-2 py-1.5 rounded-md hover:bg-neutral-100 flex items-center gap-2"
+                                  onClick={() => toggleAssignee(id)}
+                                >
+                                  <Checkbox
+                                    className="mr-1"
+                                    checked={checked}
+                                  />
+                                  <span className="truncate">
+                                    {u.name}{' '}
+                                    {u.username ? `@${u.username}` : ''}
+                                  </span>
+                                </button>
+                              </li>
+                            );
+                          })}
+                      </ul>
+                    )}
+                  </div>
+                </div>
+              </PopoverContent>
+            </Popover>
           </div>
         </div>
       </div>
 
       {/* Content */}
-      <div className="flex-1 overflow-auto px-4 py-2 space-y-2">
+      <div className="flex-1 overflow-y-scroll px-4 py-2 space-y-2">
         {isLoading && (
           <div className="space-y-2">
             {[...Array(5)].map((_, i) => (
@@ -394,13 +733,7 @@ const IssueListInner: React.FC<IssueListProps> = ({
           <div className="text-xs text-white/70">No issues found.</div>
         )}
 
-        {items.map(item => {
-          const anyItem: any = item as any;
-          const assignees = Array.isArray(anyItem.assignees)
-            ? anyItem.assignees
-            : item.assignee
-              ? [item.assignee]
-              : [];
+        {filteredItems().map(item => {
           const openedAgo = item.createdAt
             ? dayjs(item.createdAt).fromNow()
             : '';
@@ -430,7 +763,9 @@ const IssueListInner: React.FC<IssueListProps> = ({
                     </div>
                   </div>
                   <div className="shrink-0 flex items-center gap-3">
-                    <div className="text-[12px] text-black/70">#{item.number ?? '—'}</div>
+                    <div className="text-[12px] text-black/70">
+                      #{item.number ?? '—'}
+                    </div>
                     {(() => {
                       const projectId = item.project?.id as string | undefined;
                       const iid = item.number as number | undefined;
@@ -464,7 +799,6 @@ const IssueListInner: React.FC<IssueListProps> = ({
                             <SelectContent
                               container={portalContainer || undefined}
                               sideOffset={6}
-                              className="glass-modal rounded-lg"
                             >
                               <SelectItem value="open">Open</SelectItem>
                               <SelectItem value="closed">Closed</SelectItem>
@@ -488,26 +822,6 @@ const IssueListInner: React.FC<IssueListProps> = ({
                     ) : null}
                   </div>
                   <div className="flex items-center gap-1.5">
-                    {justPassed.has(item.id) ? (
-                      <div className="text-[11px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-600">Passed</div>
-                    ) : null}
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-7 w-7 glass-button"
-                      title="Add Passed Evidence"
-                      onClick={e => {
-                        e.stopPropagation();
-                        const projectId = item.project?.id as string | number | undefined;
-                        const iid = item.number as number | undefined;
-                        if (!projectId || !iid) return;
-                        setEvidenceTarget({ projectId, iid, id: item.id });
-                      }}
-                    >
-                      <svg viewBox="0 0 24 24" className="w-4 h-4 text-emerald-600" aria-hidden>
-                        <path fill="currentColor" d="M19 11h-6V5h-2v6H5v2h6v6h2v-6h6z" />
-                      </svg>
-                    </Button>
                     <Button
                       variant="ghost"
                       size="icon"
@@ -531,35 +845,37 @@ const IssueListInner: React.FC<IssueListProps> = ({
                         <FiStar className="w-4 h-4 text-gray-400" />
                       )}
                     </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-7 w-7 glass-button text-black/60"
-                      title="More"
-                      onClick={e => e.stopPropagation()}
-                    >
-                      ⋯
-                    </Button>
                   </div>
                 </div>
 
-                {/* Row 3: spacer */}
                 <div className="h-1" />
 
                 {/* Row 4: Labels heading + selector */}
                 <div className="space-y-1" onClick={e => e.stopPropagation()}>
-                  <div className="text-[11px] font-medium text-black/70">Labels</div>
+                  <div className="text-[11px] font-medium text-black/70">
+                    Labels
+                  </div>
                   {(() => {
                     const projectId = item.project?.id as string | undefined;
-                    const palette = projectId ? labelPalettes[projectId] : undefined;
-                    const labelsArray = palette ? Array.from(palette.values()) : [];
+                    const palette = projectId
+                      ? labelPalettes[projectId]
+                      : undefined;
+                    const labelsArray = palette
+                      ? Array.from(palette.values())
+                      : [];
                     const selectedLabel =
-                      item.labels && item.labels.length ? item.labels[0] : undefined;
+                      item.labels && item.labels.length
+                        ? item.labels[0]
+                        : undefined;
                     const iid = item.number as number | undefined;
                     const handleSelect = async (val: string) => {
                       if (!projectId || !iid) return;
-                      await queryClient.cancelQueries({ queryKey: issuesQueryKey });
-                      const prev = queryClient.getQueryData(issuesQueryKey) as any;
+                      await queryClient.cancelQueries({
+                        queryKey: issuesQueryKey,
+                      });
+                      const prev = queryClient.getQueryData(
+                        issuesQueryKey
+                      ) as any;
                       queryClient.setQueryData(issuesQueryKey, (old: any) => {
                         if (!old || !old.pages) return old;
                         return {
@@ -578,40 +894,52 @@ const IssueListInner: React.FC<IssueListProps> = ({
                       setSelectedIssue((prevSelected: any | null) => {
                         if (!prevSelected) return prevSelected;
                         const sameIssue =
-                          String((prevSelected as any)?.project?.id) === String(projectId) &&
+                          String((prevSelected as any)?.project?.id) ===
+                            String(projectId) &&
                           Number((prevSelected as any)?.number) === Number(iid);
-                        return sameIssue ? { ...prevSelected, labels: [val] } : prevSelected;
+                        return sameIssue
+                          ? { ...prevSelected, labels: [val] }
+                          : prevSelected;
                       });
                       try {
-                        const res = await api.updateGitLabIssue(projectId, iid, {
-                          labels: [val],
-                        });
-                        const serverLabels: string[] | undefined = Array.isArray(
-                          (res.data as any)?.labels
-                        )
-                          ? ((res.data as any).labels as string[])
-                          : undefined;
+                        const res = await api.updateGitLabIssue(
+                          projectId,
+                          iid,
+                          {
+                            labels: [val],
+                          }
+                        );
+                        const serverLabels: string[] | undefined =
+                          Array.isArray((res.data as any)?.labels)
+                            ? ((res.data as any).labels as string[])
+                            : undefined;
                         if (serverLabels && serverLabels.length) {
-                          queryClient.setQueryData(issuesQueryKey, (old: any) => {
-                            if (!old || !old.pages) return old;
-                            return {
-                              ...old,
-                              pages: old.pages.map((p: any) => ({
-                                ...p,
-                                items: (p.items || []).map((it: any) =>
-                                  String(it?.project?.id) === String(projectId) &&
-                                  Number(it?.number) === Number(iid)
-                                    ? { ...it, labels: serverLabels }
-                                    : it
-                                ),
-                              })),
-                            };
-                          });
+                          queryClient.setQueryData(
+                            issuesQueryKey,
+                            (old: any) => {
+                              if (!old || !old.pages) return old;
+                              return {
+                                ...old,
+                                pages: old.pages.map((p: any) => ({
+                                  ...p,
+                                  items: (p.items || []).map((it: any) =>
+                                    String(it?.project?.id) ===
+                                      String(projectId) &&
+                                    Number(it?.number) === Number(iid)
+                                      ? { ...it, labels: serverLabels }
+                                      : it
+                                  ),
+                                })),
+                              };
+                            }
+                          );
                           setSelectedIssue((prevSelected: any | null) => {
                             if (!prevSelected) return prevSelected;
                             const sameIssue =
-                              String((prevSelected as any)?.project?.id) === String(projectId) &&
-                              Number((prevSelected as any)?.number) === Number(iid);
+                              String((prevSelected as any)?.project?.id) ===
+                                String(projectId) &&
+                              Number((prevSelected as any)?.number) ===
+                                Number(iid);
                             return sameIssue
                               ? { ...prevSelected, labels: serverLabels }
                               : prevSelected;
@@ -622,7 +950,10 @@ const IssueListInner: React.FC<IssueListProps> = ({
                       }
                     };
                     return (
-                      <Select value={selectedLabel} onValueChange={handleSelect}>
+                      <Select
+                        value={selectedLabel}
+                        onValueChange={handleSelect}
+                      >
                         <SelectTrigger className="h-7 w-40 text-[12px] glass-input">
                           {selectedLabel && palette ? (
                             <div className="flex items-center gap-2 truncate">
@@ -630,7 +961,9 @@ const IssueListInner: React.FC<IssueListProps> = ({
                                 <span
                                   className="inline-block w-2.5 h-2.5 rounded-full border border-gray-300"
                                   style={{
-                                    backgroundColor: (palette.get(selectedLabel) as any).color,
+                                    backgroundColor: (
+                                      palette.get(selectedLabel) as any
+                                    ).color,
                                   }}
                                 />
                               ) : null}
@@ -643,7 +976,6 @@ const IssueListInner: React.FC<IssueListProps> = ({
                         <SelectContent
                           container={portalContainer || undefined}
                           sideOffset={6}
-                          className="glass-modal rounded-lg"
                         >
                           {labelsArray.map((l: any) => (
                             <SelectItem key={l.id} value={l.name}>
@@ -652,7 +984,7 @@ const IssueListInner: React.FC<IssueListProps> = ({
                                   className="inline-block w-2.5 h-2.5 rounded-full border border-gray-300"
                                   style={{ backgroundColor: l.color }}
                                 />
-                                <span>{l.name}</span>
+                                <span className="text-xs">{l.name}</span>
                               </div>
                             </SelectItem>
                           ))}
@@ -666,40 +998,35 @@ const IssueListInner: React.FC<IssueListProps> = ({
           );
         })}
 
-        {/* Infinite scroll sentinel */}
         <div ref={sentinelRef} />
         {isFetchingNextPage && (
-          <div className="text-xs text-white/70">Loading more…</div>
+          <div className="space-y-2">
+            {[...Array(2)].map((_, i) => (
+              <div
+                key={i}
+                className="rounded-lg glass-card border border-gray-100 p-3 bg-white shadow-sm"
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0 flex-1">
+                    <Skeleton className="h-4 w-3/4" />
+                    <div className="mt-2 flex items-center gap-2">
+                      <Skeleton className="h-3 w-10" />
+                      <Skeleton className="h-3 w-24" />
+                      <Skeleton className="h-3 w-20" />
+                    </div>
+                  </div>
+                  <Skeleton className="h-6 w-6 rounded-full" />
+                </div>
+                <div className="mt-3 flex gap-1">
+                  <Skeleton className="h-4 w-14 rounded-full" />
+                  <Skeleton className="h-4 w-10 rounded-full" />
+                  <Skeleton className="h-4 w-16 rounded-full" />
+                </div>
+              </div>
+            ))}
+          </div>
         )}
       </div>
-      <EvidenceDialog
-        open={!!evidenceTarget}
-        onOpenChange={open => { if (!open) setEvidenceTarget(null); }}
-        onSubmit={async ({ file, text }) => {
-          const tgt = evidenceTarget;
-          if (!tgt) return;
-          setSubmittingEvidence(true);
-          try {
-            const upload = await api.uploadFile(file, 'screenshot');
-            if (!upload.success || !upload.data?.url) throw new Error(upload.error || 'Upload failed');
-            const url = upload.data.url;
-            const body = `QA Passed${text ? `: ${text}` : ' ✅'}\n\n![](${url})`;
-            const noteRes = await api.addGitLabIssueNote(tgt.projectId, Number(tgt.iid), body);
-            if (!noteRes.success) throw new Error(noteRes.error || 'Failed to add note');
-            setJustPassed(prev => {
-              const next = new Set(prev);
-              next.add(tgt.id);
-              return next;
-            });
-            setEvidenceTarget(null);
-          } catch (e) {
-            // no-op; user can retry
-          } finally {
-            setSubmittingEvidence(false);
-          }
-        }}
-        busy={submittingEvidence}
-      />
       {/* Detail dialog */}
       {!onSelect && (
         <Dialog

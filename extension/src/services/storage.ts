@@ -4,41 +4,51 @@
 
 import { AuthData, UserData, IssueData } from '@/types/messages';
 
-export interface PinnedIssueRef { id: string; order: number }
-export interface PinnedIssueSnapshot {
+export interface PinnedIssueRef {
   id: string;
-  title?: string;
-  description?: string;
-  iid?: number;
-  project_id?: string | number;
-  web_url?: string;
-  created_at?: string;
-  updated_at?: string;
-  closed_at?: string;
-  author?: { name?: string } | null;
-  assignees?: Array<{ id?: number; name?: string; username?: string; avatar_url?: string }>;
-  labels?: string[];
-  state?: 'open' | 'closed';
-  raw?: any; // full source item for local-first needs
-  // housekeeping
-  lastSyncedAt: number;
-  // QA passed evidence entries (most recent first)
-  passedEvidence?: Array<{
-    at: number;
-    text?: string;
-    imageUrl: string;
-    noteUrl?: string;
-    localOnly?: boolean;
-  }>;
+  order: number;
 }
-export type PinnedDone = 'open' | 'done'
-export type PendingActionType = 'update' | 'assign' | 'label' | 'resolve'
+
+interface AssigneeRef {
+  avatarUrl: string;
+  id: string;
+  name: string;
+  username: string;
+}
+
+interface AuthorRef {
+  id: string;
+  name: string;
+  username: string;
+}
+
+interface ProjectRef {
+  id: string;
+  name: string;
+}
+
+// Main type
+export interface IssueDataRef {
+  assignee: AssigneeRef;
+  author: AuthorRef;
+  createdAt: string; // ISO 8601 datetime string
+  id: string; // note: provided as a string in the sample
+  labels: string[]; // array of label IDs (strings in the sample)
+  lastSyncedAt: number; // epoch ms
+  number: number;
+  project: ProjectRef;
+  title: string;
+}
+
+export type PinnedIssueSnapshot = IssueDataRef;
+export type PinnedDone = 'open' | 'done';
+export type PendingActionType = 'update' | 'assign' | 'label' | 'resolve';
 export interface PendingAction<T = any> {
-  id: string
-  action: PendingActionType
-  payload: T
-  tries: number
-  lastTriedAt?: number
+  id: string;
+  action: PendingActionType;
+  payload: T;
+  tries: number;
+  lastTriedAt?: number;
 }
 
 export interface ExtensionSettings {
@@ -77,7 +87,10 @@ export interface StorageData {
   pinnedIssues?: PinnedIssueRef[];
   pinnedDoneState?: Record<string, PinnedDone>;
   pendingActions?: PendingAction[];
-  pinnedRefs?: Record<string, { projectId: string | number; iid: number; webUrl?: string }>;
+  pinnedRefs?: Record<
+    string,
+    { projectId: string | number; iid: number; webUrl?: string }
+  >;
   pinnedSnapshots?: Record<string, PinnedIssueSnapshot>;
   // Recording index removed
 }
@@ -98,7 +111,12 @@ const DEFAULT_SETTINGS: ExtensionSettings = {
 class StorageService {
   private cache = new Map<string, any>();
   private listeners = new Map<string, Set<(value: any) => void>>();
-  private onChangedBound: ((changes: { [key: string]: chrome.storage.StorageChange }, areaName: 'sync'|'local'|'managed'|'session') => void) | null = null;
+  private onChangedBound:
+    | ((
+        changes: { [key: string]: chrome.storage.StorageChange },
+        areaName: 'sync' | 'local' | 'managed' | 'session'
+      ) => void)
+    | null = null;
 
   constructor() {
     // Ensure cross-context bridge is active even if initialize() isn't called
@@ -248,11 +266,26 @@ class StorageService {
       }
       // Migrate deprecated pinnedMeta → pinnedRefs if present
       if ((existing as any).pinnedMeta && !(existing as any).pinnedRefs) {
-        const old = (existing as any).pinnedMeta as Record<string, { source?: string; projectId?: string | number; iid?: number; webUrl?: string }>;
-        const migrated: Record<string, { projectId: string | number; iid: number; webUrl?: string }> = {};
+        const old = (existing as any).pinnedMeta as Record<
+          string,
+          {
+            source?: string;
+            projectId?: string | number;
+            iid?: number;
+            webUrl?: string;
+          }
+        >;
+        const migrated: Record<
+          string,
+          { projectId: string | number; iid: number; webUrl?: string }
+        > = {};
         Object.entries(old || {}).forEach(([k, v]) => {
           if (v && v.projectId != null && typeof v.iid === 'number') {
-            migrated[k] = { projectId: v.projectId, iid: v.iid, webUrl: v.webUrl };
+            migrated[k] = {
+              projectId: v.projectId,
+              iid: v.iid,
+              webUrl: v.webUrl,
+            };
           }
         });
         await this.set('pinnedRefs', migrated);
@@ -306,7 +339,9 @@ class StorageService {
           const listeners = this.listeners.get(key);
           if (listeners) {
             listeners.forEach(listener => {
-              try { listener(newValue); } catch {}
+              try {
+                listener(newValue);
+              } catch {}
             });
           }
         }
@@ -540,8 +575,6 @@ class StorageService {
     }
   }
 
-  
-
   // ---------- Pinned triage helpers ----------
 
   async getPinnedIssues(): Promise<PinnedIssueRef[]> {
@@ -560,7 +593,8 @@ class StorageService {
     const current = await this.getPinnedIssues();
     if (current.find(p => p.id === id)) return current;
     if (current.length >= 5) return current;
-    const nextOrder = current.length > 0 ? Math.max(...current.map(p => p.order)) + 1 : 0;
+    const nextOrder =
+      current.length > 0 ? Math.max(...current.map(p => p.order)) + 1 : 0;
     const updated = [...current, { id, order: nextOrder }];
     await this.setPinnedIssues(updated);
     return updated;
@@ -588,26 +622,44 @@ class StorageService {
   }
 
   async enqueuePendingAction<T = any>(action: PendingAction<T>): Promise<void> {
-    const existing = ((await this.get('pendingActions')) || []) as PendingAction[];
+    const existing = ((await this.get('pendingActions')) ||
+      []) as PendingAction[];
     existing.push(action);
     await this.set('pendingActions', existing);
   }
 
-  async dequeuePendingActions(predicate: (a: PendingAction) => boolean): Promise<void> {
-    const existing = ((await this.get('pendingActions')) || []) as PendingAction[];
+  async dequeuePendingActions(
+    predicate: (a: PendingAction) => boolean
+  ): Promise<void> {
+    const existing = ((await this.get('pendingActions')) ||
+      []) as PendingAction[];
     const remaining = existing.filter(a => !predicate(a));
     await this.set('pendingActions', remaining);
   }
 
-  async getPinnedRefs(): Promise<Record<string, { projectId: string | number; iid: number; webUrl?: string }>> {
+  async getPinnedRefs(): Promise<
+    Record<string, { projectId: string | number; iid: number; webUrl?: string }>
+  > {
     return (await this.get('pinnedRefs')) || {};
   }
 
-  async setPinnedRefs(refs: Record<string, { projectId: string | number; iid: number; webUrl?: string }>): Promise<void> {
+  async setPinnedRefs(
+    refs: Record<
+      string,
+      { projectId: string | number; iid: number; webUrl?: string }
+    >
+  ): Promise<void> {
     await this.set('pinnedRefs', refs);
   }
 
-  async updatePinnedRef(id: string, updates: Partial<{ projectId: string | number; iid: number; webUrl?: string }>): Promise<void> {
+  async updatePinnedRef(
+    id: string,
+    updates: Partial<{
+      projectId: string | number;
+      iid: number;
+      webUrl?: string;
+    }>
+  ): Promise<void> {
     const current = await this.getPinnedRefs();
     current[id] = { ...(current[id] || {}), ...updates } as any;
     await this.setPinnedRefs(current);
@@ -617,7 +669,16 @@ class StorageService {
     return (await this.get('pinnedSnapshots')) || {};
   }
 
-  async setPinnedSnapshots(snapshots: Record<string, PinnedIssueSnapshot>): Promise<void> {
+  async getParsedPinnedSnapshots(): Promise<PinnedIssueSnapshot[]> {
+    const snapshots = await this.get('pinnedSnapshots');
+    if (!snapshots) return [];
+    const parsedSnapshot = Object.keys(snapshots).map(key => snapshots[key]);
+    return parsedSnapshot || [];
+  }
+
+  async setPinnedSnapshots(
+    snapshots: Record<string, PinnedIssueSnapshot>
+  ): Promise<void> {
     await this.set('pinnedSnapshots', snapshots);
   }
 

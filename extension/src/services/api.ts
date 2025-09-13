@@ -690,6 +690,21 @@ class ApiService {
     return response;
   }
 
+  /**
+   * Search GitLab projects (server-side search via backend proxy)
+   */
+  async searchProjects(params: {
+    search?: string;
+    limit?: number;
+    page?: number;
+  } = {}): Promise<ApiResponse<Project[]>> {
+    const q = new URLSearchParams();
+    if (params.search) q.set('search', params.search);
+    if (params.limit) q.set('limit', String(params.limit));
+    if (params.page) q.set('page', String(params.page));
+    return this.request<Project[]>(`/api/projects?${q.toString()}`);
+  }
+
   async createProject(
     project: Omit<Project, 'id' | 'createdAt'>
   ): Promise<ApiResponse<Project>> {
@@ -722,6 +737,22 @@ class ApiService {
     projectId: string
   ): Promise<ApiResponse<GitLabUser[]>> {
     return this.request<GitLabUser[]>(`/api/projects/${projectId}/users`);
+  }
+
+  /**
+   * Search users in a project. Backend may not support query params yet,
+   * so this method fetches and lets callers filter if needed.
+   */
+  async searchUsersInProject(
+    projectId: string,
+    params: { search?: string; limit?: number } = {}
+  ): Promise<ApiResponse<GitLabUser[]>> {
+    const q = new URLSearchParams();
+    if (params.search) q.set('search', params.search);
+    if (params.limit) q.set('limit', String(params.limit));
+    return this.request<GitLabUser[]>(
+      `/api/projects/${projectId}/users${q.toString() ? `?${q.toString()}` : ''}`
+    );
   }
 
   async getGitLabUsers(): Promise<ApiResponse<GitLabUser[]>> {

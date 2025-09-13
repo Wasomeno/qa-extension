@@ -14,7 +14,6 @@ import {
   asyncHandler,
   validateRequest,
   sendResponse,
-  sendError,
   ValidationError,
   NotFoundError,
   AuthorizationError,
@@ -338,13 +337,16 @@ router.post(
           slackChannelId.trim().length > 0
         ) {
           const tokens = await slackService.getUserTokens(userId);
-          const accessToken = tokens?.accessToken || process.env.SLACK_BOT_TOKEN;
+          const accessToken =
+            tokens?.accessToken || process.env.SLACK_BOT_TOKEN;
           if (accessToken) {
-            const mentionText = Array.isArray(slackUserIds) && slackUserIds.length > 0
-              ? slackUserIds.map((id: string) => `<@${id}>`).join(' ')
-              : '';
+            const mentionText =
+              Array.isArray(slackUserIds) && slackUserIds.length > 0
+                ? slackUserIds.map((id: string) => `<@${id}>`).join(' ')
+                : '';
             const issueUrl = `${process.env.FRONTEND_URL || ''}/issues/${issue.id}`;
-            const text = `New issue: ${issue.title} ${issueUrl} ${mentionText}`.trim();
+            const text =
+              `New issue: ${issue.title} ${issueUrl} ${mentionText}`.trim();
 
             // Post summary to channel
             const postResp = await slackService.sendMessage(accessToken, {
@@ -363,12 +365,18 @@ router.post(
                 .slice(0, 10) // avoid excessively long messages
                 .map((m: any) => ({
                   type: 'image',
-                  image_url: `${process.env.BACKEND_PUBLIC_URL || ''}${m.url}`.replace(/\/$/, ''),
+                  image_url:
+                    `${process.env.BACKEND_PUBLIC_URL || ''}${m.url}`.replace(
+                      /\/$/,
+                      ''
+                    ),
                   alt_text: m.filename || 'issue image',
                 }));
               const videoLinks = media
                 .filter((m: any) => m.type === 'video')
-                .map((m: any) => `${process.env.BACKEND_PUBLIC_URL || ''}${m.url}`);
+                .map(
+                  (m: any) => `${process.env.BACKEND_PUBLIC_URL || ''}${m.url}`
+                );
 
               const blocks: any[] = [];
               if (videoLinks.length > 0) {
@@ -392,7 +400,9 @@ router.post(
               });
             }
           } else {
-            logger.warn('Slack tokens not found for user; skipping Slack notify');
+            logger.warn(
+              'Slack tokens not found for user; skipping Slack notify'
+            );
           }
         }
       } catch (slackErr) {
@@ -519,7 +529,7 @@ router.get(
       sortOrder,
     } = req.query as any;
     const userId = req.user!.id;
-
+    console.log('MOOOOOO');
     try {
       // Build base query
       let dbQuery = db

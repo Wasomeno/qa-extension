@@ -1,144 +1,227 @@
 import React from 'react';
-import { Badge } from '@/src/components/ui/ui/badge';
-import AvatarGroup from '@/components/issue-list/AvatarGroup';
-import api, { IssueListItem, GitLabIssueDetail } from '@/services/api';
+import api, { IssueListItem } from '@/services/api';
 import { Checkbox } from '@/src/components/ui/ui/checkbox';
+import { useQuery } from '@tanstack/react-query';
+import { Button } from '@/src/components/ui/ui/button';
+import { Copy } from 'lucide-react';
+import { RxOpenInNewWindow } from 'react-icons/rx';
+import MarkdownIt from 'markdown-it';
+import taskLists from 'markdown-it-task-lists';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/src/components/ui/ui/tooltip';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/src/components/ui/ui/select';
+import { useUsersInProjectQuery } from '@/hooks/use-users-in-project-query';
+import { useProjectLabelsQuery } from '@/hooks/use-project-labels-query';
 
 interface IssueDetailProps {
   issue: IssueListItem | any;
+  portalContainer?: Element | null;
 }
 
-const IssueDetail: React.FC<IssueDetailProps> = ({ issue }) => {
-  const assignees = Array.isArray((issue as any).assignees)
-    ? (issue as any).assignees
-    : issue.assignee
-      ? [issue.assignee]
-      : [];
-
+const IssueDetail: React.FC<IssueDetailProps> = ({
+  issue,
+  portalContainer,
+}) => {
   const projectId = issue?.project?.id;
   const iid = issue?.number;
 
-  const [detail, setDetail] = React.useState<GitLabIssueDetail | null>(null);
-  const [loading, setLoading] = React.useState(false);
-  const [error, setError] = React.useState<string | null>(null);
-  const [checklist, setChecklist] = React.useState<
-    { text: string; checked: boolean; raw: string; line: number }[]
-  >([]);
+  const checklistQuery = useQuery({
+    queryKey: ['checklist', projectId, iid],
+    queryFn: () => api.getGitLabIssueChecklist(projectId, iid),
+    enabled: !!projectId && !!iid,
+  });
+  const issueQuery = useQuery({
+    queryKey: ['issue', projectId, iid],
+    queryFn: () => api.getGitLabIssue(projectId, iid),
+    enabled: !!projectId && !!iid,
+  });
+  const usersInProjectQuery = useUsersInProjectQuery(projectId);
+  const projectLabels = useProjectLabelsQuery(projectId);
 
-  React.useEffect(() => {
-    let mounted = true;
-    (async () => {
-      if (!projectId || !iid) return;
-      setLoading(true);
-      setError(null);
-      const [dRes, cRes] = await Promise.all([
-        api.getGitLabIssue(projectId, iid),
-        api.getGitLabIssueChecklist(projectId, iid),
-      ]);
-      if (!mounted) return;
-      if (dRes.success && dRes.data) setDetail(dRes.data);
-      if (cRes.success && cRes.data) setChecklist(cRes.data.items || []);
-      if (!dRes.success && !cRes.success)
-        setError(dRes.error || cRes.error || 'Failed to load issue details');
-      setLoading(false);
-    })();
-    return () => {
-      mounted = false;
-    };
-  }, [projectId, iid]);
+  const issueDetail = issueQuery.data?.data;
+  const userOptions = usersInProjectQuery.data?.data?.map(user => ({
+    id: String(user.id),
+    avatar: user.avatarUrl,
+    name: user.name,
+    username: user.username,
+  }));
+  const labelOptions = projectLabels.data?.data?.items.map(label => ({
+    id: String(label.id),
+    name: label.name,
+    color: label.color,
+  }));
 
-  const rawDesc = detail?.description ?? issue.description;
-  // If the description contains any markdown task checkbox, hide the whole description
-  const effectiveDesc = React.useMemo(() => {
-    if (!rawDesc) return rawDesc;
-    const checkboxLine = /^(\s*(?:[-*+]|\d+[.)])?\s*)\[( |x|X)\]\s+/m;
-    return checkboxLine.test(String(rawDesc)) ? '' : String(rawDesc);
-  }, [rawDesc]);
+  const md = React.useMemo(() => {
+    const inst = new MarkdownIt({
+      html: false,
+      linkify: true,
+      typographer: true,
+      breaks: true,
+    });
+    try {
+      (inst as any).use(taskLists as any, { label: true, labelAfter: true });
+    } catch {}
+    return inst;
+  }, []);
 
   return (
-    <div className="p-6 space-y-4">
-      <div className="space-y-1">
-        <div className="text-sm font-semibold text-gray-900 leading-snug">
-          {detail?.title || issue.title}
-        </div>
-        <div className="text-[11px] text-gray-500">
-          #{iid ?? '—'} · {issue.project?.name ?? 'Unknown project'} · by{' '}
-          {issue.author?.name ?? detail?.author?.name ?? 'Unknown'}
-        </div>
-        {detail?.web_url && (
-          <div>
-            <a
-              className="text-[11px] text-blue-600 hover:underline"
-              href={detail.web_url}
-              target="_blank"
-              rel="noreferrer"
-            >
-              Open in GitLab →
-            </a>
-          </div>
-        )}
-      </div>
-
-      {assignees.length ? (
-        <div className="pt-2 border-t border-gray-100">
-          <div className="text-[11px] font-medium text-gray-700 mb-1">
-            Assignees
-          </div>
-          <AvatarGroup users={assignees as any} size={28} />
-        </div>
-      ) : null}
-
-      {issue.labels?.length ? (
-        <div className="pt-2 border-t border-gray-100">
-          <div className="text-[11px] font-medium text-gray-700 mb-1">
-            Labels
-          </div>
-          <div className="flex flex-wrap gap-1">
-            {issue.labels.map((l: string) => (
-              <Badge
-                key={l}
-                variant="secondary"
-                className="text-[10px] px-1.5 py-0.5"
-              >
-                {l}
-              </Badge>
-            ))}
-          </div>
-        </div>
-      ) : null}
-
-      <div className="pt-2 border-t border-gray-100 text-[11px] text-gray-500">
-        Created {new Date(issue.createdAt).toLocaleString()}
-        {detail?.updated_at && (
-          <span> · Updated {new Date(detail.updated_at).toLocaleString()}</span>
-        )}
-      </div>
-
-      {loading && (
-        <div className="text-xs text-gray-500">Loading issue details…</div>
-      )}
-
-      {checklist.length ? (
-        <div className="pt-2 border-t border-gray-100">
-          <div className="text-[11px] font-medium text-gray-700 mb-1">
-            Checklist
-          </div>
+    <div className="py-4 px-6 ">
+      <div className="flex flex-1 justify-between">
+        <div className="flex flex-1">
           <div className="space-y-1">
-            {checklist.map((c, idx) => (
+            <div className="text-sm font-semibold leading-snug">
+              {issueDetail?.title || issue.title}
+            </div>
+            <div className="text-[11px] text-neutral-500">
+              #{iid ?? '—'} · {issue.project?.name ?? 'Unknown project'} · by{' '}
+              {issue.author?.name ?? issueDetail?.author?.name ?? 'Unknown'}
+            </div>
+          </div>
+        </div>
+        <div className="flex items-center">
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger>
+                <Button size="icon">
+                  <Copy className="text-black" size={8} />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" sideOffset={-2} className="text-xs">
+                Copy Link
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger>
+                <Button size="icon">
+                  <RxOpenInNewWindow className="text-black" size={8} />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" sideOffset={-2} className="text-xs">
+                Open in Gitlab
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        </div>
+      </div>
+      <hr className="my-4 border-neutral-100" />
+      <div className="flex items-center gap-2">
+        <div className="w-1/2">
+          <div className="text-xs font-medium mb-1">Assignees</div>
+          <Select
+            value={String(issueDetail?.assignees?.[0]?.id)}
+            disabled={issueQuery.isLoading}
+          >
+            <SelectTrigger className="text-xs glass-input h-8">
+              <SelectValue placeholder="Select an assignee (optional)" />
+            </SelectTrigger>
+            <SelectContent
+              className="text-xs rounded-lg bg-white"
+              container={portalContainer || undefined}
+            >
+              {userOptions?.length === 0 ? (
+                <SelectItem
+                  className="cursor-pointer text-xs"
+                  value="#"
+                  disabled
+                >
+                  {issueDetail?.iid
+                    ? 'Loading users...'
+                    : 'Select a project first'}
+                </SelectItem>
+              ) : (
+                userOptions?.map(user => (
+                  <SelectItem
+                    className="cursor-pointer text-xs"
+                    key={user.id}
+                    value={user.id}
+                  >
+                    <div className="flex items-center gap-2">
+                      {user.avatar && (
+                        <img
+                          src={user.avatar}
+                          alt={user.name}
+                          className="w-4 h-4 rounded-full"
+                        />
+                      )}
+                      <span>{user.name}</span>
+                    </div>
+                  </SelectItem>
+                ))
+              )}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="w-1/2">
+          <div className="text-xs font-medium mb-1">Labels</div>
+          <Select
+            value={issueDetail?.labels?.[0]}
+            disabled={projectLabels.isLoading}
+          >
+            <SelectTrigger className="text-xs glass-input h-8">
+              <SelectValue placeholder="Select a label" />
+            </SelectTrigger>
+            <SelectContent
+              className="text-xs rounded-lg bg-white"
+              container={portalContainer || undefined}
+              sideOffset={8}
+              avoidCollisions={false}
+            >
+              {labelOptions?.length === 0 ? (
+                <SelectItem className="text-xs hover:bg-none" value="#">
+                  No Available Labels
+                </SelectItem>
+              ) : (
+                labelOptions?.map(label => (
+                  <SelectItem
+                    className="cursor-pointer text-xs"
+                    key={label.id}
+                    value={label.id}
+                  >
+                    <div className="flex items-center gap-2">
+                      <span
+                        className="inline-block w-2.5 h-2.5 rounded-full border border-gray-300"
+                        style={{
+                          backgroundColor: label.color,
+                        }}
+                      />
+                      {label.name}
+                    </div>
+                  </SelectItem>
+                ))
+              )}
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
+      <hr className="my-4 border-neutral-100" />
+      {issueQuery.isLoading && (
+        <div className="text-xs text-neutral-500">Loading issue details…</div>
+      )}
+      {checklistQuery.data?.data?.items?.length ? (
+        <div>
+          <div className="text-xs font-medium mb-1">Checklist</div>
+          <div className="space-y-1">
+            {checklistQuery.data?.data?.items?.map((c, idx) => (
               <label
                 key={`${c.line}-${idx}`}
-                className="flex items-start gap-2 text-xs text-gray-800"
+                className="flex items-start gap-2 text-xs"
               >
                 <Checkbox
                   checked={c.checked}
-                  onCheckedChange={val => {
-                    setChecklist(prev =>
-                      prev.map((it, i) =>
-                        i === idx ? { ...it, checked: !!val } : it
-                      )
-                    );
-                  }}
-                  className="mt-0.5 h-3.5 w-3.5"
+                  className="mt-0.5 h-3.5 w-3.5 border-neutral-200"
                 />
                 <span className="leading-4">{c.text}</span>
               </label>
@@ -146,24 +229,14 @@ const IssueDetail: React.FC<IssueDetailProps> = ({ issue }) => {
           </div>
         </div>
       ) : null}
-
-      {effectiveDesc ? (
-        <div className="pt-2 border-t border-gray-100">
-          <div className="text-[11px] font-medium text-gray-700 mb-1">
-            Description
-          </div>
-          <div className="prose prose-sm max-w-none whitespace-pre-wrap text-[13px] leading-5 text-gray-800">
-            {effectiveDesc}
-          </div>
-        </div>
-      ) : null}
-
-      {/* Comments removed per request */}
-
-      {error && (
-        <div className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-md p-2">
-          {error}
-        </div>
+      <hr className="my-4 border-neutral-100" />
+      {issueDetail?.description && (
+        <div
+          className="tiptap leading-5 space-y-2 text-[12px] focus:outline-none"
+          dangerouslySetInnerHTML={{
+            __html: md.render(issueDetail?.description),
+          }}
+        />
       )}
     </div>
   );
