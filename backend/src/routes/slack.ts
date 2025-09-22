@@ -11,9 +11,11 @@ import { databaseService } from '../services/database';
 const router = Router();
 const slackService = new SlackService();
 const redis = new RedisService();
-const oauthStateMemory = new Map<string, { userId: string; expiresAt: number }>();
+const oauthStateMemory = new Map<
+  string,
+  { userId: string; expiresAt: number }
+>();
 
-// GET /api/integrations/slack/channels
 router.get(
   '/channels',
   authMiddleware.authenticate,
@@ -23,7 +25,9 @@ router.get(
       const tokens = await slackService.getUserTokens(userId);
       const accessToken = tokens?.accessToken || process.env.SLACK_BOT_TOKEN;
       if (!accessToken) {
-        return sendResponse(res, 200, true, 'Slack not connected', { items: [] });
+        return sendResponse(res, 200, true, 'Slack not connected', {
+          items: [],
+        });
       }
 
       const channels = await slackService.getChannels(accessToken);
@@ -52,7 +56,9 @@ router.get(
       const tokens = await slackService.getUserTokens(userId);
       const accessToken = tokens?.accessToken || process.env.SLACK_BOT_TOKEN;
       if (!accessToken) {
-        return sendResponse(res, 200, true, 'Slack not connected', { items: [] });
+        return sendResponse(res, 200, true, 'Slack not connected', {
+          items: [],
+        });
       }
 
       const users = await slackService.getUsers(accessToken);
@@ -76,7 +82,12 @@ router.get(
   authMiddleware.authenticate,
   asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
     if (process.env.SLACK_BOT_TOKEN) {
-      return res.status(404).json({ success: false, error: 'Slack OAuth disabled (using bot token)' });
+      return res
+        .status(404)
+        .json({
+          success: false,
+          error: 'Slack OAuth disabled (using bot token)',
+        });
     }
     const clientId = process.env.SLACK_CLIENT_ID;
     const redirectUri = process.env.SLACK_REDIRECT_URI;
@@ -119,7 +130,9 @@ router.get(
     url.searchParams.set('scope', scopes);
     url.searchParams.set('state', state);
 
-    return sendResponse(res, 200, true, 'Slack OAuth URL', { url: url.toString() });
+    return sendResponse(res, 200, true, 'Slack OAuth URL', {
+      url: url.toString(),
+    });
   })
 );
 
@@ -158,7 +171,10 @@ router.get(
         return res.status(400).send('Invalid or expired state');
       }
 
-      const tokens = await slackService.exchangeCodeForTokens(code, redirectUri!);
+      const tokens = await slackService.exchangeCodeForTokens(
+        code,
+        redirectUri!
+      );
       await slackService.storeUserTokens(userId, tokens);
       try {
         await redis.connect();
@@ -191,7 +207,12 @@ router.post(
   authMiddleware.authenticate,
   asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
     if (process.env.SLACK_BOT_TOKEN) {
-      return sendResponse(res, 404, false, 'Slack OAuth disabled (using bot token)');
+      return sendResponse(
+        res,
+        404,
+        false,
+        'Slack OAuth disabled (using bot token)'
+      );
     }
     const { token } = req.body || {};
     if (!token) return sendResponse(res, 400, false, 'Missing token');
@@ -224,7 +245,12 @@ router.post(
   asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
     if (process.env.SLACK_BOT_TOKEN) {
       // No per-user tokens when using bot token only
-      return sendResponse(res, 200, true, 'Slack disconnected (bot token in use)');
+      return sendResponse(
+        res,
+        200,
+        true,
+        'Slack disconnected (bot token in use)'
+      );
     }
     try {
       // Clear tokens from DB and cache
@@ -272,14 +298,16 @@ router.post(
 
     try {
       const slackTokens = await slackService.getUserTokens(req.user!.id);
-      const accessToken = slackTokens?.accessToken || process.env.SLACK_BOT_TOKEN;
+      const accessToken =
+        slackTokens?.accessToken || process.env.SLACK_BOT_TOKEN;
       if (!accessToken) {
         return sendResponse(res, 400, false, 'Slack not connected');
       }
 
-      const mentionText = Array.isArray(slackUserIds) && slackUserIds.length > 0
-        ? slackUserIds.map((id) => `<@${id}>`).join(' ')
-        : '';
+      const mentionText =
+        Array.isArray(slackUserIds) && slackUserIds.length > 0
+          ? slackUserIds.map(id => `<@${id}>`).join(' ')
+          : '';
       const finalText = [text || '', mentionText].join(' ').trim();
 
       const result = await slackService.sendMessage(accessToken, {

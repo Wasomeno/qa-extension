@@ -105,71 +105,67 @@ scenariosRouter.get('/preview', async (req: Request, res: Response) => {
     let scenarios: any[] = [];
     let meta: any = {};
     // LLM path. For multi-tab inputs, run per-tab to return separate lists
-      console.log(
-        'WORKBOOK',
-        workbook?.sheets.map(sheet => sheet.rows.map(row => row.detail))
+    if (
+      workbook &&
+      Array.isArray(workbook.sheets) &&
+      workbook.sheets.length > 0
+    ) {
+      const tabs = workbook.sheets;
+      // Do not divide limit across tabs; allow multiple scenarios per tab
+      const perTabLimit = Math.max(
+        1,
+        Number(req.query.limit || req.query.maxScenarios || 10)
       );
-      if (
-        workbook &&
-        Array.isArray(workbook.sheets) &&
-        workbook.sheets.length > 0
-      ) {
-        const tabs = workbook.sheets;
-        // Do not divide limit across tabs; allow multiple scenarios per tab
-        const perTabLimit = Math.max(
-          1,
-          Number(req.query.limit || req.query.maxScenarios || 10)
-        );
-        const perTab: Array<{ name: string; scenarios: any[] }> = [];
-        for (const s of tabs) {
-          const r = await generator.generate({
-            acceptanceRows: s.rows,
-            template,
-            options: { maxScenarios: perTabLimit },
-          });
-          let scen = Array.isArray(r.scenarios) ? r.scenarios : [];
-          scen = scen.map(row => ensureNonEmptyByTemplate(row, template));
-          perTab.push({ name: s.name, scenarios: scen });
-        }
-        meta = {
-          usedRows: acceptanceRows.length,
-          requested: acceptanceRows.length,
-          template: template.name,
-          method: 'llm_per_tab',
-          tabs: perTab.map(t => ({ name: t.name, count: t.scenarios.length })),
-        };
-        return res.json({
-          success: true,
-          data: {
-            sheets: perTab, // per-tab scenarios as requested
-            meta: { ...meta, sheet: sheetMeta },
-          },
-        });
-      } else {
-        const result = await generator.generate({
-          acceptanceRows,
+      const perTab: Array<{ name: string; scenarios: any[] }> = [];
+      for (const s of tabs) {
+        const r = await generator.generate({
+          acceptanceRows: s.rows,
           template,
-          options: { maxScenarios: max },
+          options: { maxScenarios: perTabLimit },
         });
-
-        meta = { ...result.meta, method: 'llm' };
-        const singleSheet = [
-          {
-            name: 'Sheet',
-            scenarios: (Array.isArray(result.scenarios)
-              ? result.scenarios
-              : []
-            ).map(r => ensureNonEmptyByTemplate(r, template)),
-          },
-        ];
-        return res.json({
-          success: true,
-          data: {
-            sheets: singleSheet,
-            meta: { ...meta, sheet: sheetMeta },
-          },
-        });
+        let scen = Array.isArray(r.scenarios) ? r.scenarios : [];
+        scen = scen.map(row => ensureNonEmptyByTemplate(row, template));
+        perTab.push({ name: s.name, scenarios: scen });
       }
+      meta = {
+        usedRows: acceptanceRows.length,
+        requested: acceptanceRows.length,
+        template: template.name,
+        method: 'llm_per_tab',
+        tabs: perTab.map(t => ({ name: t.name, count: t.scenarios.length })),
+      };
+      return res.json({
+        success: true,
+        data: {
+          sheets: perTab, // per-tab scenarios as requested
+          meta: { ...meta, sheet: sheetMeta },
+        },
+      });
+    } else {
+      const result = await generator.generate({
+        acceptanceRows,
+        template,
+        options: { maxScenarios: max },
+      });
+
+      meta = { ...result.meta, method: 'llm' };
+      const singleSheet = [
+        {
+          name: 'Sheet',
+          scenarios: (Array.isArray(result.scenarios)
+            ? result.scenarios
+            : []
+          ).map(r => ensureNonEmptyByTemplate(r, template)),
+        },
+      ];
+      return res.json({
+        success: true,
+        data: {
+          sheets: singleSheet,
+          meta: { ...meta, sheet: sheetMeta },
+        },
+      });
+    }
     // Unreachable with the early returns above
   } catch (e: any) {
     logger.logError('Scenario preview failed', e);
@@ -200,7 +196,9 @@ scenariosRouter.post('/generate', async (req: Request, res: Response) => {
     });
     return res.json({
       success: true,
-      data: scenarios.map(s => ensureNonEmptyByTemplate(s, DefaultScenarioTemplate)),
+      data: scenarios.map(s =>
+        ensureNonEmptyByTemplate(s, DefaultScenarioTemplate)
+      ),
       meta: { ...meta, count: scenarios.length },
     });
   } catch (e: any) {

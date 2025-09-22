@@ -3,7 +3,6 @@
 import { EnvConfig } from '../config/env';
 import { DatabaseService } from '../services/database';
 import { RedisService } from '../services/redis';
-import { logger } from '../utils/logger';
 
 /**
  * Service availability checker
@@ -18,7 +17,7 @@ class ServiceChecker {
       redis: await this.checkRedis(),
       openai: this.checkOpenAI(),
       gitlab: this.checkGitLab(),
-      slack: this.checkSlack()
+      slack: this.checkSlack(),
     };
 
     this.printSummary(results);
@@ -68,7 +67,9 @@ class ServiceChecker {
     if (available) {
       console.log('✅ GitLab: OAuth configured');
     } else {
-      console.log('⚠️  GitLab: OAuth not configured (GitLab integration disabled)');
+      console.log(
+        '⚠️  GitLab: OAuth not configured (GitLab integration disabled)'
+      );
     }
     return available;
   }
@@ -78,7 +79,9 @@ class ServiceChecker {
     if (available) {
       console.log('✅ Slack: OAuth configured');
     } else {
-      console.log('⚠️  Slack: OAuth not configured (Slack integration disabled)');
+      console.log(
+        '⚠️  Slack: OAuth not configured (Slack integration disabled)'
+      );
     }
     return available;
   }
@@ -90,8 +93,10 @@ class ServiceChecker {
 
     console.log('\n📊 Summary:');
     console.log(`   Services available: ${available}/${total}`);
-    console.log(`   Critical services: ${critical}/1 ${critical ? '✅' : '❌'}`);
-    
+    console.log(
+      `   Critical services: ${critical}/1 ${critical ? '✅' : '❌'}`
+    );
+
     if (critical === 0 && EnvConfig.NODE_ENV === 'development') {
       console.log('   🚀 Development mode: Server will start anyway');
     } else if (critical === 0) {
@@ -101,7 +106,7 @@ class ServiceChecker {
 
   private printGuidance(results: any): void {
     console.log('\n💡 Quick Setup Guide:');
-    
+
     if (!results.database) {
       console.log('\n📦 PostgreSQL Setup:');
       console.log('   # macOS (Homebrew)');
@@ -135,8 +140,12 @@ class ServiceChecker {
 
     if (!results.gitlab) {
       console.log('\n🦊 GitLab Setup (Optional):');
-      console.log('   1. Create OAuth app: https://gitlab.com/-/profile/applications');
-      console.log('   2. Add to .env: GITLAB_CLIENT_ID and GITLAB_CLIENT_SECRET');
+      console.log(
+        '   1. Create OAuth app: https://gitlab.com/-/profile/applications'
+      );
+      console.log(
+        '   2. Add to .env: GITLAB_CLIENT_ID and GITLAB_CLIENT_SECRET'
+      );
     }
 
     if (!results.slack) {

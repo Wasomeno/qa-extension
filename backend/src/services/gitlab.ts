@@ -290,8 +290,9 @@ export class GitLabService {
     issueData: CreateIssueData
   ): Promise<GitLabIssue> {
     try {
+      const pid = this.normalizeProjectId(projectId);
       const response = await this.client.post(
-        `/projects/${projectId}/issues`,
+        `/projects/${pid}/issues`,
         issueData
       );
       const issue = response.data;
@@ -337,10 +338,7 @@ export class GitLabService {
     }
   ): Promise<GitLabIssue> {
     try {
-      const pid =
-        typeof projectId === 'number' || /^\d+$/.test(String(projectId))
-          ? String(projectId)
-          : encodeURIComponent(String(projectId));
+      const pid = this.normalizeProjectId(projectId);
       const payload: any = { ...updateData };
       // Normalize labels to comma-separated string if array is provided (GitLab accepts either, but normalize for safety)
       if (Array.isArray(payload.labels)) {
@@ -356,7 +354,10 @@ export class GitLabService {
 
       // Invalidate caches
       await this.invalidateCache(`gitlab_issues:${projectId}:*`);
-      await this.invalidateCache(`gitlab_issue:${projectId}:${issueIid}`);
+      await this.invalidateCache(`gitlab_issue:${pid}:${issueIid}`);
+      if (String(projectId) !== pid) {
+        await this.invalidateCache(`gitlab_issue:${projectId}:${issueIid}`);
+      }
 
       return issue;
     } catch (error) {
@@ -588,10 +589,7 @@ export class GitLabService {
     projectId: string | number,
     issueIid: number
   ): Promise<GitLabIssue> {
-    const pid =
-      typeof projectId === 'number' || /^\d+$/.test(String(projectId))
-        ? String(projectId)
-        : encodeURIComponent(String(projectId));
+    const pid = this.normalizeProjectId(projectId);
     try {
       const cacheKey = `gitlab_issue:${pid}:${issueIid}`;
 
@@ -662,17 +660,12 @@ export class GitLabService {
     projectId: string | number,
     issueIid: number
   ): Promise<any[]> {
-    const pid =
-      typeof projectId === 'number' || /^\d+$/.test(String(projectId))
-        ? String(projectId)
-        : encodeURIComponent(String(projectId));
+    const pid = this.normalizeProjectId(projectId);
+    const urlPath = `/projects/${pid}/issues/${issueIid}/notes`;
     try {
-      const response = await this.client.get(
-        `/projects/${pid}/issues/${issueIid}/notes`,
-        {
-          params: { per_page: 50 },
-        }
-      );
+      const response = await this.client.get(urlPath, {
+        params: { per_page: 50 },
+      });
       return response.data;
     } catch (error: any) {
       const status = error?.response?.status;
@@ -701,10 +694,7 @@ export class GitLabService {
   public async getProjectLabels(
     projectId: string | number
   ): Promise<GitLabLabel[]> {
-    const pid =
-      typeof projectId === 'number' || /^\d+$/.test(String(projectId))
-        ? String(projectId)
-        : encodeURIComponent(String(projectId));
+    const pid = this.normalizeProjectId(projectId);
     try {
       const cacheKey = `gitlab_labels:${pid}`;
       try {
@@ -770,17 +760,20 @@ export class GitLabService {
     body: string
   ): Promise<any> {
     try {
-      const response = await this.client.post(
-        `/projects/${projectId}/issues/${issueIid}/notes`,
-        {
-          body,
-        }
-      );
+      const pid = this.normalizeProjectId(projectId);
+      const urlPath = `/projects/${pid}/issues/${issueIid}/notes`;
+      const response = await this.client.post(urlPath, {
+        body,
+      });
 
       logger.info(`Added comment to GitLab issue ${projectId}:${issueIid}`);
 
-      // Invalidate issue cache
-      await this.invalidateCache(`gitlab_issue:${projectId}:${issueIid}`);
+      // Invalidate issue cache (support both raw and normalized keys)
+      await this.invalidateCache(`gitlab_issue:${pid}:${issueIid}`);
+      if (String(projectId) !== pid) {
+        await this.invalidateCache(`gitlab_issue:${projectId}:${issueIid}`);
+      }
+      await this.invalidateCache(`gitlab_cache:${urlPath}`);
 
       return response.data;
     } catch (error) {
@@ -873,8 +866,9 @@ export class GitLabService {
       const formData = new FormData();
       formData.append('file', new Blob([file]), filename);
 
+      const pid = this.normalizeProjectId(projectId);
       const response = await this.client.post(
-        `/projects/${projectId}/uploads`,
+        `/projects/${pid}/uploads`,
         formData,
         {
           headers: {
@@ -891,6 +885,11 @@ export class GitLabService {
     }
   }
 
+  private normalizeProjectId(projectId: string | number): string {
+    const value = String(projectId);
+    return /^\d+$/.test(value) ? value : encodeURIComponent(value);
+  }
+
   private async cacheResponse(url: string, data: any): Promise<void> {
     try {
       const cacheKey = `gitlab_cache:${url}`;
@@ -902,9 +901,27 @@ export class GitLabService {
 
   private async invalidateCache(pattern: string): Promise<void> {
     try {
-      // This would require a more sophisticated cache invalidation strategy
-      // For now, we'll just log the intention
-      logger.debug(`Invalidating GitLab cache pattern: ${pattern}`);
+      if (!this.redis.isAvailable()) {
+        logger.debug('Redis not available, skipping cache invalidation');
+        return;
+      }
+
+      const patterns = new Set<string>([pattern]);
+      // If the caller passed an exact key (no wildcard), attempt a prefix match as well
+      if (!pattern.includes('*')) {
+        patterns.add(`${pattern}*`);
+      }
+
+      for (const pat of patterns) {
+        const keys = await this.redis.keys(pat);
+        if (!keys || keys.length === 0) {
+          continue;
+        }
+        await Promise.all(keys.map(key => this.redis.del(key)));
+        logger.debug(
+          `Invalidated ${keys.length} GitLab cache entr${keys.length === 1 ? 'y' : 'ies'} for pattern ${pat}`
+        );
+      }
     } catch (error) {
       logger.warn('Failed to invalidate GitLab cache:', error);
     }

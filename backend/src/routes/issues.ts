@@ -1,11 +1,10 @@
-import { Router, Request, Response } from 'express';
+import { Router, Response } from 'express';
 import Joi from 'joi';
 import multer from 'multer';
 import { databaseService } from '../services/database';
 import { OpenAIService } from '../services/openai';
 import { GitLabService } from '../services/gitlab';
 import { SlackService } from '../services/slack';
-import { WebSocketService } from '../services/websocket';
 import { AssignmentService } from '../services/assignment';
 import { DuplicateDetectionService } from '../services/duplicateDetection';
 import { authMiddleware, AuthenticatedRequest } from '../middleware/auth';
@@ -27,8 +26,6 @@ const db = databaseService;
 const openaiService = new OpenAIService();
 const gitlabService = new GitLabService();
 const slackService = new SlackService();
-// WebSocketService will be initialized later with the server instance
-let websocketService: WebSocketService | null = null;
 const assignmentService = new AssignmentService();
 const duplicateDetectionService = new DuplicateDetectionService();
 

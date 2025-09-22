@@ -1,18 +1,17 @@
-import { Router, Request, Response } from 'express';
+import { Router, Response } from 'express';
 import Joi from 'joi';
 import multer from 'multer';
 import sharp from 'sharp';
 import { DatabaseService } from '../services/database';
 import { authMiddleware, AuthenticatedRequest } from '../middleware/auth';
 // Rate limiting middleware removed to rely on upstream GitLab limits
-import { 
-  asyncHandler, 
+import {
+  asyncHandler,
   validateRequest,
   sendResponse,
-  sendError,
   ValidationError,
   NotFoundError,
-  AuthorizationError
+  AuthorizationError,
 } from '../middleware/errorHandler';
 import { logger } from '../utils/logger';
 
@@ -24,7 +23,7 @@ const upload = multer({
   storage: multer.memoryStorage(),
   limits: {
     fileSize: 5 * 1024 * 1024, // 5MB
-    files: 1
+    files: 1,
   },
   fileFilter: (req, file, cb) => {
     if (file.mimetype.startsWith('image/')) {
@@ -32,7 +31,7 @@ const upload = multer({
     } else {
       cb(new Error('Only image files are allowed'));
     }
-  }
+  },
 });
 
 // Validation schemas
@@ -51,9 +50,9 @@ const updateProfileSchema = Joi.object({
       browser: Joi.boolean(),
       issues: Joi.boolean(),
       // recordings removed
-      mentions: Joi.boolean()
-    })
-  })
+      mentions: Joi.boolean(),
+    }),
+  }),
 });
 
 const updateUserSchema = Joi.object({
@@ -63,7 +62,7 @@ const updateUserSchema = Joi.object({
   isActive: Joi.boolean(),
   bio: Joi.string().max(500).allow(''),
   location: Joi.string().max(100).allow(''),
-  timezone: Joi.string().max(50)
+  timezone: Joi.string().max(50),
 });
 
 const searchUsersSchema = Joi.object({
@@ -72,23 +71,37 @@ const searchUsersSchema = Joi.object({
   isActive: Joi.boolean(),
   page: Joi.number().integer().min(1).default(1),
   limit: Joi.number().integer().min(1).max(100).default(20),
-  sortBy: Joi.string().valid('created_at', 'full_name', 'email', 'last_active').default('created_at'),
-  sortOrder: Joi.string().valid('asc', 'desc').default('desc')
+  sortBy: Joi.string()
+    .valid('created_at', 'full_name', 'email', 'last_active')
+    .default('created_at'),
+  sortOrder: Joi.string().valid('asc', 'desc').default('desc'),
 });
 
 // Get current user profile
-router.get('/me',
+router.get(
+  '/me',
   authMiddleware.authenticate,
   asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
     const userId = req.user!.id;
 
     try {
-      const user = await db.users()
+      const user = await db
+        .users()
         .where('id', userId)
         .select([
-          'id', 'email', 'username', 'full_name', 'avatar_url', 
-          'bio', 'location', 'website', 'timezone', 'role', 
-          'preferences', 'created_at', 'updated_at'
+          'id',
+          'email',
+          'username',
+          'full_name',
+          'avatar_url',
+          'bio',
+          'location',
+          'website',
+          'timezone',
+          'role',
+          'preferences',
+          'created_at',
+          'updated_at',
         ])
         .first();
 
@@ -102,8 +115,8 @@ router.get('/me',
       sendResponse(res, 200, true, 'Profile retrieved successfully', {
         user: {
           ...user,
-          stats
-        }
+          stats,
+        },
       });
     } catch (error) {
       logger.error('Get profile error:', error);
@@ -113,7 +126,8 @@ router.get('/me',
 );
 
 // Update current user profile
-router.put('/me',
+router.put(
+  '/me',
   authMiddleware.authenticate,
   validateRequest(updateProfileSchema),
   asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
@@ -121,16 +135,26 @@ router.put('/me',
     const updateData = req.body;
 
     try {
-      const updatedUser = await db.users()
+      const updatedUser = await db
+        .users()
         .where('id', userId)
         .update({
           ...updateData,
-          updated_at: new Date()
+          updated_at: new Date(),
         })
         .returning([
-          'id', 'email', 'username', 'full_name', 'avatar_url', 
-          'bio', 'location', 'website', 'timezone', 'role', 
-          'preferences', 'updated_at'
+          'id',
+          'email',
+          'username',
+          'full_name',
+          'avatar_url',
+          'bio',
+          'location',
+          'website',
+          'timezone',
+          'role',
+          'preferences',
+          'updated_at',
         ]);
 
       if (!updatedUser || updatedUser.length === 0) {
@@ -140,7 +164,7 @@ router.put('/me',
       logger.logUserAction('Profile updated', userId, updateData);
 
       sendResponse(res, 200, true, 'Profile updated successfully', {
-        user: updatedUser[0]
+        user: updatedUser[0],
       });
     } catch (error) {
       logger.error('Update profile error:', error);
@@ -150,7 +174,8 @@ router.put('/me',
 );
 
 // Upload avatar
-router.post('/me/avatar',
+router.post(
+  '/me/avatar',
   authMiddleware.authenticate,
   upload.single('avatar'),
   asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
@@ -165,18 +190,19 @@ router.post('/me/avatar',
       const avatarUrl = await processAndSaveAvatar(req.file.buffer, userId);
 
       // Update user record
-      const updatedUser = await db.users()
+      const updatedUser = await db
+        .users()
         .where('id', userId)
         .update({
           avatar_url: avatarUrl,
-          updated_at: new Date()
+          updated_at: new Date(),
         })
         .returning(['id', 'avatar_url']);
 
       logger.logUserAction('Avatar uploaded', userId);
 
       sendResponse(res, 200, true, 'Avatar updated successfully', {
-        avatarUrl: updatedUser[0].avatar_url
+        avatarUrl: updatedUser[0].avatar_url,
       });
     } catch (error) {
       logger.error('Avatar upload error:', error);
@@ -186,7 +212,8 @@ router.post('/me/avatar',
 );
 
 // Get user by ID
-router.get('/:id',
+router.get(
+  '/:id',
   authMiddleware.authenticate,
   asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
     const { id: targetUserId } = req.params;
@@ -195,15 +222,37 @@ router.get('/:id',
 
     try {
       // Check if user can view this profile
-      const canViewFullProfile = currentUserId === targetUserId || 
-                                currentUserRole === 'admin' || 
-                                await areUsersInSameTeam(currentUserId, targetUserId);
+      const canViewFullProfile =
+        currentUserId === targetUserId ||
+        currentUserRole === 'admin' ||
+        (await areUsersInSameTeam(currentUserId, targetUserId));
 
-      const selectFields = canViewFullProfile ? 
-        ['id', 'email', 'username', 'full_name', 'avatar_url', 'bio', 'location', 'website', 'timezone', 'role', 'created_at'] :
-        ['id', 'username', 'full_name', 'avatar_url', 'bio', 'location', 'created_at'];
+      const selectFields = canViewFullProfile
+        ? [
+            'id',
+            'email',
+            'username',
+            'full_name',
+            'avatar_url',
+            'bio',
+            'location',
+            'website',
+            'timezone',
+            'role',
+            'created_at',
+          ]
+        : [
+            'id',
+            'username',
+            'full_name',
+            'avatar_url',
+            'bio',
+            'location',
+            'created_at',
+          ];
 
-      const user = await db.users()
+      const user = await db
+        .users()
         .where('id', targetUserId)
         .where('is_active', true)
         .select(selectFields)
@@ -219,8 +268,8 @@ router.get('/:id',
       sendResponse(res, 200, true, 'User retrieved successfully', {
         user: {
           ...user,
-          stats
-        }
+          stats,
+        },
       });
     } catch (error) {
       logger.error('Get user error:', error);
@@ -230,28 +279,37 @@ router.get('/:id',
 );
 
 // Search users
-router.get('/',
+router.get(
+  '/',
   authMiddleware.authenticate,
   validateRequest(searchUsersSchema, 'query'),
   asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
-    const { query, role, isActive, page, limit, sortBy, sortOrder } = req.query as any;
+    const { query, role, isActive, page, limit, sortBy, sortOrder } =
+      req.query as any;
     const currentUserId = req.user!.id;
     const currentUserRole = req.user!.role;
 
     try {
-      let dbQuery = db.users()
+      let dbQuery = db
+        .users()
         .select([
-          'id', 'username', 'full_name', 'avatar_url', 'bio', 
-          'location', 'role', 'created_at'
+          'id',
+          'username',
+          'full_name',
+          'avatar_url',
+          'bio',
+          'location',
+          'role',
+          'created_at',
         ])
         .where('is_active', isActive !== undefined ? isActive : true);
 
       // Text search
       if (query) {
-        dbQuery = dbQuery.where(function() {
+        dbQuery = dbQuery.where(function () {
           this.where('full_name', 'ilike', `%${query}%`)
-              .orWhere('username', 'ilike', `%${query}%`)
-              .orWhere('email', 'ilike', `%${query}%`);
+            .orWhere('username', 'ilike', `%${query}%`)
+            .orWhere('email', 'ilike', `%${query}%`);
         });
       }
 
@@ -263,8 +321,17 @@ router.get('/',
       // Admin can see more fields
       if (currentUserRole === 'admin') {
         dbQuery = dbQuery.select([
-          'id', 'email', 'username', 'full_name', 'avatar_url', 
-          'bio', 'location', 'role', 'is_active', 'created_at', 'updated_at'
+          'id',
+          'email',
+          'username',
+          'full_name',
+          'avatar_url',
+          'bio',
+          'location',
+          'role',
+          'is_active',
+          'created_at',
+          'updated_at',
         ]);
       }
 
@@ -286,8 +353,8 @@ router.get('/',
           page,
           limit,
           total,
-          pages: Math.ceil(total / limit)
-        }
+          pages: Math.ceil(total / limit),
+        },
       });
     } catch (error) {
       logger.error('Search users error:', error);
@@ -297,7 +364,8 @@ router.get('/',
 );
 
 // Admin: Update user
-router.put('/:id',
+router.put(
+  '/:id',
   authMiddleware.authenticate,
   authMiddleware.authorize(['admin']),
   validateRequest(updateUserSchema),
@@ -312,15 +380,21 @@ router.put('/:id',
         throw new ValidationError('Cannot change your own role');
       }
 
-      const updatedUser = await db.users()
+      const updatedUser = await db
+        .users()
         .where('id', targetUserId)
         .update({
           ...updateData,
-          updated_at: new Date()
+          updated_at: new Date(),
         })
         .returning([
-          'id', 'email', 'username', 'full_name', 'role', 
-          'is_active', 'updated_at'
+          'id',
+          'email',
+          'username',
+          'full_name',
+          'role',
+          'is_active',
+          'updated_at',
         ]);
 
       if (!updatedUser || updatedUser.length === 0) {
@@ -329,11 +403,11 @@ router.put('/:id',
 
       logger.logAudit('User updated', adminUserId, 'user', {
         targetUserId,
-        changes: updateData
+        changes: updateData,
       });
 
       sendResponse(res, 200, true, 'User updated successfully', {
-        user: updatedUser[0]
+        user: updatedUser[0],
       });
     } catch (error) {
       logger.error('Admin update user error:', error);
@@ -343,7 +417,8 @@ router.put('/:id',
 );
 
 // Admin: Deactivate user
-router.delete('/:id',
+router.delete(
+  '/:id',
   authMiddleware.authenticate,
   authMiddleware.authorize(['admin']),
   asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
@@ -356,11 +431,12 @@ router.delete('/:id',
         throw new ValidationError('Cannot deactivate your own account');
       }
 
-      const updatedUser = await db.users()
+      const updatedUser = await db
+        .users()
         .where('id', targetUserId)
         .update({
           is_active: false,
-          updated_at: new Date()
+          updated_at: new Date(),
         })
         .returning(['id', 'username', 'full_name']);
 
@@ -370,7 +446,7 @@ router.delete('/:id',
 
       logger.logAudit('User deactivated', adminUserId, 'user', {
         targetUserId,
-        username: updatedUser[0].username
+        username: updatedUser[0].username,
       });
 
       sendResponse(res, 200, true, 'User deactivated successfully');
@@ -382,7 +458,8 @@ router.delete('/:id',
 );
 
 // Get user's teams
-router.get('/:id/teams',
+router.get(
+  '/:id/teams',
   authMiddleware.authenticate,
   asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
     const { id: targetUserId } = req.params;
@@ -392,19 +469,23 @@ router.get('/:id/teams',
     try {
       // Check permissions
       if (currentUserId !== targetUserId && currentUserRole !== 'admin') {
-        throw new AuthorizationError('Cannot view other user\'s teams');
+        throw new AuthorizationError("Cannot view other user's teams");
       }
 
-      const teams = await db.teamMembers()
+      const teams = await db
+        .teamMembers()
         .join('teams', 'team_members.team_id', 'teams.id')
         .where('team_members.user_id', targetUserId)
         .select([
-          'teams.id', 'teams.name', 'teams.description', 
-          'team_members.role as member_role', 'team_members.created_at as joined_at'
+          'teams.id',
+          'teams.name',
+          'teams.description',
+          'team_members.role as member_role',
+          'team_members.created_at as joined_at',
         ]);
 
       sendResponse(res, 200, true, 'User teams retrieved successfully', {
-        teams
+        teams,
       });
     } catch (error) {
       logger.error('Get user teams error:', error);
@@ -414,7 +495,8 @@ router.get('/:id/teams',
 );
 
 // Get user's activity
-router.get('/:id/activity',
+router.get(
+  '/:id/activity',
   authMiddleware.authenticate,
   asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
     const { id: targetUserId } = req.params;
@@ -424,16 +506,18 @@ router.get('/:id/activity',
 
     try {
       // Check permissions
-      const canViewActivity = currentUserId === targetUserId || 
-                             currentUserRole === 'admin' || 
-                             await areUsersInSameTeam(currentUserId, targetUserId);
+      const canViewActivity =
+        currentUserId === targetUserId ||
+        currentUserRole === 'admin' ||
+        (await areUsersInSameTeam(currentUserId, targetUserId));
 
       if (!canViewActivity) {
         throw new AuthorizationError('Cannot view user activity');
       }
 
       // Get recent issues
-      const recentIssues = await db.issues()
+      const recentIssues = await db
+        .issues()
         .where('user_id', targetUserId)
         .orderBy('created_at', 'desc')
         .limit(10)
@@ -443,8 +527,8 @@ router.get('/:id/activity',
 
       sendResponse(res, 200, true, 'User activity retrieved successfully', {
         activity: {
-          recentIssues
-        }
+          recentIssues,
+        },
       });
     } catch (error) {
       logger.error('Get user activity error:', error);
@@ -454,17 +538,20 @@ router.get('/:id/activity',
 );
 
 // Helper functions
-async function processAndSaveAvatar(buffer: Buffer, userId: string): Promise<string> {
+async function processAndSaveAvatar(
+  buffer: Buffer,
+  userId: string
+): Promise<string> {
   try {
     // Process image with sharp
     const processedBuffer = await sharp(buffer)
       .resize(200, 200, {
         fit: 'cover',
-        position: 'center'
+        position: 'center',
       })
       .jpeg({
         quality: 90,
-        progressive: true
+        progressive: true,
       })
       .toBuffer();
 
@@ -472,18 +559,19 @@ async function processAndSaveAvatar(buffer: Buffer, userId: string): Promise<str
     // For now, we'll save to local filesystem
     const fs = require('fs').promises;
     const path = require('path');
-    
-    const uploadsDir = process.env.UPLOADS_DIR || path.join(process.cwd(), 'uploads');
+
+    const uploadsDir =
+      process.env.UPLOADS_DIR || path.join(process.cwd(), 'uploads');
     const avatarsDir = path.join(uploadsDir, 'avatars');
-    
+
     // Ensure directory exists
     await fs.mkdir(avatarsDir, { recursive: true });
-    
+
     const filename = `${userId}-${Date.now()}.jpg`;
     const filepath = path.join(avatarsDir, filename);
-    
+
     await fs.writeFile(filepath, processedBuffer);
-    
+
     return `/uploads/avatars/${filename}`;
   } catch (error) {
     logger.error('Avatar processing error:', error);
@@ -494,7 +582,11 @@ async function processAndSaveAvatar(buffer: Buffer, userId: string): Promise<str
 async function getUserStats(userId: string, publicOnly: boolean = false) {
   try {
     const stats: any = {
-      issuesCreated: await db.issues().where('user_id', userId).count('* as count').first(),
+      issuesCreated: await db
+        .issues()
+        .where('user_id', userId)
+        .count('* as count')
+        .first(),
       // recordingsCreated removed
     };
 
@@ -504,7 +596,8 @@ async function getUserStats(userId: string, publicOnly: boolean = false) {
 
     if (!publicOnly) {
       // Add more detailed stats for full profile access
-      const issuesByStatus = await db.issues()
+      const issuesByStatus = await db
+        .issues()
         .where('user_id', userId)
         .groupBy('status')
         .select('status')
@@ -525,19 +618,22 @@ async function getUserStats(userId: string, publicOnly: boolean = false) {
   }
 }
 
-async function areUsersInSameTeam(userId1: string, userId2: string): Promise<boolean> {
+async function areUsersInSameTeam(
+  userId1: string,
+  userId2: string
+): Promise<boolean> {
   try {
-    const commonTeams = await db.teamMembers()
+    const commonTeams = await db
+      .teamMembers()
       .where('user_id', userId1)
-      .whereIn('team_id', 
-        db.teamMembers()
-          .where('user_id', userId2)
-          .select('team_id')
+      .whereIn(
+        'team_id',
+        db.teamMembers().where('user_id', userId2).select('team_id')
       )
       .count('* as count')
       .first();
 
-    return parseInt(commonTeams?.count as string || '0') > 0;
+    return parseInt((commonTeams?.count as string) || '0') > 0;
   } catch (error) {
     logger.error('Check same team error:', error);
     return false;
