@@ -45,17 +45,19 @@ export const IssueCreationModal: React.FC<IssueCreationModalProps> = ({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent 
+      <DialogContent
         className="max-w-lg max-h-[95vh] overflow-hidden p-0 gap-0 bg-white border border-gray-200 shadow-2xl"
         style={{
           position: 'fixed',
           zIndex: 999999999,
           backgroundColor: '#ffffff',
-          fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+          fontFamily:
+            '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
           fontSize: '14px',
           lineHeight: '1.5',
           color: '#111827',
-          boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(0, 0, 0, 0.05)',
+          boxShadow:
+            '0 25px 50px -12px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(0, 0, 0, 0.05)',
           borderRadius: '12px',
         }}
       >
@@ -74,12 +76,15 @@ export const IssueCreationModal: React.FC<IssueCreationModalProps> = ({
                 </p>
               </div>
             </div>
-            <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
+            <Badge
+              variant="outline"
+              className="bg-blue-50 text-blue-700 border-blue-200"
+            >
               QA Report
             </Badge>
           </div>
         </DialogHeader>
-        
+
         <div className="flex-1 overflow-y-auto">
           <div className="px-6 py-4">
             <CompactIssueCreator
@@ -88,7 +93,6 @@ export const IssueCreationModal: React.FC<IssueCreationModalProps> = ({
               onSubmit={handleSubmit}
               onCancel={onClose}
               onSaveDraft={handleSaveDraft}
-              className="border-0 p-0"
             />
           </div>
         </div>

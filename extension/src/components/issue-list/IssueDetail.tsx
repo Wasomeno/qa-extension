@@ -22,6 +22,7 @@ import {
 } from '@/src/components/ui/ui/select';
 import { useUsersInProjectQuery } from '@/hooks/use-users-in-project-query';
 import { useProjectLabelsQuery } from '@/hooks/use-project-labels-query';
+import IssueLabelsSelect from './issue-labels-select';
 
 interface IssueDetailProps {
   issue: IssueListItem | any;
@@ -55,11 +56,47 @@ const IssueDetail: React.FC<IssueDetailProps> = ({
     name: user.name,
     username: user.username,
   }));
-  const labelOptions = projectLabels.data?.data?.items.map(label => ({
-    id: String(label.id),
-    name: label.name,
-    color: label.color,
-  }));
+  const labelOptions = projectLabels.data?.data?.items || [];
+
+  const [selectedLabels, setSelectedLabels] = React.useState<string[]>([]);
+  const [labelsChanged, setLabelsChanged] = React.useState(false);
+  const [savingLabels, setSavingLabels] = React.useState(false);
+
+  React.useEffect(() => {
+    if (issueDetail?.labels) {
+      setSelectedLabels(issueDetail.labels);
+    }
+  }, [issueDetail?.labels]);
+
+  const handleLabelsChange = (newLabels: string[]) => {
+    setSelectedLabels(newLabels);
+    setLabelsChanged(true);
+  };
+
+  const handleSaveLabels = async () => {
+    if (!projectId || !iid) return;
+    setSavingLabels(true);
+    try {
+      await api.updateGitLabIssue(projectId, iid, {
+        labels: selectedLabels
+      });
+      setLabelsChanged(false);
+      // Invalidate queries to refresh data
+      issueQuery.refetch();
+    } catch (error) {
+      console.error('Failed to save labels:', error);
+      // Reset to original labels on error
+      setSelectedLabels(issueDetail?.labels || []);
+      setLabelsChanged(false);
+    } finally {
+      setSavingLabels(false);
+    }
+  };
+
+  const handleCancelLabels = () => {
+    setSelectedLabels(issueDetail?.labels || []);
+    setLabelsChanged(false);
+  };
 
   const md = React.useMemo(() => {
     const inst = new MarkdownIt({
@@ -116,8 +153,8 @@ const IssueDetail: React.FC<IssueDetailProps> = ({
         </div>
       </div>
       <hr className="my-4 border-neutral-100" />
-      <div className="flex items-center gap-2">
-        <div className="w-1/2">
+      <div className="space-y-4">
+        <div>
           <div className="text-xs font-medium mb-1">Assignees</div>
           <Select
             value={String(issueDetail?.assignees?.[0]?.id)}
@@ -163,46 +200,18 @@ const IssueDetail: React.FC<IssueDetailProps> = ({
             </SelectContent>
           </Select>
         </div>
-        <div className="w-1/2">
-          <div className="text-xs font-medium mb-1">Labels</div>
-          <Select
-            value={issueDetail?.labels?.[0]}
-            disabled={projectLabels.isLoading}
-          >
-            <SelectTrigger className="text-xs glass-input h-8">
-              <SelectValue placeholder="Select a label" />
-            </SelectTrigger>
-            <SelectContent
-              className="text-xs rounded-lg bg-white"
-              container={portalContainer || undefined}
-              sideOffset={8}
-              avoidCollisions={false}
-            >
-              {labelOptions?.length === 0 ? (
-                <SelectItem className="text-xs hover:bg-none" value="#">
-                  No Available Labels
-                </SelectItem>
-              ) : (
-                labelOptions?.map(label => (
-                  <SelectItem
-                    className="cursor-pointer text-xs"
-                    key={label.id}
-                    value={label.id}
-                  >
-                    <div className="flex items-center gap-2">
-                      <span
-                        className="inline-block w-2.5 h-2.5 rounded-full border border-gray-300"
-                        style={{
-                          backgroundColor: label.color,
-                        }}
-                      />
-                      {label.name}
-                    </div>
-                  </SelectItem>
-                ))
-              )}
-            </SelectContent>
-          </Select>
+        <div onClick={e => e.stopPropagation()}>
+          <div className="text-[11px] font-medium text-black/70 mb-1">Labels</div>
+          <IssueLabelsSelect
+            selectedLabels={selectedLabels}
+            labels={labelOptions}
+            onChange={handleLabelsChange}
+            portalContainer={portalContainer}
+            isDirty={labelsChanged}
+            onSave={handleSaveLabels}
+            onCancel={handleCancelLabels}
+            saving={savingLabels}
+          />
         </div>
       </div>
 

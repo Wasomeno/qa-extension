@@ -400,15 +400,6 @@
     border-radius: 16px;
   }
 
-  .glass-card {
-    background: rgba(255, 255, 255, 0.15);
-    backdrop-filter: blur(20px);
-    -webkit-backdrop-filter: blur(20px);
-    border: 1px solid rgba(255, 255, 255, 0.2);
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
-    border-radius: 12px;
-  }
-
   .glass-button {
     background: rgba(255, 255, 255, 0.1);
     backdrop-filter: blur(10px);
@@ -752,7 +743,6 @@
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
   border: 1px solid var(--qa-border);
-  box-shadow: var(--qa-shadow);
   border-radius: 12px;
 }
 

@@ -427,7 +427,6 @@
     backdrop-filter: blur(20px);
     -webkit-backdrop-filter: blur(20px);
     border: 1px solid var(--qa-border);
-    box-shadow: var(--qa-shadow);
     border-radius: 12px;
     color: var(--qa-fg);
   }

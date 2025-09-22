@@ -1,4 +1,8 @@
-import { ExtensionMessage, MessageType, BackgroundFetchRequest } from '../types/messages';
+import {
+  ExtensionMessage,
+  MessageType,
+  BackgroundFetchRequest,
+} from '../types/messages';
 import { apiService } from '../services/api';
 import { storageService } from '../services/storage';
 
@@ -22,12 +26,17 @@ class BackgroundService {
     } catch {}
   }
 
-  private async withAuthHeaders(init?: RequestInit | null, force = false): Promise<RequestInit> {
+  private async withAuthHeaders(
+    init?: RequestInit | null,
+    force = false
+  ): Promise<RequestInit> {
     const headers = { ...(init?.headers as Record<string, string>) };
     if (force || !headers || !headers['Authorization']) {
       try {
         const session = await this.store.get('session' as any);
-        const token = (session && (session as any).accessToken) || (await this.store.getAuth())?.jwtToken;
+        const token =
+          (session && (session as any).accessToken) ||
+          (await this.store.getAuth())?.jwtToken;
         if (token) headers['Authorization'] = `Bearer ${token}`;
       } catch {}
     }
@@ -82,14 +91,19 @@ class BackgroundService {
             } as any);
             await chrome.storage.local.remove('pendingOAuthSession');
           } catch {}
-          this.broadcast({ type: MessageType.AUTH_SESSION_UPDATED, data: { ok: true } });
+          this.broadcast({
+            type: MessageType.AUTH_SESSION_UPDATED,
+            data: { ok: true },
+          });
           return; // done
         }
       } catch {}
       if (attempts < maxAttempts) {
         setTimeout(tick, intervalMs);
       } else {
-        try { await chrome.storage.local.remove('pendingOAuthSession'); } catch {}
+        try {
+          await chrome.storage.local.remove('pendingOAuthSession');
+        } catch {}
       }
     };
     setTimeout(tick, intervalMs);
@@ -117,7 +131,7 @@ class BackgroundService {
     });
 
     // Port-based bridge (more reliable wake-up on MV3)
-    chrome.runtime.onConnect.addListener((port) => {
+    chrome.runtime.onConnect.addListener(port => {
       try {
         if (!port) return;
         if (port.name === 'keepalive') {
@@ -128,23 +142,35 @@ class BackgroundService {
           return;
         }
         if (port.name !== 'bridge') return;
-        console.log('[BG] Bridge connected from', port.sender?.url || 'unknown');
-        port.onMessage.addListener(async (msg) => {
+        console.log(
+          '[BG] Bridge connected from',
+          port.sender?.url || 'unknown'
+        );
+        port.onMessage.addListener(async msg => {
           let _reqId: string | undefined;
           try {
             if (!msg) return;
             if (msg.type === 'BRIDGE_PING') {
-              try { port.postMessage({ type: 'BRIDGE_PONG' }); } catch {}
+              try {
+                port.postMessage({ type: 'BRIDGE_PONG' });
+              } catch {}
               return;
             }
             if (msg.type !== MessageType.BACKGROUND_FETCH) return;
             _reqId = (msg && (msg as any).reqId) || undefined;
-            const { url, init, responseType, includeHeaders, timeoutMs } = (msg.data || {}) as any;
+            const { url, init, responseType, includeHeaders, timeoutMs } =
+              (msg.data || {}) as any;
             if (!url || typeof url !== 'string') {
-              port.postMessage({ ok: false, error: 'Missing URL', reqId: _reqId });
+              port.postMessage({
+                ok: false,
+                error: 'Missing URL',
+                reqId: _reqId,
+              });
               return;
             }
-            try { console.log('[BG] BACKGROUND_FETCH via port', _reqId, url); } catch {}
+            try {
+              console.log('[BG] BACKGROUND_FETCH via port', _reqId, url);
+            } catch {}
             // No timeout: never abort background fetches
             const firstInit = await this.withAuthHeaders(init);
             let resp = await fetch(url, { ...firstInit } as RequestInit);
@@ -152,8 +178,13 @@ class BackgroundService {
             if (resp.status === 401 && !/\/auth\/refresh\b/.test(url)) {
               const ok = await this.refreshTokenSingleFlight();
               if (ok) {
-                const secondInit = await this.withAuthHeaders(init, /*force*/ true);
-                try { resp = await fetch(url, { ...secondInit } as RequestInit); } catch {}
+                const secondInit = await this.withAuthHeaders(
+                  init,
+                  /*force*/ true
+                );
+                try {
+                  resp = await fetch(url, { ...secondInit } as RequestInit);
+                } catch {}
               }
             }
             // no timeout to clear
@@ -173,16 +204,25 @@ class BackgroundService {
                 const buf = await resp.arrayBuffer();
                 const bytes = new Uint8Array(buf);
                 let bin = '';
-                for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+                for (let i = 0; i < bytes.length; i++)
+                  bin += String.fromCharCode(bytes[i]);
                 body = btoa(bin);
               }
             } catch {}
-            const headers = includeHeaders ? (() => {
-              const obj: Record<string, string> = {};
-              try { resp.headers.forEach((v, k) => { obj[k] = v; }); } catch {}
-              return obj;
-            })() : undefined;
-            try { console.log('[BG] Replying via port', _reqId, resp.status); } catch {}
+            const headers = includeHeaders
+              ? (() => {
+                  const obj: Record<string, string> = {};
+                  try {
+                    resp.headers.forEach((v, k) => {
+                      obj[k] = v;
+                    });
+                  } catch {}
+                  return obj;
+                })()
+              : undefined;
+            try {
+              console.log('[BG] Replying via port', _reqId, resp.status);
+            } catch {}
             port.postMessage({
               ok: true,
               reqId: _reqId,
@@ -193,12 +233,19 @@ class BackgroundService {
                 url: resp.url,
                 headers,
                 body,
-              }
+              },
             });
           } catch (e: any) {
-            const msg = e?.name === 'AbortError' ? 'Request timed out' : (e?.message || 'Fetch failed');
-            try { console.warn('[BG] Port fetch failed', _reqId, msg); } catch {}
-            try { port.postMessage({ ok: false, error: msg, reqId: _reqId }); } catch {}
+            const msg =
+              e?.name === 'AbortError'
+                ? 'Request timed out'
+                : e?.message || 'Fetch failed';
+            try {
+              console.warn('[BG] Port fetch failed', _reqId, msg);
+            } catch {}
+            try {
+              port.postMessage({ ok: false, error: msg, reqId: _reqId });
+            } catch {}
           }
         });
       } catch {}
@@ -234,9 +281,12 @@ class BackgroundService {
       'brave://',
       'opera://',
     ];
-    if (disallowed.some((p) => url.startsWith(p))) return false;
+    if (disallowed.some(p => url.startsWith(p))) return false;
     // Chrome Web Store blocks content scripts
-    if (url.startsWith('https://chrome.google.com/webstore') || url.startsWith('https://chromewebstore.google.com')) {
+    if (
+      url.startsWith('https://chrome.google.com/webstore') ||
+      url.startsWith('https://chromewebstore.google.com')
+    ) {
       return false;
     }
     return true;
@@ -246,7 +296,7 @@ class BackgroundService {
     try {
       // Query all and find matching id (works across MV3 promise/callback variations)
       const all = await chrome.tabs.query({});
-      return all.find((t) => t.id === tabId) || null;
+      return all.find(t => t.id === tabId) || null;
     } catch {
       try {
         // Direct get when available
@@ -266,7 +316,7 @@ class BackgroundService {
         throw new Error('This page does not allow content scripts');
       }
       // Use callback form to avoid noisy Unchecked runtime.lastError logs
-      const alive = await new Promise<boolean>((resolve) => {
+      const alive = await new Promise<boolean>(resolve => {
         try {
           chrome.tabs.sendMessage(tabId, { type: 'PING' }, () => {
             const err = chrome.runtime.lastError;
@@ -290,7 +340,7 @@ class BackgroundService {
       } as any);
       // Give it a brief moment to initialize, then verify
       await new Promise(r => setTimeout(r, 150));
-      const alive2 = await new Promise<boolean>((resolve) => {
+      const alive2 = await new Promise<boolean>(resolve => {
         try {
           chrome.tabs.sendMessage(tabId, { type: 'PING' }, () => {
             const err = chrome.runtime.lastError;
@@ -301,7 +351,8 @@ class BackgroundService {
           resolve(false);
         }
       });
-      if (!alive2) throw new Error('Content script did not respond after injection');
+      if (!alive2)
+        throw new Error('Content script did not respond after injection');
     } catch (e) {
       throw new Error(
         e instanceof Error ? e.message : 'Failed to inject content script'
@@ -309,18 +360,28 @@ class BackgroundService {
     }
   }
 
-  private async sendMessageToTab<T = any>(tabId: number, message: any): Promise<T> {
+  private async sendMessageToTab<T = any>(
+    tabId: number,
+    message: any
+  ): Promise<T> {
     await this.ensureContentScript(tabId);
     // Use callback form to avoid Unchecked runtime.lastError spam
     return await new Promise<T>((resolve, reject) => {
       try {
-        chrome.tabs.sendMessage(tabId, message, (res) => {
+        chrome.tabs.sendMessage(tabId, message, res => {
           const err = chrome.runtime.lastError;
-          if (err) return reject(new Error(err.message || 'Could not reach content script on this page'));
+          if (err)
+            return reject(
+              new Error(
+                err.message || 'Could not reach content script on this page'
+              )
+            );
           resolve(res as T);
         });
       } catch (e: any) {
-        reject(new Error(e?.message || 'Could not reach content script on this page'));
+        reject(
+          new Error(e?.message || 'Could not reach content script on this page')
+        );
       }
     });
   }
@@ -334,21 +395,39 @@ class BackgroundService {
       switch (message.type) {
         case MessageType.AUTH_START: {
           try {
-            const reqSessionId = (message?.data && (message as any).data.sessionId) as string | undefined;
-            const sessionId = reqSessionId || `oauth_${Date.now()}_${Math.random().toString(36).slice(2,9)}`;
+            const reqSessionId = (message?.data &&
+              (message as any).data.sessionId) as string | undefined;
+            const sessionId =
+              reqSessionId ||
+              `oauth_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
             // Ask backend for OAuth URL
-            const res = await apiService.getGitLabOAuthUrlWithSession(sessionId);
+            const res =
+              await apiService.getGitLabOAuthUrlWithSession(sessionId);
             if (!res.success || !res.data?.authUrl) {
-              sendResponse({ success: false, error: res.error || 'Failed to get OAuth URL' });
+              console.log('Failed to get OAuth URL:', res);
+              sendResponse({
+                success: false,
+                error: res.error || 'Failed to get OAuth URL',
+              });
               break;
             }
             // Persist pending session for visibility/debug
-            try { await chrome.storage.local.set({ pendingOAuthSession: sessionId }); } catch {}
+            try {
+              await chrome.storage.local.set({
+                pendingOAuthSession: sessionId,
+              });
+            } catch {}
             // Start background polling for completion (best effort; SW may unload; popup can also poll)
             this.pollOAuthSession(sessionId).catch(() => {});
-            sendResponse({ success: true, data: { authUrl: res.data.authUrl, sessionId } });
+            sendResponse({
+              success: true,
+              data: { authUrl: res.data.authUrl, sessionId },
+            });
           } catch (e: any) {
-            sendResponse({ success: false, error: e?.message || 'AUTH_START failed' });
+            sendResponse({
+              success: false,
+              error: e?.message || 'AUTH_START failed',
+            });
           }
           break;
         }
@@ -358,7 +437,10 @@ class BackgroundService {
             const s = await this.store.get('session' as any);
             sendResponse({ success: true, data: s || null });
           } catch (e: any) {
-            sendResponse({ success: false, error: e?.message || 'AUTH_GET_SESSION failed' });
+            sendResponse({
+              success: false,
+              error: e?.message || 'AUTH_GET_SESSION failed',
+            });
           }
           break;
         }
@@ -367,12 +449,18 @@ class BackgroundService {
           try {
             await apiService.logout();
             try {
-              await chrome.storage.local.remove(['session','auth','user']);
+              await chrome.storage.local.remove(['session', 'auth', 'user']);
             } catch {}
-            this.broadcast({ type: MessageType.AUTH_SESSION_UPDATED, data: null });
+            this.broadcast({
+              type: MessageType.AUTH_SESSION_UPDATED,
+              data: null,
+            });
             sendResponse({ success: true });
           } catch (e: any) {
-            sendResponse({ success: false, error: e?.message || 'AUTH_LOGOUT failed' });
+            sendResponse({
+              success: false,
+              error: e?.message || 'AUTH_LOGOUT failed',
+            });
           }
           break;
         }
@@ -384,15 +472,22 @@ class BackgroundService {
             break;
           }
           try {
-            try { console.log('[BG] BACKGROUND_FETCH via onMessage', url); } catch {}
+            try {
+              console.log('[BG] BACKGROUND_FETCH via onMessage', url);
+            } catch {}
             // No timeout: never abort background fetches
             const firstInit = await this.withAuthHeaders(init);
             let resp = await fetch(url, { ...firstInit } as RequestInit);
             if (resp.status === 401 && !/\/auth\/refresh\b/.test(url)) {
               const ok = await this.refreshTokenSingleFlight();
               if (ok) {
-                const secondInit = await this.withAuthHeaders(init, /*force*/ true);
-                try { resp = await fetch(url, { ...secondInit } as RequestInit); } catch {}
+                const secondInit = await this.withAuthHeaders(
+                  init,
+                  /*force*/ true
+                );
+                try {
+                  resp = await fetch(url, { ...secondInit } as RequestInit);
+                } catch {}
               }
             }
             // no timeout to clear
@@ -415,7 +510,8 @@ class BackgroundService {
                 // Return base64 for safe message passing
                 const bytes = new Uint8Array(buf);
                 let bin = '';
-                for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+                for (let i = 0; i < bytes.length; i++)
+                  bin += String.fromCharCode(bytes[i]);
                 body = btoa(bin);
               }
             } catch (e) {
@@ -425,7 +521,11 @@ class BackgroundService {
             const headers: Record<string, string> | undefined = includeHeaders
               ? (() => {
                   const obj: Record<string, string> = {};
-                  try { resp.headers.forEach((v, k) => { obj[k] = v; }); } catch {}
+                  try {
+                    resp.headers.forEach((v, k) => {
+                      obj[k] = v;
+                    });
+                  } catch {}
                   return obj;
                 })()
               : undefined;
@@ -440,7 +540,10 @@ class BackgroundService {
             };
             sendResponse({ success: true, data: payload });
           } catch (e: any) {
-            const msg = e?.name === 'AbortError' ? 'Request timed out' : (e?.message || 'Fetch failed');
+            const msg =
+              e?.name === 'AbortError'
+                ? 'Request timed out'
+                : e?.message || 'Fetch failed';
             sendResponse({ success: false, error: msg });
           }
           break;
@@ -452,14 +555,23 @@ class BackgroundService {
 
         case MessageType.FILE_UPLOAD: {
           try {
-            const { url, file, purpose, filename } = (message?.data || {}) as { url?: string; file?: any; purpose?: 'screenshot' | 'attachment'; filename?: string };
+            const { url, file, purpose, filename } = (message?.data || {}) as {
+              url?: string;
+              file?: any;
+              purpose?: 'screenshot' | 'attachment';
+              filename?: string;
+            };
             if (!url || !file || !purpose) {
-              sendResponse({ success: false, error: 'Missing url, file, or purpose' });
+              sendResponse({
+                success: false,
+                error: 'Missing url, file, or purpose',
+              });
               break;
             }
             const auth = await this.store.getAuth();
             const headers: Record<string, string> = {};
-            if (auth?.jwtToken) headers['Authorization'] = `Bearer ${auth.jwtToken}`;
+            if (auth?.jwtToken)
+              headers['Authorization'] = `Bearer ${auth.jwtToken}`;
             const form = new FormData();
             // If a filename is provided (File-like), preserve it; otherwise default
             let inferredExtFromMime: string | undefined;
@@ -485,15 +597,22 @@ class BackgroundService {
                 inferredExtFromMime = map[mm];
               }
             }
-            const fname = (typeof filename === 'string' && filename) ? filename
-              : ((file && typeof file.name === 'string' && file.name) ? file.name
-                : ('upload.' + (inferredExtFromMime || 'bin')));
+            const fname =
+              typeof filename === 'string' && filename
+                ? filename
+                : file && typeof file.name === 'string' && file.name
+                  ? file.name
+                  : 'upload.' + (inferredExtFromMime || 'bin');
             try {
               form.append('file', file as Blob, fname);
             } catch {
               // As a last resort, try to reconstruct from ArrayBuffer or data URL
               let blob: Blob;
-              if (file && file.arrayBuffer && typeof file.arrayBuffer === 'function') {
+              if (
+                file &&
+                file.arrayBuffer &&
+                typeof file.arrayBuffer === 'function'
+              ) {
                 const buf = await file.arrayBuffer();
                 blob = new Blob([buf]);
               } else if (typeof file === 'string' && file.startsWith('data:')) {
@@ -501,31 +620,63 @@ class BackgroundService {
                 const base64 = file.slice(comma + 1);
                 const bin = atob(base64);
                 const bytes = new Uint8Array(bin.length);
-                for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-                blob = new Blob([bytes.buffer], { type: inferredMime || 'application/octet-stream' });
+                for (let i = 0; i < bin.length; i++)
+                  bytes[i] = bin.charCodeAt(i);
+                blob = new Blob([bytes.buffer], {
+                  type: inferredMime || 'application/octet-stream',
+                });
               } else {
                 blob = new Blob([]);
               }
               form.append('file', blob, fname);
             }
             form.append('purpose', purpose);
-            let resp = await fetch(url, { method: 'POST', headers, body: form });
+            let resp = await fetch(url, {
+              method: 'POST',
+              headers,
+              body: form,
+            });
             if (resp.status === 401 && !/\/auth\/refresh\b/.test(url)) {
               const ok = await this.refreshTokenSingleFlight();
               if (ok) {
                 const a2 = await this.store.getAuth();
-                if (a2?.jwtToken) headers['Authorization'] = `Bearer ${a2.jwtToken}`; else delete headers['Authorization'];
-                try { resp = await fetch(url, { method: 'POST', headers, body: form }); } catch {}
+                if (a2?.jwtToken)
+                  headers['Authorization'] = `Bearer ${a2.jwtToken}`;
+                else delete headers['Authorization'];
+                try {
+                  resp = await fetch(url, {
+                    method: 'POST',
+                    headers,
+                    body: form,
+                  });
+                } catch {}
               }
             }
-            const data = await (async () => { try { return await resp.json(); } catch { return null; } })();
+            const data = await (async () => {
+              try {
+                return await resp.json();
+              } catch {
+                return null;
+              }
+            })();
             if (!resp.ok) {
-              sendResponse({ success: false, error: (data && (data.error || data.message)) || `HTTP ${resp.status}: ${resp.statusText}` });
+              sendResponse({
+                success: false,
+                error:
+                  (data && (data.error || data.message)) ||
+                  `HTTP ${resp.status}: ${resp.statusText}`,
+              });
               break;
             }
-            sendResponse({ success: true, data: data && (data.data !== undefined ? data.data : data) });
+            sendResponse({
+              success: true,
+              data: data && (data.data !== undefined ? data.data : data),
+            });
           } catch (e: any) {
-            sendResponse({ success: false, error: e?.message || 'Upload failed' });
+            sendResponse({
+              success: false,
+              error: e?.message || 'Upload failed',
+            });
           }
           break;
         }
@@ -538,32 +689,65 @@ class BackgroundService {
               language?: string;
             };
             if (!url || !audioBlob) {
-              sendResponse({ success: false, error: 'Missing url or audioBlob' });
+              sendResponse({
+                success: false,
+                error: 'Missing url or audioBlob',
+              });
               break;
             }
             const auth = await this.store.getAuth();
             const headers: Record<string, string> = {};
-            if (auth?.jwtToken) headers['Authorization'] = `Bearer ${auth.jwtToken}`;
+            if (auth?.jwtToken)
+              headers['Authorization'] = `Bearer ${auth.jwtToken}`;
             const form = new FormData();
             form.append('audio', audioBlob);
             if (language) form.append('language', language);
-            let resp = await fetch(url, { method: 'POST', headers, body: form });
+            let resp = await fetch(url, {
+              method: 'POST',
+              headers,
+              body: form,
+            });
             if (resp.status === 401 && !/\/auth\/refresh\b/.test(url)) {
               const ok = await this.refreshTokenSingleFlight();
               if (ok) {
                 const a2 = await this.store.getAuth();
-                if (a2?.jwtToken) headers['Authorization'] = `Bearer ${a2.jwtToken}`; else delete headers['Authorization'];
-                try { resp = await fetch(url, { method: 'POST', headers, body: form }); } catch {}
+                if (a2?.jwtToken)
+                  headers['Authorization'] = `Bearer ${a2.jwtToken}`;
+                else delete headers['Authorization'];
+                try {
+                  resp = await fetch(url, {
+                    method: 'POST',
+                    headers,
+                    body: form,
+                  });
+                } catch {}
               }
             }
-            const data = await (async () => { try { return await resp.json(); } catch { return null; } })();
+            const data = await (async () => {
+              try {
+                return await resp.json();
+              } catch {
+                return null;
+              }
+            })();
             if (!resp.ok) {
-              sendResponse({ success: false, error: (data && (data.error || data.message)) || `HTTP ${resp.status}: ${resp.statusText}` });
+              sendResponse({
+                success: false,
+                error:
+                  (data && (data.error || data.message)) ||
+                  `HTTP ${resp.status}: ${resp.statusText}`,
+              });
               break;
             }
-            sendResponse({ success: true, data: data && (data.data !== undefined ? data.data : data) });
+            sendResponse({
+              success: true,
+              data: data && (data.data !== undefined ? data.data : data),
+            });
           } catch (e: any) {
-            sendResponse({ success: false, error: e?.message || 'Transcription failed' });
+            sendResponse({
+              success: false,
+              error: e?.message || 'Transcription failed',
+            });
           }
           break;
         }
@@ -586,7 +770,10 @@ class BackgroundService {
           if (!tab?.id) throw new Error('No active tab');
           try {
             await this.ensureContentScript(tab.id);
-            const res = await this.sendMessageToTab(tab.id, { type: undefined as any, data: message.data });
+            const res = await this.sendMessageToTab(tab.id, {
+              type: undefined as any,
+              data: message.data,
+            });
             if (res?.success) {
               // no-op
             } else {
@@ -594,7 +781,8 @@ class BackgroundService {
             }
             sendResponse(res);
           } catch (e: any) {
-            const msg = e?.message || 'Could not reach content script on this page';
+            const msg =
+              e?.message || 'Could not reach content script on this page';
             sendResponse({ success: false, error: msg });
           }
           break;
@@ -606,7 +794,10 @@ class BackgroundService {
           if (!tab?.id) throw new Error('No active tab');
           try {
             await this.ensureContentScript(tab.id);
-            const res = await this.sendMessageToTab(tab.id, { type: undefined as any, data: message.data });
+            const res = await this.sendMessageToTab(tab.id, {
+              type: undefined as any,
+              data: message.data,
+            });
             if (res?.success) {
               // no-op
             } else {
@@ -614,15 +805,14 @@ class BackgroundService {
             }
             sendResponse(res);
           } catch (e: any) {
-            const msg = e?.message || 'Could not reach content script on this page';
+            const msg =
+              e?.message || 'Could not reach content script on this page';
             sendResponse({ success: false, error: msg });
           }
           break;
         }
 
         // Recording-related message types removed
-
-        
 
         default:
           sendResponse({ success: false, error: 'Unknown message type' });
@@ -652,7 +842,6 @@ class BackgroundService {
       case 'create-issue-context':
         await this.createIssueFromContext(info, tab);
         break;
-      
     }
   }
 
@@ -680,8 +869,6 @@ class BackgroundService {
       title: 'Create Issue from Selection',
       contexts: ['selection', 'page'],
     });
-
-    
   }
 
   private async openIssueCreator() {
@@ -760,14 +947,10 @@ class BackgroundService {
     }
   }
 
-  
-
   private async handleAuthentication(authData: any) {
     await (apiService as any).authenticate(authData);
     await (this.store as any).saveAuthData(authData);
   }
-
-  
 
   // Removed injectContentScript method - using manifest-declared content scripts only
 
@@ -810,7 +993,9 @@ try {
     storageService.initialize().catch(console.error);
 
     // Content scripts are now declared in manifest - no manual injection needed
-    console.log('Extension installed/updated - content scripts will load automatically on matching pages');
+    console.log(
+      'Extension installed/updated - content scripts will load automatically on matching pages'
+    );
   });
 } catch (error) {
   console.error('Failed to initialize background service:', error);

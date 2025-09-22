@@ -77,7 +77,6 @@ interface CompactIssueCreatorProps {
   onCancel?: () => void;
   onSaveDraft?: (draft: IssueData) => void;
   onBack?: () => void;
-  className?: string;
   portalContainer?: Element | null;
 }
 
@@ -87,8 +86,6 @@ export const CompactIssueCreator: React.FC<CompactIssueCreatorProps> = ({
   onSubmit,
   onCancel,
   onSaveDraft,
-  onBack,
-  className = '',
   portalContainer,
 }) => {
   const keyboardIsolation = useKeyboardIsolation();
@@ -916,7 +913,7 @@ export const CompactIssueCreator: React.FC<CompactIssueCreatorProps> = ({
   return (
     <div
       ref={containerRef}
-      className={cn('w-full space-y-3 relative', className)}
+      className="w-full space-y-3 relative border-0 pt-4"
       onMouseDown={e => e.stopPropagation()}
       onMouseUp={e => e.stopPropagation()}
       onClick={e => e.stopPropagation()}
@@ -966,7 +963,7 @@ export const CompactIssueCreator: React.FC<CompactIssueCreatorProps> = ({
             onClick={closeAllPills}
           />
         )}
-        <div className="space-y-4">
+        <div className="space-y-4 px-4">
           {/* Context bar: compact pills for key fields */}
           <div className="flex flex-wrap items-center gap-2">
             {/* Project pill */}
@@ -1513,32 +1510,30 @@ export const CompactIssueCreator: React.FC<CompactIssueCreatorProps> = ({
             )}
             {aiError && <p className="text-sm text-red-600">{aiError}</p>}
           </div>
-
-          {/* Action Buttons */}
-          <div className="sticky bottom-0 py-4 flex gap-2 bg-white border-t border-gray-100">
-            <Button
-              type="submit"
-              variant="outline"
-              disabled={
-                isLoading ||
-                !watchedValues.description ||
-                !watchedValues.title ||
-                !watchedValues.projectId
-              }
-              className="text-center flex-1 border-neutral-200"
-              style={{ borderRadius: 'var(--radius)' }}
-              size="sm"
-            >
-              {isLoading ? (
-                <>
-                  <FiLoader className="h-3 w-3 mr-1 animate-spin" />
-                  Creating...
-                </>
-              ) : (
-                <>Create</>
-              )}
-            </Button>
-          </div>
+        </div>
+        <div className="sticky bottom-0 py-4 px-2 flex gap-2">
+          <Button
+            type="submit"
+            variant="outline"
+            disabled={
+              isLoading ||
+              !watchedValues.description ||
+              !watchedValues.title ||
+              !watchedValues.projectId
+            }
+            className="text-center flex-1 border-neutral-200 bg-white disabled:opacity-100 disabled:bg-neutral-50 disabled:text-neutral-300"
+            style={{ borderRadius: 'var(--radius)' }}
+            size="sm"
+          >
+            {isLoading ? (
+              <>
+                <FiLoader className="h-3 w-3 mr-1 animate-spin" />
+                Creating...
+              </>
+            ) : (
+              <>Create</>
+            )}
+          </Button>
         </div>
       </form>
     </div>

@@ -11,9 +11,9 @@ import {
   Link as LinkIcon,
   Loader2,
   FileDown,
-  Copy,
   CheckCircle2,
   AlertCircle,
+  KeyRound,
 } from 'lucide-react';
 import CompactIssueCreator from '@/components/compact-issue-creator';
 import IssueList from '@/components/issue-list';
@@ -28,6 +28,12 @@ import { Input } from '@/src/components/ui/ui/input';
 import { Badge } from '@/src/components/ui/ui/badge';
 import { Alert, AlertDescription } from '@/src/components/ui/ui/alert';
 import { ScrollArea } from '@/src/components/ui/ui/scroll-area';
+import {
+  Card,
+  CardHeader,
+  CardTitle,
+  CardContent,
+} from '@/src/components/ui/ui/card';
 import useAuth from '@/hooks/useAuth';
 import { authService } from '@/services/auth';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -123,62 +129,59 @@ const FloatingTriggerPopup: React.FC<FloatingTriggerPopupProps> = ({
   // Recording summary removed
 
   const renderFeatureList = () => {
-    const formatAgo = (ts?: number) => {
-      if (!ts) return '';
-      const diff = Math.max(0, Date.now() - ts);
-      const mins = Math.floor(diff / 60000);
-      if (mins < 1) return 'just now';
-      if (mins < 60) return `${mins}m ago`;
-      const hours = Math.floor(mins / 60);
-      if (hours < 24) return `${hours}h ago`;
-      const days = Math.floor(hours / 24);
-      return `${days}d ago`;
-    };
-
-    // Recording label removed
-
     return (
       <div
         className="flex relative flex-col h-full w-[260px] p-3"
         onMouseDown={onMouseDown}
       >
         {!isAuthenticated && (
-          <div className="absolute h-full z-40 w-full bg-neutral-50/90 backdrop-blur-sm top-0 left-0 p-4 flex flex-col gap-2 justify-center items-center rounded-xl">
-            <div className="font-medium text-sm mb-1">
-              Your Session is Invalid
-            </div>
-            <div className="flex items-center gap-2">
-              <Button
-                size="sm"
-                variant="default"
-                className="pointer-events-auto text-xs bg-neutral-200"
-                disabled={authBusy}
-                onClick={async () => {
-                  setAuthError(null);
-                  setAuthBusy(true);
-                  try {
-                    const res = await authService.startGitLabOAuth();
-                    if (res.success) {
-                      try {
-                        window.open(res.authUrl, '_blank');
-                      } catch {}
-                    } else {
-                      setAuthError(res.error);
+          <Card className="absolute h-full z-40 w-full bg-white/80 backdrop-blur-sm top-0 left-0 rounded-xl shadow-sm border-muted/40 flex flex-col justify-center">
+            <CardHeader className="pt-4 pb-2 text-center">
+              <div className="mx-auto mb-2 h-8 w-8 rounded-xl border bg-muted/40 grid place-items-center">
+                <KeyRound className="h-3 w-3" />
+              </div>
+              <CardTitle className="text-sm font-medium">
+                Your session is invalid
+              </CardTitle>
+              <p className="text-xs text-muted-foreground mt-1">
+                Please sign in again to continue.
+              </p>
+            </CardHeader>
+            <CardContent className="pb-4">
+              <div className="flex flex-col gap-2">
+                <Button
+                  size="sm"
+                  className="h-8 pointer-events-auto bg-black hover:bg-gray-800 text-white text-xs"
+                  disabled={authBusy}
+                  onClick={async () => {
+                    setAuthError(null);
+                    setAuthBusy(true);
+                    try {
+                      const res = await authService.startGitLabOAuth();
+                      if (res.success) {
+                        try {
+                          window.open(res.authUrl, '_blank');
+                        } catch {}
+                      } else {
+                        setAuthError(res.error);
+                      }
+                    } catch (e: any) {
+                      setAuthError(e?.message || 'Failed to start sign-in');
+                    } finally {
+                      setAuthBusy(false);
                     }
-                  } catch (e: any) {
-                    setAuthError(e?.message || 'Failed to start sign-in');
-                  } finally {
-                    setAuthBusy(false);
-                  }
-                }}
-              >
-                {authBusy ? 'Opening…' : 'Sign in'}
-              </Button>
-              {authError && (
-                <span className="text-[color:var(--qa-fg)]">{authError}</span>
-              )}
-            </div>
-          </div>
+                  }}
+                >
+                  {authBusy ? 'Opening…' : 'Sign in with Google'}
+                </Button>
+                {authError && (
+                  <p className="text-xs text-red-600 text-center mt-1">
+                    {authError}
+                  </p>
+                )}
+              </div>
+            </CardContent>
+          </Card>
         )}
 
         <div className="px-3 py-2 flex items-center justify-between">
@@ -195,7 +198,7 @@ const FloatingTriggerPopup: React.FC<FloatingTriggerPopupProps> = ({
         <button
           disabled={!isAuthenticated}
           onClick={() => onFeatureSelect('issue')}
-          className="group w-full text-left bg-white/40 hover:bg-white/60 active:bg-white/70 border border-white/30 rounded-lg px-3 py-2 transition-colors pointer-events-auto disabled:opacity-60 disabled:cursor-not-allowed"
+          className="group w-full text-left hover:bg-neutral-100/60 rounded-lg px-3 py-2 transition-colors pointer-events-auto disabled:opacity-60 disabled:cursor-not-allowed"
         >
           <div className="flex items-center">
             <FileText className="w-4 h-4 mr-3" />
@@ -301,10 +304,7 @@ const FloatingTriggerPopup: React.FC<FloatingTriggerPopupProps> = ({
                   </div>
                 )}
               >
-                <CompactIssueCreator
-                  className="border-0 pt-4 px-4"
-                  portalContainer={portalRef.current}
-                />
+                <CompactIssueCreator portalContainer={portalRef.current} />
               </ErrorBoundary>
             </div>
           </div>
