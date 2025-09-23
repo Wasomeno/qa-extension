@@ -4,7 +4,6 @@ import { createRoot } from 'react-dom/client';
 import { motion, AnimatePresence } from 'framer-motion';
 import '../styles/globals.css';
 import {
-  FiPlus,
   FiSettings,
   FiUser,
   FiGitlab,
@@ -16,15 +15,15 @@ import {
   FiCamera,
   FiFileText,
 } from 'react-icons/fi';
+import { Loader } from 'lucide-react';
 
 import { apiService } from '@/services/api';
 import { storageService } from '@/services/storage';
 import useOAuth from '@/hooks/useOAuth';
 import { UserData, MessageType } from '@/types/messages';
-import IssueCreator from '@/components/issue-creator';
 
 interface PopupState {
-  currentView: 'dashboard' | 'create-issue' | 'login' | 'loading';
+  currentView: 'dashboard' | 'login' | 'loading';
   user: UserData | null;
   isAuthenticated: boolean;
   connectionStatus: 'connected' | 'disconnected' | 'connecting';
@@ -66,7 +65,9 @@ const PopupApp: React.FC = () => {
   // Removed eager keepalive port from popup to avoid MV3 race
   useEffect(() => {
     return () => {
-      try { keepaliveRef.current?.disconnect(); } catch {}
+      try {
+        keepaliveRef.current?.disconnect();
+      } catch {}
       keepaliveRef.current = null;
     };
   }, []);
@@ -221,8 +222,6 @@ const PopupApp: React.FC = () => {
         });
 
         console.log('🟢 Dashboard state set, loading additional data...');
-
-      
       } else {
         console.log(
           '🔴 NOT AUTHENTICATED PATH: isAuthenticated=',
@@ -293,7 +292,6 @@ const PopupApp: React.FC = () => {
       await storageService.remove('auth');
       await storageService.remove('user');
       await storageService.remove('settings');
-      
 
       setState(prev => ({
         ...prev,
@@ -318,138 +316,6 @@ const PopupApp: React.FC = () => {
         connectionStatus: 'disconnected',
         success: 'Logged out successfully',
         error: null,
-      }));
-    }
-  };
-
-  const handleCreateIssue = async (): Promise<void> => {
-    try {
-      const [tab] = await chrome.tabs.query({
-        active: true,
-        currentWindow: true,
-      });
-
-      if (!tab.id) {
-        setState(prev => ({
-          ...prev,
-          error: 'No active tab found',
-        }));
-        return;
-      }
-
-      const isTabEligible = (t?: chrome.tabs.Tab) => {
-        if (!t || !t.url) return false;
-        const url = t.url;
-        const disallowed = [
-          'chrome://',
-          'chrome-extension://',
-          'edge://',
-          'moz-extension://',
-          'about:',
-          'devtools://',
-          'view-source:',
-          'brave://',
-          'opera://',
-        ];
-        if (disallowed.some(p => url.startsWith(p))) return false;
-        if (
-          url.startsWith('https://chrome.google.com/webstore') ||
-          url.startsWith('https://chromewebstore.google.com')
-        ) {
-          return false;
-        }
-        return true;
-      };
-
-      if (!isTabEligible(tab)) {
-        setState(prev => ({
-          ...prev,
-          error: 'This page does not allow content scripts',
-        }));
-        return;
-      }
-
-      // Check if we can access the tab (not a chrome:// or extension page)
-      if (
-        tab.url?.startsWith('chrome://') ||
-        tab.url?.startsWith('chrome-extension://') ||
-        tab.url?.startsWith('edge://') ||
-        tab.url?.startsWith('moz-extension://')
-      ) {
-        setState(prev => ({
-          ...prev,
-          error: 'Cannot create issues on browser internal pages',
-        }));
-        return;
-      }
-
-      // Check if content script is already available
-      let contentScriptAvailable = false;
-      try {
-        const response = await new Promise<any>((resolve) => {
-          chrome.tabs.sendMessage(tab.id!, { type: 'PING' }, (reply) => {
-            const _ = chrome.runtime.lastError; resolve(reply);
-          });
-        });
-        contentScriptAvailable = !!response;
-      } catch (error) {
-        // Content script not available, need to inject
-        console.log('Content script not available, injecting...');
-      }
-
-      if (!contentScriptAvailable) {
-        try {
-          // Try to inject content script if it's not already there
-          await chrome.scripting.executeScript({
-            target: { tabId: tab.id },
-            files: ['content.js'],
-          });
-          // Wait a bit for content script to initialize
-          await new Promise(resolve => setTimeout(resolve, 100));
-        } catch (injectionError) {
-          console.log('Content script injection failed:', injectionError);
-          setState(prev => ({
-            ...prev,
-            error: 'Unable to inject content script on this page',
-          }));
-          return;
-        }
-      }
-
-      try {
-        const response = await new Promise<any>((resolve) => {
-          chrome.tabs.sendMessage(tab.id!, { type: MessageType.CREATE_ISSUE_FROM_CONTEXT }, (reply) => { const _ = chrome.runtime.lastError; resolve(reply); });
-        });
-
-        console.log('RESPONSE', response);
-
-        if (response && response.success) {
-          setState(prev => ({
-            ...prev,
-            currentView: 'create-issue',
-          }));
-        } else {
-          setState(prev => ({
-            ...prev,
-            error: response?.error || 'Failed to create issue context',
-          }));
-        }
-      } catch (messageError) {
-        console.error(
-          'Failed to send message to content script:',
-          messageError
-        );
-        setState(prev => ({
-          ...prev,
-          error:
-            'Content script not available. Please refresh the page and try again.',
-        }));
-      }
-    } catch (error) {
-      console.error('Create issue error:', error);
-      setState(prev => ({
-        ...prev,
-        error: 'Failed to create issue context',
       }));
     }
   };
@@ -518,8 +384,11 @@ const PopupApp: React.FC = () => {
 
       let contentScriptAvailable = false;
       try {
-        const response = await new Promise<any>((resolve) => {
-          chrome.tabs.sendMessage(tab.id!, { type: 'PING' }, (reply) => { const _ = chrome.runtime.lastError; resolve(reply); });
+        const response = await new Promise<any>(resolve => {
+          chrome.tabs.sendMessage(tab.id!, { type: 'PING' }, reply => {
+            const _ = chrome.runtime.lastError;
+            resolve(reply);
+          });
         });
         contentScriptAvailable = !!response;
       } catch (error) {
@@ -547,8 +416,15 @@ const PopupApp: React.FC = () => {
       }
 
       try {
-        const response = await new Promise<any>((resolve) => {
-          chrome.tabs.sendMessage(tab.id!, { type: MessageType.CAPTURE_ELEMENT, data: {} }, (reply) => { const _ = chrome.runtime.lastError; resolve(reply); });
+        const response = await new Promise<any>(resolve => {
+          chrome.tabs.sendMessage(
+            tab.id!,
+            { type: MessageType.CAPTURE_ELEMENT, data: {} },
+            reply => {
+              const _ = chrome.runtime.lastError;
+              resolve(reply);
+            }
+          );
         });
 
         if (response && response.success) {
@@ -583,17 +459,20 @@ const PopupApp: React.FC = () => {
       console.log('Attempting simple screenshot capture...');
 
       // Try to capture screenshot directly
-      const response = await new Promise<any>((resolve) => {
-        chrome.runtime.sendMessage({ type: MessageType.CAPTURE_SCREENSHOT }, (reply) => {
-          const _ = chrome.runtime.lastError; resolve(reply);
-        });
+      const response = await new Promise<any>(resolve => {
+        chrome.runtime.sendMessage(
+          { type: MessageType.CAPTURE_SCREENSHOT },
+          reply => {
+            const _ = chrome.runtime.lastError;
+            resolve(reply);
+          }
+        );
       });
 
       if (response && response.success) {
         console.log('Simple screenshot captured, saving manually...');
 
         // Create a simple draft manually
-        
 
         setState(prev => ({
           ...prev,
@@ -626,14 +505,11 @@ const PopupApp: React.FC = () => {
       console.log('Direct screenshot captured successfully');
 
       // Save directly using storage service
-      
 
       setState(prev => ({
         ...prev,
         success: 'Screenshot captured and saved as draft!',
       }));
-
-      
     } catch (error) {
       console.error('Direct capture failed:', error);
       setState(prev => ({
@@ -648,11 +524,17 @@ const PopupApp: React.FC = () => {
       console.log('Attempting fallback capture for tab:', tab.id, tab.url);
 
       // Send message to background script to handle capture directly
-      const response = await new Promise<any>((resolve) => {
-        chrome.runtime.sendMessage({
-          type: MessageType.FALLBACK_QUICK_CAPTURE,
-          data: { tabId: tab.id, url: tab.url, title: tab.title },
-        }, (reply) => { const _ = chrome.runtime.lastError; resolve(reply); });
+      const response = await new Promise<any>(resolve => {
+        chrome.runtime.sendMessage(
+          {
+            type: MessageType.FALLBACK_QUICK_CAPTURE,
+            data: { tabId: tab.id, url: tab.url, title: tab.title },
+          },
+          reply => {
+            const _ = chrome.runtime.lastError;
+            resolve(reply);
+          }
+        );
       });
 
       console.log('Fallback capture response:', response);
@@ -705,7 +587,7 @@ const PopupApp: React.FC = () => {
 
   // React to background-auth completion via session changes
   useEffect(() => {
-    const unsub = storageService.onChanged('session' as any, async (s) => {
+    const unsub = storageService.onChanged('session' as any, async s => {
       const token = (s as any)?.accessToken;
       if (token) {
         const user = await storageService.getUser();
@@ -718,7 +600,9 @@ const PopupApp: React.FC = () => {
         }));
       }
     });
-    return () => { if (unsub) unsub(); };
+    return () => {
+      if (unsub) unsub();
+    };
   }, []);
 
   if (state.currentView === 'loading') {
@@ -727,7 +611,7 @@ const PopupApp: React.FC = () => {
         <div className="absolute inset-0 glass-bg-dots opacity-30"></div>
         <div className="relative z-10 flex flex-1 flex-col justify-center items-center p-6">
           <div className="glass-card p-8 space-y-6 text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+            <Loader className="h-12 w-12 animate-spin text-blue-600 mx-auto" />
             <h2 className="text-lg font-semibold text-gray-900">Loading...</h2>
             <p className="text-sm text-gray-600">
               Checking authentication status
@@ -775,9 +659,16 @@ const PopupApp: React.FC = () => {
                     setIsLoading(true);
                     const r = await startGitLab();
                     if (!r.success) {
-                      setState(prev => ({ ...prev, error: oAuthError || 'Failed to initiate GitLab OAuth' }));
+                      setState(prev => ({
+                        ...prev,
+                        error: oAuthError || 'Failed to initiate GitLab OAuth',
+                      }));
                     } else {
-                      setState(prev => ({ ...prev, success: 'OAuth window opened. Please complete authentication...' }));
+                      setState(prev => ({
+                        ...prev,
+                        success:
+                          'OAuth window opened. Please complete authentication...',
+                      }));
                     }
                     setIsLoading(false);
                   }}
@@ -789,7 +680,9 @@ const PopupApp: React.FC = () => {
                   ) : (
                     <FiGitlab className="text-lg text-orange-400" />
                   )}
-                  {isLoading || oAuthLoading ? 'Connecting...' : 'Sign in with GitLab'}
+                  {isLoading || oAuthLoading
+                    ? 'Connecting...'
+                    : 'Sign in with GitLab'}
                 </motion.button>
               </div>
 
@@ -799,34 +692,6 @@ const PopupApp: React.FC = () => {
                 </p>
               </div>
             </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  if (state.currentView === 'create-issue') {
-    return (
-      <div className="flex flex-col w-full max-w-sm mx-auto glass-bg-pattern relative min-h-[500px]">
-        <div className="absolute inset-0 glass-bg-dots opacity-20"></div>
-        <div className="relative z-10 flex-1 overflow-y-auto overflow-x-hidden">
-          <div className="p-2">
-            <IssueCreator
-              className="w-full max-w-none mx-0"
-              onSubmit={() => {
-                setState(prev => ({
-                  ...prev,
-                  currentView: 'dashboard',
-                  success: 'Issue created successfully!',
-                }));
-              }}
-              onCancel={() => {
-                setState(prev => ({
-                  ...prev,
-                  currentView: 'dashboard',
-                }));
-              }}
-            />
           </div>
         </div>
       </div>
@@ -955,23 +820,6 @@ const PopupApp: React.FC = () => {
         </div>
       )}
 
-      {/* Main Actions */}
-      <div className="relative z-10 p-4">
-        <div className="grid grid-cols-2 gap-3">
-          <motion.button
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
-            onClick={handleCreateIssue}
-            className="glass-button glass-glow-blue flex flex-col items-center justify-center gap-2 p-4 transition-all duration-200 cursor-pointer text-blue-700"
-          >
-            <FiPlus />
-            <span className="text-sm font-medium">Create Issue</span>
-          </motion.button>
-
-          
-        </div>
-      </div>
-
       {/* Recent Screenshots removed */}
       {false && state.recentScreenshots.length > 0 && (
         <div className="relative z-10 p-4">
@@ -993,7 +841,9 @@ const PopupApp: React.FC = () => {
                       {screenshot.title || 'Untitled Page'}
                     </div>
                     <div className="text-sm text-gray-600 flex items-center gap-2">
-                      <span>{new Date(screenshot.timestamp).toLocaleString()}</span>
+                      <span>
+                        {new Date(screenshot.timestamp).toLocaleString()}
+                      </span>
                       {screenshot.url && (
                         <>
                           <span>•</span>
@@ -1028,10 +878,7 @@ const PopupApp: React.FC = () => {
                   </button>
                   <button
                     onClick={() => {
-                      setState(prev => ({
-                        ...prev,
-                        currentView: 'create-issue',
-                      }));
+                      // Issue creation removed
                     }}
                     className="p-2 rounded-md text-gray-600 hover:text-gray-900 hover:bg-gray-200 transition-colors"
                     title="Create issue from screenshot"

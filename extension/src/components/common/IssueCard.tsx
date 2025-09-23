@@ -172,8 +172,8 @@ const IssueCard: React.FC<IssueCardProps> = ({
             <div className="text-[12px] text-black/70 truncate">{metaLeft}</div>
             <div
               className={cn(
-                "flex items-center gap-1.5 transition-all duration-200 ease-in-out",
-                isHovered || addingEvidence ? "opacity-100" : "opacity-0"
+                'flex items-center gap-1.5 transition-all duration-200 ease-out',
+                isHovered || addingEvidence ? 'opacity-100' : 'opacity-0'
               )}
             >
               {actionRight}
@@ -192,9 +192,9 @@ const IssueCard: React.FC<IssueCardProps> = ({
           </div>
         )}
 
-        {(labelsSection || labelsStatic) ? <div className="h-1" /> : null}
+        {labelsSection || labelsStatic ? <div className="h-1" /> : null}
 
-        {(labelsSection || labelsStatic) ? (
+        {labelsSection || labelsStatic ? (
           <div className="space-y-1" onClick={e => e.stopPropagation()}>
             <div className="text-[11px] font-medium text-black/70">Labels</div>
             {/* Container for both interactive and static labels */}
@@ -202,10 +202,10 @@ const IssueCard: React.FC<IssueCardProps> = ({
               {/* Interactive labels - shown on hover */}
               <div
                 className={cn(
-                  "transition-all duration-200 ease-in-out",
+                  'transition-all duration-200 ease-out',
                   isHovered || addingEvidence
-                    ? "opacity-100 relative z-10"
-                    : "opacity-0 pointer-events-none absolute inset-0 z-0"
+                    ? 'opacity-100 relative z-10'
+                    : 'opacity-0 pointer-events-none absolute inset-0 z-0'
                 )}
               >
                 {labelsSection}
@@ -214,10 +214,10 @@ const IssueCard: React.FC<IssueCardProps> = ({
               {labelsStatic && (
                 <div
                   className={cn(
-                    "transition-all duration-200 ease-in-out",
+                    'transition-all duration-200 ease-out',
                     isHovered || addingEvidence
-                      ? "opacity-0 pointer-events-none absolute inset-0 z-0"
-                      : "opacity-100 relative z-10"
+                      ? 'opacity-0 pointer-events-none absolute inset-0 z-0'
+                      : 'opacity-100 relative z-10'
                   )}
                 >
                   {labelsStatic}
@@ -395,6 +395,7 @@ const IssueCard: React.FC<IssueCardProps> = ({
                     Cancel
                   </Button>
                   <Button
+                    variant="outline"
                     size="sm"
                     className="h-8 text-[12px] flex-1"
                     onClick={handleSubmitEvidence}

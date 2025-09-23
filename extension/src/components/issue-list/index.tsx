@@ -109,6 +109,7 @@ const IssueListInner: React.FC<IssueListProps> = ({
     string[]
   >([]);
   const [selectedLabels, setSelectedLabels] = React.useState<string[]>([]);
+  const [selectedStatuses, setSelectedStatuses] = React.useState<string[]>([]);
   const [createdBy] = React.useState<'me' | 'any'>('any');
   const [sort, setSort] = React.useState<'newest' | 'oldest'>('newest');
   const debouncedSearch = useDebounce(search, 500);
@@ -147,6 +148,15 @@ const IssueListInner: React.FC<IssueListProps> = ({
 
   // Removed ineffective useEffects - now handled by React Query hooks above
 
+  // Map status selections to API format
+  const statusFilter = React.useMemo(() => {
+    if (selectedStatuses.length === 0) return undefined;
+    if (selectedStatuses.includes('open') && selectedStatuses.includes('closed')) {
+      return undefined; // Show both, so no filter
+    }
+    return selectedStatuses.includes('closed') ? 'closed' : undefined;
+  }, [selectedStatuses]);
+
   const {
     items,
     fetchNextPage,
@@ -166,6 +176,7 @@ const IssueListInner: React.FC<IssueListProps> = ({
         ? selectedAssigneeIds[0]
         : undefined,
     labels: selectedLabels,
+    status: statusFilter,
     limit: 5,
     sort,
   });
@@ -183,7 +194,7 @@ const IssueListInner: React.FC<IssueListProps> = ({
           ? selectedAssigneeIds[0]
           : '') as string,
         createdBy: createdBy || 'me',
-        status: '',
+        status: statusFilter || '',
         limit: 5,
         sort: sort || 'newest',
       },
@@ -193,8 +204,10 @@ const IssueListInner: React.FC<IssueListProps> = ({
       selectedProjectIds,
       selectedAssigneeIds,
       selectedLabels,
+      selectedStatuses,
       createdBy,
       sort,
+      statusFilter,
     ]
   );
 
@@ -254,6 +267,12 @@ const IssueListInner: React.FC<IssueListProps> = ({
   const toggleLabel = (name: string) => {
     setSelectedLabels(prev =>
       prev.includes(name) ? prev.filter(l => l !== name) : [...prev, name]
+    );
+  };
+
+  const toggleStatus = (status: string) => {
+    setSelectedStatuses(prev =>
+      prev.includes(status) ? prev.filter(s => s !== status) : [...prev, status]
     );
   };
 
@@ -399,6 +418,13 @@ const IssueListInner: React.FC<IssueListProps> = ({
     });
     return map;
   }, [visibleLabels, selectedLabels]);
+
+  const statusClickHandlers = React.useMemo(() => {
+    const map = new Map<string, () => void>();
+    map.set('open', () => toggleStatus('open'));
+    map.set('closed', () => toggleStatus('closed'));
+    return map;
+  }, [selectedStatuses]);
 
   const handleIssueOpen = (item: any) => {
     if (onSelect) onSelect(item);
@@ -564,6 +590,30 @@ const IssueListInner: React.FC<IssueListProps> = ({
             style={{ backgroundColor: l.color }}
           />
           <span className="truncate">{l.name}</span>
+        </button>
+      </li>
+    );
+  };
+
+  const renderStatusOption = (status: 'open' | 'closed') => {
+    const checked = selectedStatuses.includes(status);
+    const onClick = statusClickHandlers.get(status);
+    const displayName = status.charAt(0).toUpperCase() + status.slice(1);
+    const dotColor = status === 'closed' ? '#6b7280' : '#22c55e';
+
+    return (
+      <li key={status} role="option" aria-selected={checked}>
+        <button
+          type="button"
+          className="w-full text-left px-2 py-1.5 rounded-md hover:bg-neutral-100 flex items-center gap-2"
+          onClick={onClick}
+        >
+          <Checkbox className="mr-1" checked={checked} />
+          <span
+            className="inline-block w-2.5 h-2.5 rounded-full border"
+            style={{ backgroundColor: dotColor }}
+          />
+          <span className="truncate">{displayName}</span>
         </button>
       </li>
     );
@@ -735,25 +785,25 @@ const IssueListInner: React.FC<IssueListProps> = ({
             </Popover>
           </div>
           <div className="space-y-1">
-            <Label className="text-xs">Labels</Label>
+            <Label className="text-xs">Labels & Status</Label>
             <Popover open={openLabels} onOpenChange={setOpenLabels}>
               <PopoverTrigger asChild>
                 <Button
                   type="button"
                   variant="outline"
                   className="text-xs h-8 glass-input w-full justify-between"
-                  disabled={isLoading || selectedProjectIds.length !== 1 || projectLabelsQuery.isLoading}
+                  disabled={isLoading || projectLabelsQuery.isLoading}
                 >
                   <span className="truncate">
-                    {selectedLabels.length > 0
-                      ? `${selectedLabels.length} selected`
+                    {(selectedLabels.length + selectedStatuses.length) > 0
+                      ? `${selectedLabels.length + selectedStatuses.length} selected`
                       : selectedProjectIds.length === 1
-                        ? 'Select labels'
-                        : 'Select a single project'}
+                        ? 'Select labels/status'
+                        : 'Select labels/status'}
                   </span>
-                  {selectedLabels.length > 0 && (
+                  {(selectedLabels.length + selectedStatuses.length) > 0 && (
                     <Badge variant="secondary" className="ml-2 text-[10px]">
-                      {selectedLabels.length}
+                      {selectedLabels.length + selectedStatuses.length}
                     </Badge>
                   )}
                 </Button>
@@ -778,17 +828,29 @@ const IssueListInner: React.FC<IssueListProps> = ({
                         <SkeletonRow />
                         <SkeletonRow />
                       </div>
-                    ) : visibleLabels.length === 0 ? (
-                      <div className="text-xs text-neutral-500 px-1 py-2">
-                        No options found
-                      </div>
                     ) : (
                       <ul
                         className="text-xs"
                         role="listbox"
-                        aria-label="Labels"
+                        aria-label="Labels and Status"
                       >
-                        {visibleLabels.map(renderLabelOption)}
+                        {/* Status options always shown first */}
+                        {renderStatusOption('open')}
+                        {renderStatusOption('closed')}
+
+                        {/* Separator if there are labels */}
+                        {visibleLabels.length > 0 && (
+                          <li className="border-t border-gray-200 my-1" />
+                        )}
+
+                        {/* Label options */}
+                        {visibleLabels.length === 0 && selectedProjectIds.length === 1 ? (
+                          <li className="text-xs text-neutral-500 px-1 py-2">
+                            No labels found
+                          </li>
+                        ) : (
+                          visibleLabels.map(renderLabelOption)
+                        )}
                       </ul>
                     )}
                   </div>

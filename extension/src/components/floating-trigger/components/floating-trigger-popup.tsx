@@ -172,7 +172,7 @@ const FloatingTriggerPopup: React.FC<FloatingTriggerPopupProps> = ({
                     }
                   }}
                 >
-                  {authBusy ? 'Opening…' : 'Sign in with Google'}
+                  {authBusy ? 'Opening…' : 'Sign in Gitlab'}
                 </Button>
                 {authError && (
                   <p className="text-xs text-red-600 text-center mt-1">
@@ -462,7 +462,7 @@ const FloatingTriggerPopup: React.FC<FloatingTriggerPopupProps> = ({
                 originY: 0.5,
               }}
               exit={{ opacity: 0, scale: 0.98, filter: 'blur(2px)' }}
-              transition={{ ease: 'easeInOut' }}
+              transition={{ ease: 'easeOut' }}
             >
               {renderFeatureDetail()}
             </motion.div>

@@ -11,10 +11,8 @@ import { Server as SocketIOServer } from 'socket.io';
 
 import { errorHandler } from './middleware/errorHandler';
 import { authRouter } from './routes/auth';
-import { userRouter } from './routes/users';
 import { projectRouter } from './routes/projects';
 import { issueRouter } from './routes/issues';
-import { webhookRouter } from './routes/webhooks';
 import { filesRouter } from './routes/files';
 import { slackRouter } from './routes/slack';
 import { healthRouter } from './routes/health';
@@ -126,12 +124,10 @@ class App {
 
     // API routes
     this.app.use('/api/auth', authRouter);
-    this.app.use('/api/users', userRouter);
     this.app.use('/api/projects', projectRouter);
     this.app.use('/api/issues', issueRouter);
     this.app.use('/api/integrations/slack', slackRouter);
     this.app.use('/api/scenarios', scenariosRouter);
-    this.app.use('/api/webhooks', webhookRouter);
     this.app.use('/api/files', filesRouter);
 
     // Static serving for uploaded assets (dev-friendly; secure appropriately in prod)

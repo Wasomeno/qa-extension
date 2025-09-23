@@ -55,11 +55,6 @@ const buildErrorPayload = (e: any, req: Request) => {
   };
 };
 
-// Simple GET to return current default template
-scenariosRouter.get('/template', (req: Request, res: Response) => {
-  return res.json({ success: true, data: DefaultScenarioTemplate });
-});
-
 // workbook-raw endpoint removed
 
 // Preview: reads sheet, generates small sample
@@ -169,40 +164,6 @@ scenariosRouter.get('/preview', async (req: Request, res: Response) => {
     // Unreachable with the early returns above
   } catch (e: any) {
     logger.logError('Scenario preview failed', e);
-    return res.status(400).json(buildErrorPayload(e, req));
-  }
-});
-
-// Generate full set
-scenariosRouter.post('/generate', async (req: Request, res: Response) => {
-  try {
-    const { url, template, options } = req.body || {};
-    if (!url)
-      return res.status(400).json({ success: false, error: 'Missing url' });
-    const ids = GoogleSheetReader.extractIds(String(url));
-    let acceptanceRows: any[] = [];
-    if (ids.gid) {
-      const read = await GoogleSheetReader.readPublicCsv(String(url));
-      acceptanceRows = read.rows;
-    } else {
-      const wb = await GoogleSheetReader.readPublicWorkbook(String(url));
-      acceptanceRows = wb.sheets.flatMap(s => s.rows);
-    }
-    const generator = new ScenarioGeneratorService();
-    const { scenarios, meta } = await generator.generate({
-      acceptanceRows,
-      template: DefaultScenarioTemplate,
-      options: options || {},
-    });
-    return res.json({
-      success: true,
-      data: scenarios.map(s =>
-        ensureNonEmptyByTemplate(s, DefaultScenarioTemplate)
-      ),
-      meta: { ...meta, count: scenarios.length },
-    });
-  } catch (e: any) {
-    logger.logError('Scenario generate failed', e);
     return res.status(400).json(buildErrorPayload(e, req));
   }
 });

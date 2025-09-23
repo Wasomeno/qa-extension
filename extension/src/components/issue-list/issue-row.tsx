@@ -3,8 +3,7 @@ import { Button } from '@/src/components/ui/ui/button';
 import { Badge } from '@/src/components/ui/ui/badge';
 import { AiFillStar } from 'react-icons/ai';
 import { FiStar } from 'react-icons/fi';
-import IssueStatusSelect from '@/components/issue-list/issue-status-select';
-import IssueLabelsSelect from '@/components/issue-list/issue-labels-select';
+import UnifiedStatusLabelsSelect from '@/components/issue-list/unified-status-labels-select';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
 import IssueCard from '@/components/common/IssueCard';
@@ -48,23 +47,27 @@ const IssueRow: React.FC<IssueRowProps> = ({
   onChangeState,
   portalContainer,
 }) => {
+  const isClosed = (item as any)?.state === 'closed';
+  const statusValue: 'open' | 'closed' = isClosed ? 'closed' : 'open';
+
   const [localLabels, setLocalLabels] = React.useState<string[]>(
-    Array.isArray(selectedLabels) ? selectedLabels : []
+    Array.isArray(selectedLabels) ? [...selectedLabels, statusValue] : [statusValue]
   );
   const [saving, setSaving] = React.useState(false);
 
   React.useEffect(() => {
-    setLocalLabels(Array.isArray(selectedLabels) ? selectedLabels : []);
-  }, [selectedLabels]);
+    const baseLabels = Array.isArray(selectedLabels) ? selectedLabels : [];
+    setLocalLabels([...baseLabels, statusValue]);
+  }, [selectedLabels, statusValue]);
 
   const isDirty = React.useMemo(() => {
-    const a = Array.isArray(selectedLabels) ? selectedLabels : [];
+    const a = Array.isArray(selectedLabels) ? [...selectedLabels, statusValue] : [statusValue];
     const b = Array.isArray(localLabels) ? localLabels : [];
     if (a.length !== b.length) return true;
     const sa = [...a].sort().join('\n');
     const sb = [...b].sort().join('\n');
     return sa !== sb;
-  }, [selectedLabels, localLabels]);
+  }, [selectedLabels, localLabels, statusValue]);
 
   const handleOpenClick = () => onOpen(item);
   const handlePinClick = (e: React.MouseEvent) => {
@@ -72,11 +75,8 @@ const IssueRow: React.FC<IssueRowProps> = ({
     onTogglePin(item);
   };
 
-  const isClosed = (item as any)?.state === 'closed';
-  const statusValue: 'open' | 'closed' = isClosed ? 'closed' : 'open';
-
-  const handleStatusChange = (val: 'open' | 'closed') => {
-    onChangeState(val);
+  const handleUnifiedChange = (vals: string[]) => {
+    setLocalLabels(vals);
   };
 
   const labelsArray: LabelItem[] = projectLabelPalette
@@ -93,18 +93,40 @@ const IssueRow: React.FC<IssueRowProps> = ({
       ? [item.assignee]
       : [];
 
-  // Create static labels for non-hover state
-  const selectedLabelItems = labelsArray.filter(l => localLabels.includes(l.name));
-  const staticLabels = selectedLabelItems.length > 0 ? (
+  // Create static labels for non-hover state (including status)
+  const statusBadge = (
+    <Badge
+      key="status"
+      variant="secondary"
+      className="gap-1 glass-card border-white/50 bg-white/60 backdrop-blur-sm ring-1 ring-blue-200 bg-blue-50/60"
+    >
+      <span
+        className="inline-block w-2.5 h-2.5 rounded-full"
+        style={{
+          backgroundColor: statusValue === 'closed' ? '#6b7280' : '#22c55e'
+        }}
+      />
+      <span className="capitalize">{statusValue}</span>
+    </Badge>
+  );
+
+  const regularLabelItems = labelsArray.filter(l =>
+    localLabels.includes(l.name) &&
+    l.name.toLowerCase() !== 'open' &&
+    l.name.toLowerCase() !== 'closed'
+  );
+
+  const staticLabels = (
     <div className="flex flex-wrap gap-2">
-      {selectedLabelItems.map((l) => (
+      {statusBadge}
+      {regularLabelItems.map((l) => (
         <Badge key={l.id} variant="secondary" className="gap-1 glass-card border-white/50 bg-white/60 backdrop-blur-sm">
           <Dot color={l.color} />
           <span>{l.name}</span>
         </Badge>
       ))}
     </div>
-  ) : null;
+  );
 
   return (
     <IssueCard
@@ -116,13 +138,7 @@ const IssueRow: React.FC<IssueRowProps> = ({
       evidenceEnabled
       evidenceProjectId={item.project?.id}
       evidenceIid={item.number}
-      statusControl={
-        <IssueStatusSelect
-          value={statusValue}
-          onChange={handleStatusChange}
-          portalContainer={portalContainer}
-        />
-      }
+      statusControl={null}
       metaLeft={
         <div className="flex items-center gap-2">
           <div className="text-[12px] text-black/70 truncate">
@@ -161,26 +177,40 @@ const IssueRow: React.FC<IssueRowProps> = ({
         </Button>
       }
       labelsSection={
-        <IssueLabelsSelect
+        <UnifiedStatusLabelsSelect
           selectedLabels={localLabels}
           labels={labelsArray}
-          onChange={vals => setLocalLabels(vals)}
+          currentStatus={statusValue}
+          onChange={handleUnifiedChange}
           portalContainer={portalContainer}
           isDirty={isDirty}
           saving={saving}
           onSave={async () => {
             try {
               setSaving(true);
-              await onChangeLabels(localLabels);
+
+              // Check if status changed
+              const hasOpenLabel = localLabels.some(label => label.toLowerCase() === 'open');
+              const hasClosedLabel = localLabels.some(label => label.toLowerCase() === 'closed');
+              const newStatus = hasClosedLabel ? 'closed' : 'open';
+
+              if (newStatus !== statusValue) {
+                onChangeState(newStatus);
+              }
+
+              // Update labels (excluding status labels for the API)
+              const regularLabels = localLabels.filter(label =>
+                label.toLowerCase() !== 'open' && label.toLowerCase() !== 'closed'
+              );
+              await onChangeLabels(regularLabels);
             } finally {
               setSaving(false);
             }
           }}
-          onCancel={() =>
-            setLocalLabels(
-              Array.isArray(selectedLabels) ? selectedLabels : []
-            )
-          }
+          onCancel={() => {
+            const baseLabels = Array.isArray(selectedLabels) ? selectedLabels : [];
+            setLocalLabels([...baseLabels, statusValue]);
+          }}
         />
       }
       labelsStatic={staticLabels}

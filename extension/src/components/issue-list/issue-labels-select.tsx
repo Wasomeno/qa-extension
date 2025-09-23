@@ -10,7 +10,12 @@ import {
 } from '@/src/components/ui/ui/popover';
 
 function Dot({ color }: { color: string }) {
-  return <span className="inline-block h-3 w-3 rounded-full border" style={{ backgroundColor: color }} />;
+  return (
+    <span
+      className="inline-block h-3 w-3 rounded-full border"
+      style={{ backgroundColor: color }}
+    />
+  );
 }
 
 type LabelItem = {
@@ -65,7 +70,9 @@ const IssueLabelsSelect: React.FC<IssueLabelsSelectProps> = ({
 
   const clearAll = () => onChange([]);
 
-  const selectedLabelItems = labels.filter(l => selectedLabels.includes(l.name));
+  const selectedLabelItems = labels.filter(l =>
+    selectedLabels.includes(l.name)
+  );
 
   return (
     <div onClick={handleStopPropagation} className="space-y-2">
@@ -75,7 +82,9 @@ const IssueLabelsSelect: React.FC<IssueLabelsSelectProps> = ({
             type="button"
             className="inline-flex items-center justify-between w-full h-8 px-3 rounded-xl border glass-input text-xs shadow-sm"
           >
-            <span className="font-medium">{selectedLabels.length || 0} selected</span>
+            <span className="font-medium">
+              {selectedLabels.length || 0} selected
+            </span>
             <span className="text-neutral-500">{selectedLabels.length}</span>
           </button>
         </PopoverTrigger>
@@ -96,8 +105,12 @@ const IssueLabelsSelect: React.FC<IssueLabelsSelectProps> = ({
             {/* Selected chips */}
             {selectedLabelItems.length > 0 && (
               <div className="mt-2 flex flex-wrap gap-1.5">
-                {selectedLabelItems.map((l) => (
-                  <Badge key={l.id} variant="secondary" className="gap-1 glass-card border-white/50 bg-white/60 backdrop-blur-sm">
+                {selectedLabelItems.map(l => (
+                  <Badge
+                    key={l.id}
+                    variant="secondary"
+                    className="gap-1 glass-card border-white/50 bg-white/60 backdrop-blur-sm"
+                  >
                     <Dot color={l.color} />
                     <span>{l.name}</span>
                     <button
@@ -109,7 +122,12 @@ const IssueLabelsSelect: React.FC<IssueLabelsSelectProps> = ({
                     </button>
                   </Badge>
                 ))}
-                <Button variant="ghost" size="sm" onClick={clearAll} className="h-6 px-2 ml-1 text-xs glass-button">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={clearAll}
+                  className="h-6 px-2 ml-1 text-xs glass-button"
+                >
                   Clear
                 </Button>
               </div>
@@ -119,7 +137,9 @@ const IssueLabelsSelect: React.FC<IssueLabelsSelectProps> = ({
           {/* Labels List */}
           <div className="max-h-[260px] overflow-auto px-2 py-2">
             <div className="py-1">
-              <div className="text-[11px] text-neutral-500 px-2 mb-1">All labels</div>
+              <div className="text-[11px] text-neutral-500 px-2 mb-1">
+                All labels
+              </div>
               <div className="grid">
                 {visibleLabels.length === 0 ? (
                   <div className="text-xs text-neutral-500 px-2 py-3">
@@ -138,7 +158,10 @@ const IssueLabelsSelect: React.FC<IssueLabelsSelectProps> = ({
                             : 'hover:bg-neutral-100/50'
                         }`}
                       >
-                        <Checkbox checked={checked} className="pointer-events-none" />
+                        <Checkbox
+                          checked={checked}
+                          className="pointer-events-none"
+                        />
                         <Dot color={l.color} />
                         <div className="flex-1">
                           <div className="text-sm leading-none">{l.name}</div>
@@ -165,6 +188,7 @@ const IssueLabelsSelect: React.FC<IssueLabelsSelectProps> = ({
               Cancel
             </Button>
             <Button
+              variant="outline"
               className="text-xs"
               onClick={async e => {
                 e.stopPropagation();
@@ -182,8 +206,12 @@ const IssueLabelsSelect: React.FC<IssueLabelsSelectProps> = ({
       {/* Selected Labels Display */}
       {selectedLabelItems.length > 0 && (
         <div className="flex flex-wrap gap-2">
-          {selectedLabelItems.map((l) => (
-            <Badge key={l.id} variant="secondary" className="gap-1 glass-card border-white/50 bg-white/60 backdrop-blur-sm">
+          {selectedLabelItems.map(l => (
+            <Badge
+              key={l.id}
+              variant="secondary"
+              className="gap-1 glass-card border-white/50 bg-white/60 backdrop-blur-sm"
+            >
               <Dot color={l.color} />
               <span>{l.name}</span>
             </Badge>
