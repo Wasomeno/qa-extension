@@ -12,6 +12,7 @@ import {
   Code as IconInlineCode,
   Link as IconLink,
   Eye as IconEye,
+  ChevronRight,
 } from 'lucide-react';
 
 import { IssueData } from '@/types/messages';
@@ -110,6 +111,13 @@ export const CompactIssueCreator: React.FC<CompactIssueCreatorProps> = ({
   const [openSlack, setOpenSlack] = React.useState(false);
   const anyPillOpen =
     openProject || openLabels || openFormat || openAssignee || openSlack;
+  const suppressOpenRef = React.useRef({
+    project: false,
+    labels: false,
+    format: false,
+    assignee: false,
+    slack: false,
+  });
   const closeAllPills = () => {
     setOpenProject(false);
     setOpenLabels(false);
@@ -117,6 +125,31 @@ export const CompactIssueCreator: React.FC<CompactIssueCreatorProps> = ({
     setOpenAssignee(false);
     setOpenSlack(false);
   };
+
+  const handleTriggerPointerDown = (
+    event: React.PointerEvent,
+    openState: boolean,
+    key: 'project' | 'labels' | 'format' | 'assignee' | 'slack',
+    setter: React.Dispatch<React.SetStateAction<boolean>>
+  ) => {
+    if (!openState) return;
+    event.preventDefault();
+    suppressOpenRef.current[key] = true;
+    setter(false);
+  };
+
+  const createOnOpenChange = (
+    key: 'project' | 'labels' | 'format' | 'assignee' | 'slack',
+    setter: React.Dispatch<React.SetStateAction<boolean>>
+  ) =>
+    (next: boolean) => {
+      if (next && suppressOpenRef.current[key]) {
+        suppressOpenRef.current[key] = false;
+        return;
+      }
+      suppressOpenRef.current[key] = false;
+      setter(next);
+    };
 
   // Markdown helpers for toolbar
   const getSel = () => {
@@ -967,30 +1000,47 @@ export const CompactIssueCreator: React.FC<CompactIssueCreatorProps> = ({
           {/* Context bar: compact pills for key fields */}
           <div className="flex flex-wrap items-center gap-2">
             {/* Project pill */}
-            <Popover open={openProject} onOpenChange={setOpenProject}>
+            <Popover
+              open={openProject}
+              onOpenChange={createOnOpenChange('project', setOpenProject)}
+            >
               <PopoverTrigger asChild>
                 <Button
                   type="button"
                   variant="outline"
                   size="sm"
-                  className="h-7 px-2 glass-input"
+                className="h-7 px-2 glass-input"
                   disabled={isLoading}
                   title="Select project"
+                onPointerDown={event =>
+                  handleTriggerPointerDown(
+                    event,
+                    openProject,
+                    'project',
+                    setOpenProject
+                  )
+                }
                 >
                   <LuFolderGit2 />
-                  <span className="text-sm text-neutral-600">
-                    Project <span className="text-neutral-400">▾</span>
-                  </span>
+                <div className="flex items-center gap-2 text-sm text-neutral-600">
+                  <span>Project</span>
                   {(() => {
                     const p = projects.find(
                       p => p.id === watchedValues.projectId
                     );
                     return (
-                      <span className="ml-2 text-sm text-neutral-900 truncate max-w-[140px]">
+                      <span className="text-neutral-900 truncate max-w-[140px]">
                         {p ? p.name : 'Select'}
                       </span>
                     );
                   })()}
+                </div>
+                <ChevronRight
+                  className={cn(
+                    'h-3.5 w-3.5 text-neutral-400 transition-transform duration-200',
+                    openProject && 'rotate-90'
+                  )}
+                />
                 </Button>
               </PopoverTrigger>
               <PopoverContent
@@ -1004,26 +1054,36 @@ export const CompactIssueCreator: React.FC<CompactIssueCreatorProps> = ({
             </Popover>
 
             {/* Label(s) pill */}
-            <Popover open={openLabels} onOpenChange={setOpenLabels}>
+            <Popover
+              open={openLabels}
+              onOpenChange={createOnOpenChange('labels', setOpenLabels)}
+            >
               <PopoverTrigger asChild>
                 <Button
                   type="button"
                   variant="outline"
                   size="sm"
-                  className="h-7 px-2 glass-input"
+                className="h-7 px-2 glass-input"
                   disabled={isLoading || !watchedValues.projectId}
                   title="Select label"
+                onPointerDown={event =>
+                  handleTriggerPointerDown(
+                    event,
+                    openLabels,
+                    'labels',
+                    setOpenLabels
+                  )
+                }
                 >
                   <IoPricetagsOutline />
-                  <span className="text-sm text-neutral-600">
-                    Labels <span className="text-neutral-400">▾</span>
-                  </span>
+                <div className="flex items-center gap-2 text-sm text-neutral-600">
+                  <span>Labels</span>
                   {(() => {
                     const selected = labelOptions?.find(
                       l => l.value.toString() === (watchedValues.labelId || '')
                     );
                     return (
-                      <span className="ml-2 inline-flex items-center gap-1 text-sm text-neutral-900 truncate max-w-[180px]">
+                      <span className="inline-flex items-center gap-1 text-neutral-900 truncate max-w-[160px]">
                         {selected ? (
                           <>
                             <span
@@ -1038,6 +1098,13 @@ export const CompactIssueCreator: React.FC<CompactIssueCreatorProps> = ({
                       </span>
                     );
                   })()}
+                </div>
+                <ChevronRight
+                  className={cn(
+                    'h-3.5 w-3.5 text-neutral-400 transition-transform duration-200',
+                    openLabels && 'rotate-90'
+                  )}
+                />
                 </Button>
               </PopoverTrigger>
               <PopoverContent
@@ -1050,21 +1117,31 @@ export const CompactIssueCreator: React.FC<CompactIssueCreatorProps> = ({
             </Popover>
 
             {/* Format pill */}
-            <Popover open={openFormat} onOpenChange={setOpenFormat}>
+            <Popover
+              open={openFormat}
+              onOpenChange={createOnOpenChange('format', setOpenFormat)}
+            >
               <PopoverTrigger asChild>
                 <Button
                   type="button"
                   variant="outline"
                   size="sm"
-                  className="h-7 px-2 glass-input"
+                className="h-7 px-2 glass-input"
                   disabled={isLoading}
                   title="Issue format"
+                onPointerDown={event =>
+                  handleTriggerPointerDown(
+                    event,
+                    openFormat,
+                    'format',
+                    setOpenFormat
+                  )
+                }
                 >
                   <CgNotes />
-                  <span className="text-sm text-neutral-600">
-                    Format <span className="text-neutral-400">▾</span>
-                  </span>
-                  <span className="ml-2 text-sm text-neutral-900 truncate max-w-[140px]">
+                <div className="flex items-center gap-2 text-sm text-neutral-600">
+                  <span>Format</span>
+                  <span className="text-neutral-900 truncate max-w-[120px]">
                     {(() => {
                       const f = watchedValues.issueFormat;
                       if (!f) return 'Select';
@@ -1073,6 +1150,13 @@ export const CompactIssueCreator: React.FC<CompactIssueCreatorProps> = ({
                       return String(f);
                     })()}
                   </span>
+                </div>
+                <ChevronRight
+                  className={cn(
+                    'h-3.5 w-3.5 text-neutral-400 transition-transform duration-200',
+                    openFormat && 'rotate-90'
+                  )}
+                />
                 </Button>
               </PopoverTrigger>
               <PopoverContent
@@ -1085,30 +1169,47 @@ export const CompactIssueCreator: React.FC<CompactIssueCreatorProps> = ({
             </Popover>
 
             {/* Assignee pill */}
-            <Popover open={openAssignee} onOpenChange={setOpenAssignee}>
+            <Popover
+              open={openAssignee}
+              onOpenChange={createOnOpenChange('assignee', setOpenAssignee)}
+            >
               <PopoverTrigger asChild>
                 <Button
                   type="button"
                   variant="outline"
                   size="sm"
-                  className="h-7 px-2 glass-input"
+                className="h-7 px-2 glass-input"
                   disabled={isLoading || !watchedValues.projectId}
                   title="Assign"
+                onPointerDown={event =>
+                  handleTriggerPointerDown(
+                    event,
+                    openAssignee,
+                    'assignee',
+                    setOpenAssignee
+                  )
+                }
                 >
                   <IoPersonOutline />
-                  <span className="text-sm text-neutral-600">
-                    Assignee <span className="text-neutral-400">▾</span>
-                  </span>
+                <div className="flex items-center gap-2 text-sm text-neutral-600">
+                  <span>Assignee</span>
                   {(() => {
                     const u = users.find(
                       u => u.id === watchedValues.assigneeId
                     );
                     return (
-                      <span className="ml-2 text-sm text-neutral-900 truncate max-w-[140px]">
+                      <span className="text-neutral-900 truncate max-w-[140px]">
                         {u ? u.name : 'Me'}
                       </span>
                     );
                   })()}
+                </div>
+                <ChevronRight
+                  className={cn(
+                    'h-3.5 w-3.5 text-neutral-400 transition-transform duration-200',
+                    openAssignee && 'rotate-90'
+                  )}
+                />
                 </Button>
               </PopoverTrigger>
               <PopoverContent
@@ -1120,27 +1221,37 @@ export const CompactIssueCreator: React.FC<CompactIssueCreatorProps> = ({
               </PopoverContent>
             </Popover>
             {/* Slack pill */}
-            <Popover open={openSlack} onOpenChange={setOpenSlack}>
+            <Popover
+              open={openSlack}
+              onOpenChange={createOnOpenChange('slack', setOpenSlack)}
+            >
               <PopoverTrigger asChild>
                 <Button
                   type="button"
                   variant="outline"
                   size="sm"
-                  className="h-7 px-2 glass-input"
+                className="h-7 px-2 glass-input"
                   disabled={isLoading}
                   title="Slack notification"
+                onPointerDown={event =>
+                  handleTriggerPointerDown(
+                    event,
+                    openSlack,
+                    'slack',
+                    setOpenSlack
+                  )
+                }
                 >
                   <PiSlackLogoLight />
-                  <span className="text-sm text-neutral-600">
-                    Slack <span className="text-neutral-400">▾</span>
-                  </span>
+                <div className="flex items-center gap-2 text-sm text-neutral-600">
+                  <span>Slack</span>
                   {(() => {
                     const enabled = slackEnabled;
                     const ch = (slackChannelsQuery.data || []).find(
                       (c: any) => c.id === watchedValues.slackChannelId
                     );
                     return (
-                      <span className="ml-2 text-sm text-neutral-900 truncate max-w-[160px]">
+                      <span className="text-neutral-900 truncate max-w-[150px]">
                         {enabled ? (
                           ch ? (
                             <>
@@ -1156,6 +1267,13 @@ export const CompactIssueCreator: React.FC<CompactIssueCreatorProps> = ({
                       </span>
                     );
                   })()}
+                </div>
+                <ChevronRight
+                  className={cn(
+                    'h-3.5 w-3.5 text-neutral-400 transition-transform duration-200',
+                    openSlack && 'rotate-90'
+                  )}
+                />
                 </Button>
               </PopoverTrigger>
               <PopoverContent

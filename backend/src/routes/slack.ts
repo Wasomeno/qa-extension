@@ -5,12 +5,12 @@ import { asyncHandler, sendResponse } from '../middleware/errorHandler';
 import { SlackService } from '../services/slack';
 import { logger } from '../utils/logger';
 import crypto from 'crypto';
-import { RedisService } from '../services/redis';
+import { redisService } from '../services/redis';
 import { databaseService } from '../services/database';
 
 const router = Router();
 const slackService = new SlackService();
-const redis = new RedisService();
+// Redis service is now a singleton, use directly where needed
 
 router.get(
   '/channels',

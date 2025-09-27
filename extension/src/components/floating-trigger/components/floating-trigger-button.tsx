@@ -3,6 +3,12 @@ import { motion } from 'framer-motion';
 import { ImMagicWand } from 'react-icons/im';
 
 import { useKeyboardIsolation } from '@/hooks/useKeyboardIsolation';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/src/components/ui/ui/tooltip';
 
 type ViewState = 'closed' | 'features' | 'feature-detail';
 
@@ -27,6 +33,14 @@ const FloatingTriggerButton: React.FC<FloatingTriggerButtonProps> = ({
   const rootRef = React.useRef<HTMLDivElement>(null);
   // Keep light background, but adapt text color for contrast
   const [onDarkBackdrop, setOnDarkBackdrop] = React.useState(false);
+  const [isHovered, setIsHovered] = React.useState(false);
+  const [showTooltip, setShowTooltip] = React.useState(false);
+  const [isAnimating, setIsAnimating] = React.useState(false);
+  const [isDragging, setIsDragging] = React.useState(false);
+  const [dragStartPosition, setDragStartPosition] = React.useState<{
+    x: number;
+    y: number;
+  } | null>(null);
 
   // Lightweight backdrop luminance detection to choose text tone only
   React.useEffect(() => {
@@ -117,11 +131,74 @@ const FloatingTriggerButton: React.FC<FloatingTriggerButtonProps> = ({
     };
   }, [position.x, position.y, viewState]);
 
+  // Track when we're transitioning to closed state
+  React.useEffect(() => {
+    if (viewState === 'closed' && open) {
+      // Just transitioned from open to closed - start animation period
+      setShowTooltip(false);
+    } else if (viewState !== 'closed') {
+      setShowTooltip(false);
+    }
+  }, [viewState, open]);
+
+  // Control tooltip visibility
+  React.useEffect(() => {
+    if (viewState === 'closed' && isHovered && !isAnimating && !isDragging) {
+      setShowTooltip(true);
+    } else {
+      setShowTooltip(false);
+    }
+  }, [viewState, isHovered, isAnimating, isDragging]);
+
+  // Handle drag detection
+  const handleMouseDown = React.useCallback(
+    (e: React.MouseEvent) => {
+      setDragStartPosition({ x: e.clientX, y: e.clientY });
+      setIsDragging(false);
+      onMouseDown(e);
+    },
+    [onMouseDown]
+  );
+
+  React.useEffect(() => {
+    if (!dragStartPosition) return;
+
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!dragStartPosition) return;
+
+      const dx = e.clientX - dragStartPosition.x;
+      const dy = e.clientY - dragStartPosition.y;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+
+      // Consider it a drag if moved more than 3 pixels
+      if (distance > 3 && !isDragging) {
+        setIsDragging(true);
+        setShowTooltip(false);
+      }
+    };
+
+    const handleMouseUp = () => {
+      setDragStartPosition(null);
+      // Keep isDragging true for a brief moment to prevent tooltip flicker
+      setTimeout(() => setIsDragging(false), 100);
+    };
+
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [dragStartPosition, isDragging]);
+
   return (
     <motion.div
       ref={rootRef}
       initial={false}
-      className={`floating-trigger ${open ? 'ft-glass' : ''} qa-theme-light ${onDarkBackdrop ? 'qa-text-dark' : 'qa-text-light'}`}
+      onAnimationStart={() => setIsAnimating(true)}
+      onAnimationComplete={() => setIsAnimating(false)}
+      className={`floating-trigger ${open ? 'ft-glass' : ''} qa-theme-light ${onDarkBackdrop ? 'qa-text-dark' : 'qa-text-light'} ${viewState === 'closed' && !isHovered ? 'bg-gradient-to-r from-red-500 to-orange-500' : ''}`}
       style={{
         position: 'fixed',
         left: position.x,
@@ -130,9 +207,17 @@ const FloatingTriggerButton: React.FC<FloatingTriggerButtonProps> = ({
         pointerEvents: 'auto',
         backdropFilter: viewState === 'closed' ? 'blur(12px)' : 'blur(16px)',
         background:
-          viewState === 'closed' ? 'var(--qa-glass)' : 'var(--qa-glass)',
+          viewState === 'closed' && !isHovered
+            ? undefined
+            : viewState === 'closed'
+              ? 'var(--qa-glass)'
+              : 'var(--qa-glass)',
         border:
-          viewState === 'closed' ? '1px solid var(--qa-border)' : undefined,
+          viewState === 'closed' && !isHovered
+            ? 'none'
+            : viewState === 'closed'
+              ? '1px solid var(--qa-border)'
+              : undefined,
         boxShadow:
           viewState === 'closed'
             ? '0 4px 12px rgba(0,0,0,0.15)'
@@ -140,39 +225,93 @@ const FloatingTriggerButton: React.FC<FloatingTriggerButtonProps> = ({
       }}
       animate={{
         width:
-          viewState === 'closed' ? 45 : viewState === 'features' ? 260 : 400,
+          viewState === 'closed'
+            ? isHovered
+              ? 50
+              : 25
+            : viewState === 'features'
+              ? 260
+              : 400,
         height:
           viewState === 'closed'
-            ? 45
+            ? isHovered
+              ? 50
+              : 25
             : viewState === 'features'
               ? 300
               : selectedFeature === 'pinned'
                 ? 340
                 : 480,
-        borderRadius: viewState === 'closed' ? 30 : 16,
-        scale: viewState === 'closed' ? 1 : 1,
+        borderRadius: viewState === 'closed' ? (isHovered ? 100 : 100) : 16,
+        scale: 1,
+        opacity: 1,
       }}
       transition={{
         type: 'spring',
-        stiffness: 120,
-        damping: 12,
-        mass: 0.75,
+        stiffness: 200,
+        damping: 15,
+        mass: 0.6,
         ease: 'easeInOut',
       }}
       {...keyboardIsolation}
     >
       {viewState === 'closed' ? (
-        <motion.div
-          key="button"
-          initial={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          className="w-full h-full flex items-center justify-center cursor-pointer"
-          onMouseDown={onMouseDown}
-        >
-          <motion.div whileTap={{ scale: 0.8 }}>
-            <ImMagicWand className="w-4 h-4 text-[color:var(--qa-fg)]" />
-          </motion.div>
-        </motion.div>
+        <TooltipProvider>
+          <Tooltip open={showTooltip}>
+            <TooltipTrigger asChild>
+              <motion.div
+                key="button"
+                initial={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="w-full h-full flex items-center justify-center cursor-pointer"
+                onMouseDown={handleMouseDown}
+                onMouseEnter={() => setIsHovered(true)}
+                onMouseLeave={() => setIsHovered(false)}
+              >
+                <motion.div
+                  animate={{
+                    scale: isHovered ? 1 : 0,
+                    opacity: isHovered ? 1 : 0,
+                    rotate: isHovered && !isDragging ? 5 : 0,
+                  }}
+                  whileTap={!isDragging ? { scale: 0.8, rotate: -5 } : {}}
+                  transition={{
+                    type: 'spring',
+                    stiffness: 300,
+                    damping: 20,
+                    mass: 0.4,
+                  }}
+                  style={{ pointerEvents: 'none' }}
+                >
+                  <img
+                    src="https://harlequin-unemployed-donkey-752.mypinata.cloud/ipfs/bafkreifqjkrounrfbhp6uabalj645txqku46o7w4j5loge4esludxnt2k4"
+                    aria-label="logo"
+                    className="w-9 h-9"
+                    style={{ pointerEvents: 'none', userSelect: 'none' }}
+                  />
+                </motion.div>
+              </motion.div>
+            </TooltipTrigger>
+            <TooltipContent
+              side="top"
+              sideOffset={12}
+              className="animate-in fade-in-0 zoom-in-95 slide-in-from-bottom-2 duration-200"
+            >
+              <motion.div
+                initial={{ y: 5, opacity: 0 }}
+                animate={{ y: 0, opacity: 1 }}
+                transition={{
+                  type: 'spring',
+                  stiffness: 400,
+                  damping: 25,
+                  duration: 0.2,
+                }}
+              >
+                Let's manage some issue!
+              </motion.div>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
       ) : (
         <motion.div
           key="content"

@@ -1,7 +1,7 @@
 import { Server as SocketIOServer, Socket } from 'socket.io';
 import jwt from 'jsonwebtoken';
 import { DatabaseService } from './database';
-import { RedisService } from './redis';
+import { redisService } from './redis';
 import { logger } from '../utils/logger';
 import { EnvConfig } from '../config/env';
 
@@ -53,7 +53,7 @@ export class WebSocketService {
   constructor(io: SocketIOServer) {
     this.io = io;
     this.db = new DatabaseService();
-    this.redis = new RedisService();
+    this.redis = redisService;
   }
 
   public initialize(): void {

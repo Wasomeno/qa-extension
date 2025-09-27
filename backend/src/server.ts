@@ -18,7 +18,7 @@ import { slackRouter } from './routes/slack';
 import { healthRouter } from './routes/health';
 import { scenariosRouter } from './routes/scenarios';
 import { databaseService } from './services/database';
-import { RedisService } from './services/redis';
+import { redisService } from './services/redis';
 import { WebSocketService } from './services/websocket';
 import { logger } from './utils/logger';
 import { EnvConfig } from './config/env';
@@ -31,7 +31,7 @@ class App {
   public server: any;
   public io: SocketIOServer;
   private databaseService = databaseService;
-  private redisService: RedisService;
+  private redisService = redisService;
   private webSocketService: WebSocketService;
 
   constructor() {
@@ -44,7 +44,6 @@ class App {
       }
     });
 
-    this.redisService = new RedisService();
     this.webSocketService = new WebSocketService(this.io);
 
     this.initializeMiddleware();

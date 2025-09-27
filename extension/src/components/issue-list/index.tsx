@@ -5,6 +5,7 @@ import useInfiniteIssues from '@/hooks/useInfiniteIssues';
 import api, { GitLabUser, Project } from '@/services/api';
 import { cn } from '@/lib/utils';
 import { useKeyboardIsolation } from '@/hooks/useKeyboardIsolation';
+import useAuth from '@/hooks/useAuth';
 import { Button } from '@/src/components/ui/ui/button';
 import { Input } from '@/src/components/ui/ui/input';
 // Select components are used in subcomponents
@@ -25,6 +26,7 @@ import {
 import { Checkbox } from '@/src/components/ui/ui/checkbox';
 import AvatarGroup from '@/components/issue-list/AvatarGroup';
 import { Label } from '@/src/components/ui/ui/label';
+import { ChevronRight } from 'lucide-react';
 // Icons used in subcomponents
 import { storageService } from '@/services/storage';
 import IssueRow from '@/components/issue-list/issue-row';
@@ -62,18 +64,12 @@ const useUsersQuery = (projectId: string, search: string) => {
   });
 };
 
-const useLabelsQuery = (projectId: string, enabled: boolean) => {
-  return useQuery({
-    queryKey: ['labels', projectId],
-    queryFn: async () => {
-      if (!projectId) return [];
-      const res = await api.getGitLabProjectLabels(projectId);
-      if (!res.success) throw new Error(res.error || 'Failed to load labels');
-      return res.data?.items || [];
-    },
-    enabled: !!projectId && enabled,
-    staleTime: 300_000,
-  });
+type GitLabLabel = {
+  id: number;
+  name: string;
+  color: string;
+  text_color?: string;
+  description?: string;
 };
 
 function SkeletonRow() {
@@ -99,6 +95,8 @@ const IssueListInner: React.FC<IssueListProps> = ({
   const queryClient = useQueryClient();
   const keyboardIsolation = useKeyboardIsolation();
   const sentinelRef = React.useRef<HTMLDivElement | null>(null);
+  const { user } = useAuth();
+  const projectFiltersInitializedRef = React.useRef(false);
 
   const [search, setSearch] = React.useState('');
   // Filters
@@ -131,19 +129,60 @@ const IssueListInner: React.FC<IssueListProps> = ({
     selectedProjectIds.length === 1 ? selectedProjectIds[0] : '',
     debouncedAssigneeQuery
   );
-  const projectLabelsQuery = useLabelsQuery(
-    selectedProjectIds.length === 1 ? selectedProjectIds[0] : '',
-    openLabels
-  );
+  const labelsQueries = useQueries({
+    queries: selectedProjectIds.map(pid => ({
+      queryKey: ['labels', pid],
+      enabled: !!pid,
+      staleTime: 300_000,
+      queryFn: async () => {
+        const res = await api.getGitLabProjectLabels(pid);
+        if (!res.success) throw new Error(res.error || 'Failed to load labels');
+        return res.data?.items || [];
+      },
+    })),
+  });
 
   // Extract data and states from queries
   const projects = projectsQuery.data || [];
   const users = usersQuery.data || [];
-  const labelsOptions = projectLabelsQuery.data || [];
+  const combinedLabels = React.useMemo(() => {
+    const map = new Map<string, GitLabLabel>();
+    labelsQueries.forEach(query => {
+      if (!query.data) return;
+      (query.data as GitLabLabel[]).forEach(label => {
+        const key = `${label.name.toLowerCase()}`;
+        if (!map.has(key)) {
+          map.set(key, label);
+        }
+      });
+    });
+    return Array.from(map.values());
+  }, [labelsQueries]);
+
+  const labelsOptions = React.useMemo(() => {
+    if (!selectedProjectIds.length) return [] as GitLabLabel[];
+    return combinedLabels;
+  }, [combinedLabels, selectedProjectIds.length]);
   const loadingProjects = projectsQuery.isLoading;
   const loadingUsers = usersQuery.isLoading;
-  const loadingLabels = projectLabelsQuery.isLoading;
-  const authError = projectsQuery.error?.message || usersQuery.error?.message || projectLabelsQuery.error?.message || null;
+  const loadingLabels = React.useMemo(() => {
+    if (!selectedProjectIds.length) return false;
+    return labelsQueries.some(query => query.isLoading || query.isFetching);
+  }, [labelsQueries, selectedProjectIds.length]);
+  const authError = React.useMemo(() => {
+    const projErr = projectsQuery.error as any;
+    const userErr = usersQuery.error as any;
+    const labelErr = labelsQueries.find(query => query.error)?.error as any;
+    return (
+      projErr?.message ||
+      userErr?.message ||
+      labelErr?.message ||
+      projErr ||
+      userErr ||
+      labelErr ||
+      null
+    );
+  }, [projectsQuery.error, usersQuery.error, labelsQueries]);
   const [selectedIssue, setSelectedIssue] = React.useState<any | null>(null);
 
   // Removed ineffective useEffects - now handled by React Query hooks above
@@ -232,25 +271,23 @@ const IssueListInner: React.FC<IssueListProps> = ({
     })),
   });
   const labelPalettes = React.useMemo(() => {
-    const map: Record<
-      string,
-      Map<
-        string,
-        {
-          id: number;
-          name: string;
-          color: string;
-          text_color?: string;
-          description?: string;
-        }
-      >
-    > = {};
+    const map: Record<string, Map<string, GitLabLabel>> = {};
     labelQueries.forEach((q, idx) => {
       const pid = projectIds[idx];
-      const labels = (q.data as any[]) || [];
-      const inner = new Map<string, any>();
-      labels.forEach((l: any) => inner.set(l.name, l));
+      const labels = (q.data as GitLabLabel[]) || [];
+      const inner = new Map<string, GitLabLabel>();
+      labels.forEach((l: GitLabLabel) => inner.set(l.name, l));
       map[pid] = inner;
+    });
+    return map;
+  }, [labelQueries, projectIds]);
+
+  const labelLoadingMap = React.useMemo(() => {
+    const map: Record<string, boolean> = {};
+    labelQueries.forEach((q, idx) => {
+      const pid = projectIds[idx];
+      if (!pid) return;
+      map[pid] = Boolean((q as any)?.isLoading || (q as any)?.isFetching);
     });
     return map;
   }, [labelQueries, projectIds]);
@@ -276,13 +313,32 @@ const IssueListInner: React.FC<IssueListProps> = ({
     );
   };
 
+  const handleTriggerPointerDown = <T extends React.PointerEvent>(
+    event: T,
+    openState: boolean,
+    key: 'projects' | 'labels' | 'assignees',
+    setter: React.Dispatch<React.SetStateAction<boolean>>
+  ) => {
+    if (!openState) return;
+    event.preventDefault();
+    suppressOpenRefs.current[key] = true;
+    setter(false);
+  };
+
+  const suppressOpenRefs = React.useRef({
+    projects: false,
+    labels: false,
+    assignees: false,
+  });
+
   const toggleProject = (id: string) => {
     setSelectedProjectIds(prev => {
       const next = prev.includes(id)
         ? prev.filter(p => p !== id)
         : [...prev, id];
-      // If moving away from a single selected project, clear labels to avoid cross-project mismatch
-      if (next.length !== 1 && selectedLabels.length) setSelectedLabels([]);
+      if (next.length === 0) {
+        setSelectedLabels([]);
+      }
       return next;
     });
   };
@@ -292,6 +348,19 @@ const IssueListInner: React.FC<IssueListProps> = ({
       prev.includes(id) ? prev.filter(p => p !== id) : [...prev, id]
     );
   };
+
+  const createOnOpenChange = (
+    key: 'projects' | 'labels' | 'assignees',
+    setter: React.Dispatch<React.SetStateAction<boolean>>
+  ) =>
+    (next: boolean) => {
+      if (next && suppressOpenRefs.current[key]) {
+        suppressOpenRefs.current[key] = false;
+        return;
+      }
+      suppressOpenRefs.current[key] = false;
+      setter(next);
+    };
 
   const visibleIssues = React.useMemo(() => {
     let out = items;
@@ -323,6 +392,71 @@ const IssueListInner: React.FC<IssueListProps> = ({
   // Pinned triage state
   const [pinnedIds, setPinnedIds] = React.useState<Set<string>>(new Set());
   const [pinnedCount, setPinnedCount] = React.useState(0);
+
+  // Evidence mode state - tracks which issue cards are in evidence mode
+  const [evidenceModeIds, setEvidenceModeIds] = React.useState<Set<string>>(new Set());
+
+  React.useEffect(() => {
+    let cancelled = false;
+    const userId = user?.id;
+    projectFiltersInitializedRef.current = false;
+
+    if (!userId) {
+      setSelectedProjectIds([]);
+      projectFiltersInitializedRef.current = true;
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    (async () => {
+      try {
+        const filters = await storageService.getIssueFilters();
+        const selection = filters[userId];
+        const ids = Array.isArray(selection?.projectIds)
+          ? selection.projectIds.map(String)
+          : [];
+        if (!cancelled) {
+          setSelectedProjectIds(prev => {
+            const sameLength = prev.length === ids.length;
+            const sameContent =
+              sameLength && prev.every((value, idx) => value === ids[idx]);
+            return sameContent ? prev : ids;
+          });
+        }
+      } catch {
+        if (!cancelled) {
+          setSelectedProjectIds([]);
+        }
+      } finally {
+        if (!cancelled) {
+          projectFiltersInitializedRef.current = true;
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id]);
+
+  React.useEffect(() => {
+    const userId = user?.id;
+    if (!userId || !projectFiltersInitializedRef.current) return;
+
+    (async () => {
+      try {
+        if (selectedProjectIds.length) {
+          await storageService.updateIssueFilter(userId, {
+            projectIds: selectedProjectIds,
+            updatedAt: Date.now(),
+          });
+        } else {
+          await storageService.updateIssueFilter(userId, null);
+        }
+      } catch {}
+    })();
+  }, [selectedProjectIds, user?.id]);
 
   React.useEffect(() => {
     let unsub: (() => void) | null = null;
@@ -369,6 +503,27 @@ const IssueListInner: React.FC<IssueListProps> = ({
         Object.assign({}, item as any, { lastSyncedAt: Date.now() }) as any
       );
     } catch {}
+  };
+
+  // Evidence mode handlers
+  const toggleEvidenceMode = (id: string) => {
+    setEvidenceModeIds(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(id)) {
+        newSet.delete(id);
+      } else {
+        newSet.add(id);
+      }
+      return newSet;
+    });
+  };
+
+  const exitEvidenceMode = (id: string) => {
+    setEvidenceModeIds(prev => {
+      const newSet = new Set(prev);
+      newSet.delete(id);
+      return newSet;
+    });
   };
 
   // Handlers and helpers moved out of JSX
@@ -624,6 +779,8 @@ const IssueListInner: React.FC<IssueListProps> = ({
     const iid = item.number as number | undefined;
     const palette = projectId ? labelPalettes[projectId] : undefined;
     const selectedLabels = Array.isArray(item.labels) ? item.labels : [];
+    const isInEvidenceMode = evidenceModeIds.has(item.id);
+    
     return (
       <IssueRow
         key={item.id}
@@ -641,6 +798,11 @@ const IssueListInner: React.FC<IssueListProps> = ({
           handleIssueStatusChange(projectId, iid, val)
         }
         portalContainer={portalContainer}
+        labelsLoading={projectId ? labelLoadingMap[projectId] : false}
+        // Evidence mode props
+        isInEvidenceMode={isInEvidenceMode}
+        onToggleEvidenceMode={() => toggleEvidenceMode(item.id)}
+        onExitEvidenceMode={() => exitEvidenceMode(item.id)}
       />
     );
   };
@@ -726,24 +888,73 @@ const IssueListInner: React.FC<IssueListProps> = ({
         <div className="grid grid-cols-3 gap-2">
           <div className="space-y-1">
             <Label className="text-xs">Project</Label>
-            <Popover open={openProjects} onOpenChange={setOpenProjects}>
+            <Popover
+              open={openProjects}
+              onOpenChange={createOnOpenChange('projects', setOpenProjects)}
+            >
               <PopoverTrigger asChild>
                 <Button
                   type="button"
                   variant="outline"
-                  className="text-xs h-8 glass-input w-full justify-between"
+                className="text-xs h-8 glass-input w-full justify-between"
                   disabled={isLoading || projectsQuery.isLoading}
+                onPointerDown={event =>
+                  handleTriggerPointerDown(
+                    event,
+                    openProjects,
+                    'projects',
+                    setOpenProjects
+                  )
+                }
                 >
-                  <span className="truncate">
-                    {selectedProjectIds.length > 0
-                      ? `${selectedProjectIds.length} selected`
-                      : 'All projects'}
-                  </span>
-                  {selectedProjectIds.length > 0 && (
-                    <Badge variant="secondary" className="ml-2 text-[10px]">
+                <div className="flex items-center gap-2 truncate">
+                  {selectedProjectIds.length === 0 && (
+                    <span className="truncate">All projects</span>
+                  )}
+                  {selectedProjectIds.length === 1 && (
+                    <Badge
+                      variant="secondary"
+                      className="text-[10px] px-2 py-1 truncate max-w-[140px]"
+                    >
+                      {(() => {
+                        const selected = projects.find(
+                          p => String(p.id) === selectedProjectIds[0]
+                        );
+                        return selected ? selected.name : '1 selected';
+                      })()}
+                    </Badge>
+                  )}
+                  {selectedProjectIds.length > 1 && (
+                    <div className="flex items-center gap-1 truncate">
+                      <span className="truncate">
+                        {(() => {
+                          const [firstId] = selectedProjectIds;
+                          const firstProject = projects.find(
+                            p => String(p.id) === firstId
+                          );
+                          if (!firstProject) {
+                            return `${selectedProjectIds.length} selected`;
+                          }
+                          const remaining = selectedProjectIds.length - 1;
+                          return `${firstProject.name}${remaining > 0 ? ` +${remaining}` : ''}`;
+                        })()}
+                      </span>
+                    </div>
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  {selectedProjectIds.length > 1 && (
+                    <Badge variant="secondary" className="text-[10px]">
                       {selectedProjectIds.length}
                     </Badge>
                   )}
+                  <ChevronRight
+                    className={cn(
+                      'h-3.5 w-3.5 text-neutral-400 transition-transform duration-200',
+                      openProjects && 'rotate-90'
+                    )}
+                  />
+                </div>
                 </Button>
               </PopoverTrigger>
               <PopoverContent
@@ -786,26 +997,69 @@ const IssueListInner: React.FC<IssueListProps> = ({
           </div>
           <div className="space-y-1">
             <Label className="text-xs">Labels & Status</Label>
-            <Popover open={openLabels} onOpenChange={setOpenLabels}>
+            <Popover
+              open={openLabels}
+              onOpenChange={createOnOpenChange('labels', setOpenLabels)}
+            >
               <PopoverTrigger asChild>
                 <Button
                   type="button"
                   variant="outline"
-                  className="text-xs h-8 glass-input w-full justify-between"
-                  disabled={isLoading || projectLabelsQuery.isLoading}
+                className="text-xs h-8 glass-input w-full justify-between"
+                  disabled={isLoading || loadingLabels}
+                onPointerDown={event =>
+                  handleTriggerPointerDown(
+                    event,
+                    openLabels,
+                    'labels',
+                    setOpenLabels
+                  )
+                }
                 >
-                  <span className="truncate">
-                    {(selectedLabels.length + selectedStatuses.length) > 0
-                      ? `${selectedLabels.length + selectedStatuses.length} selected`
-                      : selectedProjectIds.length === 1
+                <div className="flex items-center gap-2 truncate">
+                  {(selectedLabels.length + selectedStatuses.length) === 0 && (
+                    <span className="truncate">
+                      {selectedProjectIds.length
                         ? 'Select labels/status'
-                        : 'Select labels/status'}
-                  </span>
+                        : 'Select a project first'}
+                    </span>
+                  )}
+                  {(selectedLabels.length + selectedStatuses.length) === 1 && (
+                    <Badge
+                      variant="secondary"
+                      className="text-[10px] px-2 py-1 truncate max-w-[140px]"
+                    >
+                      {(() => {
+                        const combined = [...selectedStatuses, ...selectedLabels];
+                        const name = combined[0];
+                        return name || '1 selected';
+                      })()}
+                    </Badge>
+                  )}
+                  {(selectedLabels.length + selectedStatuses.length) > 1 && (
+                    <span className="truncate">
+                      {(() => {
+                        const combined = [...selectedStatuses, ...selectedLabels];
+                        const first = combined[0];
+                        const remaining = combined.length - 1;
+                        return `${first}${remaining > 0 ? ` +${remaining}` : ''}`;
+                      })()}
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
                   {(selectedLabels.length + selectedStatuses.length) > 0 && (
-                    <Badge variant="secondary" className="ml-2 text-[10px]">
+                    <Badge variant="secondary" className="text-[10px]">
                       {selectedLabels.length + selectedStatuses.length}
                     </Badge>
                   )}
+                  <ChevronRight
+                    className={cn(
+                      'h-3.5 w-3.5 text-neutral-400 transition-transform duration-200',
+                      openLabels && 'rotate-90'
+                    )}
+                  />
+                </div>
                 </Button>
               </PopoverTrigger>
               <PopoverContent
@@ -844,9 +1098,11 @@ const IssueListInner: React.FC<IssueListProps> = ({
                         )}
 
                         {/* Label options */}
-                        {visibleLabels.length === 0 && selectedProjectIds.length === 1 ? (
+                        {visibleLabels.length === 0 ? (
                           <li className="text-xs text-neutral-500 px-1 py-2">
-                            No labels found
+                            {selectedProjectIds.length
+                              ? 'No labels found for selected projects'
+                              : 'Select at least one project to load labels'}
                           </li>
                         ) : (
                           visibleLabels.map(renderLabelOption)
@@ -862,24 +1118,79 @@ const IssueListInner: React.FC<IssueListProps> = ({
           {/* Assignee (multi-select) */}
           <div className="space-y-1">
             <Label className="text-xs">Assignee</Label>
-            <Popover open={openAssignees} onOpenChange={setOpenAssignees}>
+            <Popover
+              open={openAssignees}
+              onOpenChange={createOnOpenChange('assignees', setOpenAssignees)}
+            >
               <PopoverTrigger asChild>
                 <Button
                   type="button"
                   variant="outline"
-                  className="text-xs h-8 glass-input w-full justify-between"
+                className="text-xs h-8 glass-input w-full justify-between"
                   disabled={isLoading || usersQuery.isLoading}
+                onPointerDown={event =>
+                  handleTriggerPointerDown(
+                    event,
+                    openAssignees,
+                    'assignees',
+                    setOpenAssignees
+                  )
+                }
                 >
-                  <span className="truncate">
-                    {selectedAssigneeIds.length > 0
-                      ? `${selectedAssigneeIds.length} selected`
-                      : 'Anyone'}
-                  </span>
+                <div className="flex items-center gap-2 truncate">
+                  {selectedAssigneeIds.length === 0 && (
+                    <span className="truncate">Anyone</span>
+                  )}
+                  {selectedAssigneeIds.length === 1 && (
+                    <Badge
+                      variant="secondary"
+                      className="text-[10px] px-2 py-1 truncate max-w-[140px]"
+                    >
+                      {(() => {
+                        const selectedUser = users.find(
+                          u => String(u.id) === selectedAssigneeIds[0]
+                        );
+                        if (selectedAssigneeIds[0] === 'unassigned') {
+                          return 'Unassigned';
+                        }
+                        return selectedUser
+                          ? selectedUser.name || selectedUser.username
+                          : '1 selected';
+                      })()}
+                    </Badge>
+                  )}
+                  {selectedAssigneeIds.length > 1 && (
+                    <span className="truncate">
+                      {(() => {
+                        const firstId = selectedAssigneeIds[0];
+                        let firstLabel = 'Multiple';
+                        if (firstId === 'unassigned') {
+                          firstLabel = 'Unassigned';
+                        } else {
+                          const firstUser = users.find(u => String(u.id) === firstId);
+                          if (firstUser) {
+                            firstLabel = firstUser.name || `@${firstUser.username}`;
+                          }
+                        }
+                        const remaining = selectedAssigneeIds.length - 1;
+                        return `${firstLabel}${remaining > 0 ? ` +${remaining}` : ''}`;
+                      })()}
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
                   {selectedAssigneeIds.length > 0 && (
-                    <Badge variant="secondary" className="ml-2 text-[10px]">
+                    <Badge variant="secondary" className="text-[10px]">
                       {selectedAssigneeIds.length}
                     </Badge>
                   )}
+                  <ChevronRight
+                    className={cn(
+                      'h-3.5 w-3.5 text-neutral-400 transition-transform duration-200',
+                      openAssignees && 'rotate-90'
+                    )}
+                  />
+                </div>
                 </Button>
               </PopoverTrigger>
               <PopoverContent

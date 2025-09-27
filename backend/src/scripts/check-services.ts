@@ -2,7 +2,7 @@
 
 import { EnvConfig } from '../config/env';
 import { DatabaseService } from '../services/database';
-import { RedisService } from '../services/redis';
+import { redisService } from '../services/redis';
 
 /**
  * Service availability checker
@@ -40,11 +40,14 @@ class ServiceChecker {
 
   private async checkRedis(): Promise<boolean> {
     try {
-      const redis = new RedisService();
-      await redis.connect();
-      await redis.disconnect();
-      console.log('✅ Redis: Connected successfully');
-      return true;
+      const isHealthy = await redisService.healthCheck();
+      if (isHealthy) {
+        console.log('✅ Redis: Connected successfully');
+        return true;
+      } else {
+        console.log('❌ Redis: Health check failed');
+        return false;
+      }
     } catch (error) {
       console.log('❌ Redis: Not available');
       console.log(`   Error: ${(error as Error).message}`);

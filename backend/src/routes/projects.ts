@@ -944,9 +944,20 @@ router.get(
       const perPage = parseInt(limit as string, 10) || 5;
       const pageNum = parseInt(page as string, 10) || 1;
 
+      const labelString = typeof labels === 'string' ? labels : undefined;
+      const selectedLabels = labelString
+        ? labelString
+            .split(',')
+            .map((label: string) => label.trim())
+            .filter(Boolean)
+        : [];
+
+      const hasMultipleLabels = selectedLabels.length > 1;
+
       const issues = await gitlab.getAllIssues({
         state: (state as any) || 'opened',
-        labels: labels as string | undefined,
+        labels: labelString,
+        labels_match_mode: hasMultipleLabels ? 'or' : 'and',
         assignee_id,
         author_id,
         search: (search as string) || undefined,
@@ -972,6 +983,7 @@ router.get(
         id: String(it.id),
         number: it.iid,
         title: it.title,
+        web_url: it.web_url,
         project: {
           id: String(it.project_id),
           name: projectNameMap.get(it.project_id) || 'Project',

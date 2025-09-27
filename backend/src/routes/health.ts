@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { DatabaseService, databaseService } from '../services/database';
-import { RedisService } from '../services/redis';
+import { redisService } from '../services/redis';
 import { logger } from '../utils/logger';
 import { sendResponse, sendError } from '../middleware/errorHandler';
 
@@ -127,8 +127,7 @@ async function checkRedisHealth(): Promise<ServiceHealth> {
   const startTime = Date.now();
   
   try {
-    const redis = new RedisService();
-    await redis.ping();
+    await redisService.ping();
     
     return {
       status: 'healthy',

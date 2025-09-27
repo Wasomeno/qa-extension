@@ -3,6 +3,7 @@ import { logger } from '../utils/logger';
 import { EnvConfig } from '../config/env';
 
 export class RedisService {
+  private static instance: RedisService | null = null;
   private client: RedisClientType | null = null;
   private isConnected: boolean = false;
 
@@ -24,6 +25,13 @@ export class RedisService {
     });
 
     this.setupEventHandlers();
+  }
+
+  public static getInstance(): RedisService {
+    if (!RedisService.instance) {
+      RedisService.instance = new RedisService();
+    }
+    return RedisService.instance;
   }
 
   private setupEventHandlers(): void {
@@ -270,3 +278,6 @@ export class RedisService {
     return client.sMembers(`websocket_sessions:${userId}`);
   }
 }
+
+// Export singleton instance
+export const redisService = RedisService.getInstance();

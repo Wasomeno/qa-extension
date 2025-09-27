@@ -9,6 +9,8 @@ import {
   PopoverTrigger,
 } from '@/src/components/ui/ui/popover';
 import { cn } from '@/lib/utils';
+import { Skeleton } from '@/src/components/ui/ui/skeleton';
+import { ChevronRight } from 'lucide-react';
 
 function Dot({ color }: { color: string }) {
   return (
@@ -36,6 +38,7 @@ interface UnifiedStatusLabelsSelectProps {
   onSave?: () => void;
   onCancel?: () => void;
   saving?: boolean;
+  loading?: boolean;
 }
 
 const UnifiedStatusLabelsSelect: React.FC<UnifiedStatusLabelsSelectProps> = ({
@@ -48,9 +51,11 @@ const UnifiedStatusLabelsSelect: React.FC<UnifiedStatusLabelsSelectProps> = ({
   onSave,
   onCancel,
   saving,
+  loading,
 }) => {
   const [open, setOpen] = React.useState(false);
   const [query, setQuery] = React.useState('');
+  const suppressNextOpenRef = React.useRef(false);
 
   const handleStopPropagation = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -130,34 +135,63 @@ const UnifiedStatusLabelsSelect: React.FC<UnifiedStatusLabelsSelectProps> = ({
   const selectedLabelItems = allLabels.filter(l =>
     effectiveSelectedLabels.includes(l.name)
   );
+
+  const handleTriggerPointerDown = (
+    event: React.PointerEvent<HTMLButtonElement>
+  ) => {
+    if (!open) return;
+    event.preventDefault();
+    suppressNextOpenRef.current = true;
+    setOpen(false);
+  };
+
+  const handleOpenChange = (next: boolean) => {
+    if (next && suppressNextOpenRef.current) {
+      suppressNextOpenRef.current = false;
+      return;
+    }
+    suppressNextOpenRef.current = false;
+    setOpen(next);
+  };
   const currentStatusLabel = statusLabels.find(l => l.name === currentStatus);
 
   return (
     <div onClick={handleStopPropagation} className="space-y-2">
-      <Popover open={open} onOpenChange={setOpen}>
+      <Popover open={open} onOpenChange={handleOpenChange}>
         <PopoverTrigger asChild>
           <button
             type="button"
             className="inline-flex items-center justify-between w-full h-8 px-3 rounded-xl border glass-input text-xs shadow-sm"
+            onPointerDown={handleTriggerPointerDown}
           >
-            <div className="flex items-center gap-2">
-              {currentStatusLabel && (
-                <>
-                  <span
-                    className="inline-block w-2.5 h-2.5 rounded-full"
-                    style={{ backgroundColor: currentStatusLabel.color }}
-                  />
-                  <span className="font-medium capitalize">
-                    {currentStatus}
+            {loading ? (
+              <Skeleton className="h-4 w-24 rounded-full" />
+            ) : (
+              <div className="flex items-center gap-2">
+                {currentStatusLabel && (
+                  <>
+                    <span
+                      className="inline-block w-2.5 h-2.5 rounded-full"
+                      style={{ backgroundColor: currentStatusLabel.color }}
+                    />
+                    <span className="font-medium capitalize">
+                      {currentStatus}
+                    </span>
+                  </>
+                )}
+                {effectiveSelectedLabels.length > 1 && (
+                  <span className="text-neutral-500">
+                    +{effectiveSelectedLabels.length - 1}
                   </span>
-                </>
+                )}
+              </div>
+            )}
+            <ChevronRight
+              className={cn(
+                'h-3.5 w-3.5 text-neutral-400 transition-transform duration-200',
+                open && 'rotate-90'
               )}
-              {effectiveSelectedLabels.length > 1 && (
-                <span className="text-neutral-500">
-                  +{effectiveSelectedLabels.length - 1}
-                </span>
-              )}
-            </div>
+            />
           </button>
         </PopoverTrigger>
         <PopoverContent
@@ -166,112 +200,78 @@ const UnifiedStatusLabelsSelect: React.FC<UnifiedStatusLabelsSelectProps> = ({
           sideOffset={8}
           align="start"
         >
-          {/* Search and Selected Chips */}
-          <div className="p-2 border-b bg-neutral-50/30">
-            <Input
-              value={query}
-              onChange={e => setQuery(e.target.value)}
-              placeholder="Search labels"
-              className="text-xs h-7 glass-input"
-            />
-            {/* Selected chips */}
-            {selectedLabelItems.length > 0 && (
-              <div className="mt-1.5 flex flex-wrap gap-1">
-                {selectedLabelItems.map(l => {
-                  const isStatusLabel =
-                    l.name.toLowerCase() === 'open' ||
-                    l.name.toLowerCase() === 'closed';
-                  return (
-                    <Badge
-                      key={l.id}
-                      variant="secondary"
-                      className={cn(
-                        'gap-1 glass-card border-white/50 bg-white/60 backdrop-blur-sm transition-all duration-200 ease-in-out text-xs h-5 px-1.5',
-                        isStatusLabel && 'ring-1 ring-blue-200 bg-blue-50/60'
-                      )}
-                    >
-                      <span
-                        className="inline-block h-2 w-2 rounded-full border transition-all duration-200 ease-in-out"
-                        style={{ backgroundColor: l.color }}
-                      />
-                      <span className={isStatusLabel ? 'capitalize' : ''}>
-                        {l.name}
-                      </span>
-                      {!isStatusLabel && (
-                        <button
-                          onClick={() => toggleLabel(l.name)}
-                          className="ml-0.5 -mr-0.5 h-3 w-3 rounded-full grid place-items-center hover:bg-neutral-200 transition-all duration-150 ease-in-out text-xs"
-                          title={`Remove ${l.name}`}
-                        >
-                          ×
-                        </button>
-                      )}
-                    </Badge>
-                  );
-                })}
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={clearAll}
-                  className="h-5 px-1.5 ml-0.5 text-xs glass-button"
-                >
-                  Clear
-                </Button>
-              </div>
-            )}
-          </div>
-
-          {/* Labels List */}
-          <div className="max-h-[220px] overflow-auto px-1.5 py-1.5">
-            {/* Status section */}
-            <div className="py-0.5">
-              <div className="text-[10px] text-neutral-500 px-1.5 mb-0.5">
-                Status
-              </div>
-              <div className="grid">
-                {statusLabels.map(l => {
-                  const checked = effectiveSelectedLabels.includes(l.name);
-                  return (
-                    <button
-                      key={l.id}
-                      onClick={() => toggleLabel(l.name)}
-                      className={cn(
-                        'group flex items-center gap-2 px-1.5 py-1.5 mb-0.5 rounded-md text-left transition-all duration-200 ease-in-out border',
-                        checked
-                          ? 'bg-blue-50/60 border-blue-200 shadow-sm'
-                          : 'border-transparent hover:bg-neutral-100/50'
-                      )}
-                    >
-                      <Checkbox
-                        checked={checked}
-                        className="pointer-events-none transition-all duration-200 ease-in-out"
-                      />
-                      <span
-                        className="inline-block h-2.5 w-2.5 rounded-full border transition-all duration-200 ease-in-out"
-                        style={{ backgroundColor: l.color }}
-                      />
-                      <div className="flex-1">
-                        <div className="text-xs leading-none capitalize">
-                          {l.name}
-                        </div>
-                      </div>
-                    </button>
-                  );
-                })}
+          {loading ? (
+            <div className="p-3 space-y-3">
+              <Skeleton className="h-6 w-full rounded-md" />
+              <Skeleton className="h-6 w-[70%] rounded-md" />
+              <Skeleton className="h-6 w-[85%] rounded-md" />
+              <div className="flex gap-2">
+                <Skeleton className="h-7 w-full rounded-md" />
+                <Skeleton className="h-7 w-full rounded-md" />
               </div>
             </div>
+          ) : (
+            <>
+              <div className="p-2 border-b bg-neutral-50/30">
+                <Input
+                  value={query}
+                  onChange={e => setQuery(e.target.value)}
+                  placeholder="Search labels"
+                  className="text-xs h-7 glass-input"
+                />
+                {selectedLabelItems.length > 0 && (
+                  <div className="mt-1.5 flex flex-wrap gap-1">
+                    {selectedLabelItems.map(l => {
+                      const isStatusLabel =
+                        l.name.toLowerCase() === 'open' ||
+                        l.name.toLowerCase() === 'closed';
+                      return (
+                        <Badge
+                          key={l.id}
+                          variant="secondary"
+                          className={cn(
+                        'gap-1 glass-card border-white/50 bg-white/60 backdrop-blur-sm transition-all duration-200 ease-in-out text-xs h-5 px-1.5 items-center',
+                            isStatusLabel && 'ring-1 ring-blue-200 bg-blue-50/60'
+                          )}
+                        >
+                          <span
+                            className="inline-block h-2 w-2 rounded-full border transition-all duration-200 ease-in-out"
+                            style={{ backgroundColor: l.color }}
+                          />
+                      <span className={cn('leading-none', isStatusLabel && 'capitalize')}>
+                            {l.name}
+                          </span>
+                          {!isStatusLabel && (
+                            <button
+                              onClick={() => toggleLabel(l.name)}
+                              className="ml-0.5 h-3 w-3 rounded-full flex items-center justify-center transition-all duration-150 ease-in-out text-xs"
+                              title={`Remove ${l.name}`}
+                            >
+                              ×
+                            </button>
+                          )}
+                        </Badge>
+                      );
+                    })}
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={clearAll}
+                      className="h-5 px-1.5 ml-0.5 text-xs glass-button"
+                    >
+                      Clear
+                    </Button>
+                  </div>
+                )}
+              </div>
 
-            {/* Regular labels section */}
-            {visibleLabels.filter(l => !statusLabels.includes(l)).length >
-              0 && (
-              <div className="py-0.5 border-t">
-                <div className="text-[10px] text-neutral-500 px-1.5 mb-0.5">
-                  Labels
-                </div>
-                <div className="grid">
-                  {visibleLabels
-                    .filter(l => !statusLabels.includes(l))
-                    .map(l => {
+              <div className="max-h-[220px] overflow-auto px-1.5 py-1.5">
+                <div className="py-0.5">
+                  <div className="text-[10px] text-neutral-500 px-1.5 mb-0.5">
+                    Status
+                  </div>
+                  <div className="grid">
+                    {statusLabels.map(l => {
                       const checked = effectiveSelectedLabels.includes(l.name);
                       return (
                         <button
@@ -280,7 +280,7 @@ const UnifiedStatusLabelsSelect: React.FC<UnifiedStatusLabelsSelectProps> = ({
                           className={cn(
                             'group flex items-center gap-2 px-1.5 py-1.5 mb-0.5 rounded-md text-left transition-all duration-200 ease-in-out border',
                             checked
-                              ? 'bg-green-50/60 border-green-200 shadow-sm'
+                              ? 'bg-blue-50/60 border-blue-200 shadow-sm'
                               : 'border-transparent hover:bg-neutral-100/50'
                           )}
                         >
@@ -293,53 +293,95 @@ const UnifiedStatusLabelsSelect: React.FC<UnifiedStatusLabelsSelectProps> = ({
                             style={{ backgroundColor: l.color }}
                           />
                           <div className="flex-1">
-                            <div className="text-xs leading-none">{l.name}</div>
+                            <div className="text-xs leading-none capitalize">
+                              {l.name}
+                            </div>
                           </div>
                         </button>
                       );
                     })}
+                  </div>
                 </div>
-              </div>
-            )}
 
-            {visibleLabels.length === 0 && (
-              <div className="text-xs text-neutral-500 px-1.5 py-2">
-                No options found
-              </div>
-            )}
-          </div>
+                {visibleLabels.filter(l => !statusLabels.includes(l)).length >
+                  0 && (
+                  <div className="py-0.5 border-t">
+                    <div className="text-[10px] text-neutral-500 px-1.5 mb-0.5">
+                      Labels
+                    </div>
+                    <div className="grid">
+                      {visibleLabels
+                        .filter(l => !statusLabels.includes(l))
+                        .map(l => {
+                          const checked = effectiveSelectedLabels.includes(l.name);
+                          return (
+                            <button
+                              key={l.id}
+                              onClick={() => toggleLabel(l.name)}
+                              className={cn(
+                                'group flex items-center gap-2 px-1.5 py-1.5 mb-0.5 rounded-md text-left transition-all duration-200 ease-in-out border',
+                                checked
+                                  ? 'bg-green-50/60 border-green-200 shadow-sm'
+                                  : 'border-transparent hover:bg-neutral-100/50'
+                              )}
+                            >
+                              <Checkbox
+                                checked={checked}
+                                className="pointer-events-none transition-all duration-200 ease-in-out"
+                              />
+                              <span
+                                className="inline-block h-2.5 w-2.5 rounded-full border transition-all duration-200 ease-in-out"
+                                style={{ backgroundColor: l.color }}
+                              />
+                              <div className="flex-1">
+                                <div className="text-xs leading-none">{l.name}</div>
+                              </div>
+                            </button>
+                          );
+                        })}
+                    </div>
+                  </div>
+                )}
 
-          {/* Footer actions */}
-          <div className="border-t bg-white p-2 flex flex-1 justify-between gap-1.5 items-center rounded-b-lg">
-            <Button
-              variant="ghost"
-              className="glass-button text-xs flex-1 h-7"
-              onClick={e => {
-                e.stopPropagation();
-                onCancel?.();
-                setOpen(false);
-              }}
-            >
-              Cancel
-            </Button>
-            <Button
-              variant="outline"
-              className="text-xs flex-1 h-7"
-              onClick={async e => {
-                e.stopPropagation();
-                if (onSave) await onSave();
-                setOpen(false);
-              }}
-              disabled={!isDirty || !!saving}
-            >
-              {saving ? 'Saving…' : 'Save'}
-            </Button>
-          </div>
+                {visibleLabels.length === 0 && (
+                  <div className="text-xs text-neutral-500 px-1.5 py-2">
+                    No options found
+                  </div>
+                )}
+              </div>
+
+              <div className="border-t bg-white p-2 flex flex-1 justify-between gap-1.5 items-center rounded-b-lg">
+                <Button
+                  variant="ghost"
+                  className="glass-button text-xs flex-1 h-7"
+                  onClick={e => {
+                    e.stopPropagation();
+                    onCancel?.();
+                    setOpen(false);
+                  }}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  variant="outline"
+                  className="text-xs flex-1 h-7"
+                  onClick={async e => {
+                    e.stopPropagation();
+                    if (onSave) await onSave();
+                    setOpen(false);
+                  }}
+                  disabled={!isDirty || !!saving}
+                >
+                  {saving ? 'Saving…' : 'Save'}
+                </Button>
+              </div>
+            </>
+          )}
         </PopoverContent>
       </Popover>
 
       {/* Selected Labels Display */}
-      {selectedLabelItems.length > 1 && (
+      {!loading && selectedLabelItems.length > 1 && (
         <div className="flex flex-wrap gap-2">
           {selectedLabelItems.map(l => {
             const isStatusLabel =
@@ -349,13 +391,10 @@ const UnifiedStatusLabelsSelect: React.FC<UnifiedStatusLabelsSelectProps> = ({
               <Badge
                 key={l.id}
                 variant="secondary"
-                className={cn(
-                  'gap-1 glass-card border-white/50 bg-white/60 backdrop-blur-sm transition-all duration-200 ease-in-out',
-                  isStatusLabel && 'ring-1 ring-blue-200 bg-blue-50/60'
-                )}
+                  className={cn('gap-1 glass-card border-white/50 bg-white/60 backdrop-blur-sm transition-all duration-200 ease-in-out items-center', isStatusLabel && 'ring-1 ring-blue-200 bg-blue-50/60')}
               >
                 <Dot color={l.color} />
-                <span className={isStatusLabel ? 'capitalize' : ''}>
+                  <span className={cn('leading-none', isStatusLabel && 'capitalize')}>
                   {l.name}
                 </span>
               </Badge>

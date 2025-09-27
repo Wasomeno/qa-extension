@@ -184,12 +184,12 @@ const FloatingTriggerPopup: React.FC<FloatingTriggerPopupProps> = ({
           </Card>
         )}
 
-        <div className="px-3 py-2 flex items-center justify-between">
+        <div className="px-3 py-2 flex items-center justify-between relative z-50">
           <span className="text-sm font-semibold">Quick Actions</span>
           <Button
             variant="ghost"
             onClick={onClose}
-            className="p-0 h-fit hover:bg-none"
+            className="p-0 h-fit hover:bg-none pointer-events-auto"
           >
             <X className="w-3 h-3" />
           </Button>

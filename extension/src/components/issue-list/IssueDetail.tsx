@@ -3,7 +3,7 @@ import api, { IssueListItem } from '@/services/api';
 import { Checkbox } from '@/src/components/ui/ui/checkbox';
 import { useQuery } from '@tanstack/react-query';
 import { Button } from '@/src/components/ui/ui/button';
-import { Copy } from 'lucide-react';
+import { Copy, ChevronRight } from 'lucide-react';
 import { RxOpenInNewWindow } from 'react-icons/rx';
 import MarkdownIt from 'markdown-it';
 import taskLists from 'markdown-it-task-lists';
@@ -23,6 +23,7 @@ import {
 import { useUsersInProjectQuery } from '@/hooks/use-users-in-project-query';
 import { useProjectLabelsQuery } from '@/hooks/use-project-labels-query';
 import IssueLabelsSelect from './issue-labels-select';
+import { Skeleton } from '@/src/components/ui/ui/skeleton';
 
 interface IssueDetailProps {
   issue: IssueListItem | any;
@@ -110,6 +111,45 @@ const IssueDetail: React.FC<IssueDetailProps> = ({
     } catch {}
     return inst;
   }, []);
+
+  if (issueQuery.isLoading && !issueDetail) {
+    return (
+      <div className="py-4 px-6 space-y-4">
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex-1 space-y-2">
+            <Skeleton className="h-5 w-3/4 rounded-md" />
+            <Skeleton className="h-3 w-1/2 rounded-md" />
+          </div>
+          <div className="flex gap-2">
+            <Skeleton className="h-8 w-8 rounded-full" />
+            <Skeleton className="h-8 w-8 rounded-full" />
+          </div>
+        </div>
+        <Skeleton className="h-px w-full" />
+        <div className="space-y-4">
+          <div>
+            <Skeleton className="h-3 w-24 rounded-md mb-2" />
+            <Skeleton className="h-8 w-full rounded-md" />
+          </div>
+          <div>
+            <Skeleton className="h-3 w-20 rounded-md mb-2" />
+            <div className="flex gap-2">
+              <Skeleton className="h-6 w-24 rounded-full" />
+              <Skeleton className="h-6 w-28 rounded-full" />
+              <Skeleton className="h-6 w-20 rounded-full" />
+            </div>
+          </div>
+        </div>
+        <Skeleton className="h-px w-full" />
+        <div className="space-y-3">
+          <Skeleton className="h-3 w-28 rounded-md" />
+          <Skeleton className="h-3 w-full rounded-md" />
+          <Skeleton className="h-3 w-[90%] rounded-md" />
+          <Skeleton className="h-3 w-[85%] rounded-md" />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="py-4 px-6 ">

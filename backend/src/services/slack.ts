@@ -1,7 +1,7 @@
 import axios, { AxiosInstance } from 'axios';
 import crypto from 'crypto';
 import { DatabaseService, databaseService } from './database';
-import { RedisService } from './redis';
+import { redisService } from './redis';
 import { logger } from '../utils/logger';
 
 export interface SlackConfig {
@@ -86,7 +86,7 @@ export class SlackService {
 
   constructor() {
     this.db = databaseService;
-    this.redis = new RedisService();
+    this.redis = redisService;
     
     this.config = {
       clientId: process.env.SLACK_CLIENT_ID!,

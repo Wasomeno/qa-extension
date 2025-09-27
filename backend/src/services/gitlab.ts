@@ -1,6 +1,6 @@
 import axios, { AxiosInstance, AxiosRequestConfig } from 'axios';
 import { logger } from '../utils/logger';
-import { RedisService } from './redis';
+import { redisService } from './redis';
 import { CustomError } from '../middleware/errorHandler';
 
 export interface GitLabProject {
@@ -70,11 +70,7 @@ export class GitLabService {
   constructor(accessToken?: string, baseUrl?: string) {
     this.baseUrl =
       baseUrl || process.env.GITLAB_BASE_URL || 'https://gitlab.com';
-    this.redis = new RedisService();
-    // Initialize Redis connection
-    this.redis.connect().catch(error => {
-      logger.warn('Redis connection failed in GitLab service:', error.message);
-    });
+    this.redis = redisService;
 
     this.client = axios.create({
       baseURL: `${this.baseUrl}/api/v4`,
@@ -267,7 +263,7 @@ export class GitLabService {
       const cacheKey = `gitlab_project:${projectId}`;
 
       // Check cache first
-      const cached = await this.redis.get(cacheKey);
+      const cached = await this.safeRedisGet<GitLabProject>(cacheKey);
       if (cached) {
         return cached;
       }
@@ -276,7 +272,7 @@ export class GitLabService {
       const project = response.data;
 
       // Cache for 10 minutes
-      await this.redis.set(cacheKey, project, 600);
+      await this.safeRedisSet(cacheKey, project, 600);
 
       return project;
     } catch (error) {
@@ -389,7 +385,7 @@ export class GitLabService {
       const cacheKey = `gitlab_issues:${projectId}:${JSON.stringify(params)}`;
 
       // Check cache first
-      const cached = await this.redis.get(cacheKey);
+      const cached = await this.safeRedisGet<GitLabIssue[]>(cacheKey);
       if (cached) {
         return cached;
       }
@@ -400,7 +396,7 @@ export class GitLabService {
       const issues = response.data;
 
       // Cache for 2 minutes
-      await this.redis.set(cacheKey, issues, 120);
+      await this.safeRedisSet(cacheKey, issues, 120);
 
       return issues;
     } catch (error) {
@@ -421,6 +417,7 @@ export class GitLabService {
       per_page?: number; // global per_page
       page?: number; // global page (1-based)
       project_ids?: Array<number | string>; // optional project filter
+      labels_match_mode?: 'and' | 'or';
     } = {}
   ): Promise<GitLabIssue[]> {
     // Global pagination configuration
@@ -429,9 +426,18 @@ export class GitLabService {
     const globalSkip = (globalPage - 1) * globalPerPage;
 
     // Filters to forward to per-project issues API
+    const matchMode = options.labels_match_mode || 'and';
+    const initialLabels = options.labels;
+    const labelList = initialLabels
+      ? initialLabels
+          .split(',')
+          .map(label => label.trim())
+          .filter(Boolean)
+      : [];
+
     const baseIssueParams: Record<string, any> = {
       state: options.state || 'opened',
-      labels: options.labels,
+      labels: matchMode === 'and' ? initialLabels : undefined,
       milestone: options.milestone,
       assignee_id: options.assignee_id,
       author_id: options.author_id,
@@ -460,13 +466,24 @@ export class GitLabService {
         projectId: number | string;
         nextPage: number | null; // null when no more pages
         buffer: GitLabIssue[]; // accumulated issues fetched for this project
+        label?: string;
       };
 
-      const states: ProjectPageState[] = projectIds.map(pid => ({
-        projectId: pid,
-        nextPage: 1,
-        buffer: [],
-      }));
+      const states: ProjectPageState[] =
+        matchMode === 'or' && labelList.length > 0
+          ? projectIds.flatMap(pid =>
+              labelList.map(label => ({
+                projectId: pid,
+                nextPage: 1,
+                buffer: [],
+                label,
+              }))
+            )
+          : projectIds.map(pid => ({
+              projectId: pid,
+              nextPage: 1,
+              buffer: [],
+            }));
 
       const targetCount = globalSkip + globalPerPage; // how many items we need to collect before slicing
 
@@ -482,12 +499,14 @@ export class GitLabService {
       // Helper: fetch a specific page for a project
       const fetchProjectPage = async (
         state: ProjectPageState,
-        pageNum: number
+        pageNum: number,
+        overrideLabels?: string
       ): Promise<{ items: GitLabIssue[]; nextPage: number | null }> => {
         const params = {
           ...baseIssueParams,
           per_page: Math.min(globalPerPage, 100),
           page: pageNum,
+          ...(overrideLabels ? { labels: overrideLabels } : {}),
         };
         const pid =
           typeof state.projectId === 'number' || /^\d+$/.test(String(state.projectId))
@@ -503,9 +522,15 @@ export class GitLabService {
       // Round 1: fetch page 1 for all projects (2 at a time)
       await runInBatches(states, async st => {
         if (st.nextPage === null) return;
-        const { items, nextPage } = await fetchProjectPage(st, st.nextPage);
-        st.buffer.push(...items);
-        st.nextPage = nextPage;
+        if (matchMode === 'or' && st.label) {
+          const { items, nextPage } = await fetchProjectPage(st, st.nextPage, st.label);
+          st.buffer.push(...items);
+          st.nextPage = nextPage;
+        } else {
+          const { items, nextPage } = await fetchProjectPage(st, st.nextPage);
+          st.buffer.push(...items);
+          st.nextPage = nextPage;
+        }
       }, 2);
 
       // Accumulate and sort
@@ -525,9 +550,15 @@ export class GitLabService {
         const toFetch = states.filter(s => s.nextPage);
         await runInBatches(toFetch, async st => {
           if (!st.nextPage) return;
-          const { items, nextPage } = await fetchProjectPage(st, st.nextPage);
-          st.buffer.push(...items);
-          st.nextPage = nextPage;
+          if (matchMode === 'or' && st.label) {
+            const { items, nextPage } = await fetchProjectPage(st, st.nextPage, st.label);
+            st.buffer.push(...items);
+            st.nextPage = nextPage;
+          } else {
+            const { items, nextPage } = await fetchProjectPage(st, st.nextPage);
+            st.buffer.push(...items);
+            st.nextPage = nextPage;
+          }
         }, 2);
 
         // Rebuild combined, dedupe, and sort again
@@ -594,7 +625,7 @@ export class GitLabService {
       const cacheKey = `gitlab_issue:${pid}:${issueIid}`;
 
       // Check cache first
-      const cached = await this.redis.get(cacheKey);
+      const cached = await this.safeRedisGet<GitLabIssue>(cacheKey);
       if (cached) {
         return cached;
       }
@@ -606,7 +637,7 @@ export class GitLabService {
       const issue = response.data;
 
       // Cache for 5 minutes
-      await this.redis.set(cacheKey, issue, 300);
+      await this.safeRedisSet(cacheKey, issue, 300);
 
       return issue;
     } catch (error: any) {
@@ -627,7 +658,7 @@ export class GitLabService {
         if (Array.isArray(listResp.data) && listResp.data.length === 1) {
           const fallbackIssue = listResp.data[0];
           // Cache and return
-          await this.redis.set(
+          await this.safeRedisSet(
             `gitlab_issue:${pid}:${issueIid}`,
             fallbackIssue,
             300
@@ -698,7 +729,7 @@ export class GitLabService {
     try {
       const cacheKey = `gitlab_labels:${pid}`;
       try {
-        const cached = await this.redis.get(cacheKey);
+        const cached = await this.safeRedisGet<GitLabLabel[]>(cacheKey);
         if (cached) return cached;
       } catch (_) {}
 
@@ -707,7 +738,7 @@ export class GitLabService {
       });
       const labels = response.data as GitLabLabel[];
       try {
-        await this.redis.set(cacheKey, labels, 300);
+        await this.safeRedisSet(cacheKey, labels, 300);
       } catch (_) {}
       return labels;
     } catch (error: any) {
@@ -790,7 +821,7 @@ export class GitLabService {
 
       // Check cache first (if Redis is available)
       try {
-        const cached = await this.redis.get(cacheKey);
+        const cached = await this.safeRedisGet<GitLabUser[]>(cacheKey);
         if (cached) {
           return cached;
         }
@@ -808,7 +839,7 @@ export class GitLabService {
 
       // Cache for 15 minutes (if Redis is available)
       try {
-        await this.redis.set(cacheKey, members, 900);
+        await this.safeRedisSet(cacheKey, members, 900);
       } catch (error) {
         logger.debug(
           'Cache storage failed, continuing without cache:',
@@ -893,9 +924,38 @@ export class GitLabService {
   private async cacheResponse(url: string, data: any): Promise<void> {
     try {
       const cacheKey = `gitlab_cache:${url}`;
-      await this.redis.set(cacheKey, data, 300); // 5 minutes default
+      await this.safeRedisSet(cacheKey, data, 300); // 5 minutes default
     } catch (error) {
       logger.warn('Failed to cache GitLab response:', error);
+    }
+  }
+
+  private async safeRedisGet<T>(key: string): Promise<T | null> {
+    if (!this.redis.isAvailable()) {
+      return null;
+    }
+    try {
+      return (await this.redis.get(key)) as T;
+    } catch (error) {
+      logger.debug('GitLab cache get skipped:', {
+        key,
+        error: (error as Error).message,
+      });
+      return null;
+    }
+  }
+
+  private async safeRedisSet(key: string, value: any, ttl?: number): Promise<void> {
+    if (!this.redis.isAvailable()) {
+      return;
+    }
+    try {
+      await this.redis.set(key, value, ttl);
+    } catch (error) {
+      logger.debug('GitLab cache set skipped:', {
+        key,
+        error: (error as Error).message,
+      });
     }
   }
 

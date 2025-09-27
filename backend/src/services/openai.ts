@@ -1,6 +1,6 @@
 import OpenAI from 'openai';
 import { DatabaseService } from './database';
-import { RedisService } from './redis';
+import { redisService } from './redis';
 import { logger } from '../utils/logger';
 import { EnvConfig } from '../config/env';
 
@@ -104,7 +104,7 @@ export class OpenAIService {
     }
 
     this.db = new DatabaseService();
-    this.redis = new RedisService();
+    this.redis = redisService;
     this.model = EnvConfig.OPENAI_MODEL;
   }
 

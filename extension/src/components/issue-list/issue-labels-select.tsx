@@ -8,6 +8,8 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '@/src/components/ui/ui/popover';
+import { cn } from '@/lib/utils';
+import { ChevronRight } from 'lucide-react';
 
 function Dot({ color }: { color: string }) {
   return (
@@ -48,6 +50,7 @@ const IssueLabelsSelect: React.FC<IssueLabelsSelectProps> = ({
 }) => {
   const [open, setOpen] = React.useState(false);
   const [query, setQuery] = React.useState('');
+  const suppressNextOpenRef = React.useRef(false);
 
   const handleStopPropagation = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -74,18 +77,45 @@ const IssueLabelsSelect: React.FC<IssueLabelsSelectProps> = ({
     selectedLabels.includes(l.name)
   );
 
+  const handleTriggerPointerDown = (
+    event: React.PointerEvent<HTMLButtonElement>
+  ) => {
+    if (!open) return;
+    event.preventDefault();
+    suppressNextOpenRef.current = true;
+    setOpen(false);
+  };
+
+  const handleOpenChange = (next: boolean) => {
+    if (next && suppressNextOpenRef.current) {
+      suppressNextOpenRef.current = false;
+      return;
+    }
+    suppressNextOpenRef.current = false;
+    setOpen(next);
+  };
+
   return (
     <div onClick={handleStopPropagation} className="space-y-2">
-      <Popover open={open} onOpenChange={setOpen}>
+      <Popover open={open} onOpenChange={handleOpenChange}>
         <PopoverTrigger asChild>
           <button
             type="button"
             className="inline-flex items-center justify-between w-full h-8 px-3 rounded-xl border glass-input text-xs shadow-sm"
+            onPointerDown={handleTriggerPointerDown}
           >
-            <span className="font-medium">
-              {selectedLabels.length || 0} selected
-            </span>
-            <span className="text-neutral-500">{selectedLabels.length}</span>
+            <div className="flex items-center gap-2">
+              <span className="font-medium">
+                {selectedLabels.length || 0} selected
+              </span>
+              <span className="text-neutral-500">{selectedLabels.length}</span>
+            </div>
+            <ChevronRight
+              className={cn(
+                'h-3.5 w-3.5 text-neutral-400 transition-transform duration-200',
+                open && 'rotate-90'
+              )}
+            />
           </button>
         </PopoverTrigger>
         <PopoverContent
@@ -109,13 +139,13 @@ const IssueLabelsSelect: React.FC<IssueLabelsSelectProps> = ({
                   <Badge
                     key={l.id}
                     variant="secondary"
-                    className="gap-1 glass-card border-white/50 bg-white/60 backdrop-blur-sm"
+                    className="gap-1 glass-card border-white/50 bg-white/60 backdrop-blur-sm items-center"
                   >
                     <Dot color={l.color} />
-                    <span>{l.name}</span>
+                    <span className="leading-none">{l.name}</span>
                     <button
                       onClick={() => toggleLabel(l.name)}
-                      className="ml-1 -mr-0.5 h-4 w-4 rounded-full grid place-items-center hover:bg-neutral-200"
+                      className="ml-1 h-4 w-4 rounded-full flex items-center justify-center"
                       title={`Remove ${l.name}`}
                     >
                       ×
@@ -210,10 +240,10 @@ const IssueLabelsSelect: React.FC<IssueLabelsSelectProps> = ({
             <Badge
               key={l.id}
               variant="secondary"
-              className="gap-1 glass-card border-white/50 bg-white/60 backdrop-blur-sm"
+              className="gap-1 glass-card border-white/50 bg-white/60 backdrop-blur-sm items-center"
             >
               <Dot color={l.color} />
-              <span>{l.name}</span>
+              <span className="leading-none">{l.name}</span>
             </Badge>
           ))}
         </div>

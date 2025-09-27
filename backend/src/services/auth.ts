@@ -1,7 +1,7 @@
 import bcrypt from 'bcryptjs';
 import jwt, { SignOptions } from 'jsonwebtoken';
 import { databaseService } from './database';
-import { RedisService } from './redis';
+import { redisService } from './redis';
 import { logger } from '../utils/logger';
 import { EnvConfig } from '../config/env';
 
@@ -31,10 +31,10 @@ export interface OAuthData {
 
 export class AuthService {
   private db = databaseService;
-  private redis: RedisService;
+  private redis = redisService;
 
   constructor() {
-    this.redis = new RedisService();
+    // Redis service is now a singleton, no need to initialize
   }
 
   public async register(userData: RegisterData): Promise<{ user: any; tokens: TokenPair }> {
@@ -526,6 +526,11 @@ export class AuthService {
   }
 
   public async storeOAuthSession(sessionId: string, data: any): Promise<void> {
+    if (!this.redis.isAvailable()) {
+      logger.warn('Redis not available for OAuth session storage');
+      throw new Error('Redis not available');
+    }
+    
     try {
       const key = `oauth_session:${sessionId}`;
       await this.redis.set(key, data, 300); // 5 minutes expiration
@@ -537,6 +542,11 @@ export class AuthService {
   }
 
   public async getOAuthSession(sessionId: string): Promise<any> {
+    if (!this.redis.isAvailable()) {
+      logger.warn('Redis not available for OAuth session retrieval');
+      throw new Error('Redis not available');
+    }
+    
     try {
       const key = `oauth_session:${sessionId}`;
       const data = await this.redis.get(key);
@@ -549,6 +559,11 @@ export class AuthService {
   }
 
   public async deleteOAuthSession(sessionId: string): Promise<void> {
+    if (!this.redis.isAvailable()) {
+      logger.warn('Redis not available for OAuth session deletion');
+      throw new Error('Redis not available');
+    }
+    
     try {
       const key = `oauth_session:${sessionId}`;
       await this.redis.del(key);

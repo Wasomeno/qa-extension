@@ -27,6 +27,11 @@ interface ProjectRef {
   name: string;
 }
 
+export interface IssueFilterSelection {
+  projectIds: string[];
+  updatedAt: number;
+}
+
 // Main type
 export interface IssueDataRef {
   assignee: AssigneeRef;
@@ -93,6 +98,7 @@ export interface StorageData {
   >;
   pinnedSnapshots?: Record<string, PinnedIssueSnapshot>;
   // Recording index removed
+  issueFilters?: Record<string, IssueFilterSelection>;
 }
 
 const DEFAULT_SETTINGS: ExtensionSettings = {
@@ -296,6 +302,10 @@ class StorageService {
       }
       if (!existing.pinnedSnapshots) {
         await this.set('pinnedSnapshots', {} as Record<string, any>);
+      }
+
+      if (!existing.issueFilters) {
+        await this.set('issueFilters', {} as Record<string, IssueFilterSelection>);
       }
 
       // Session migration: if session missing but legacy auth/user exist, synthesize session
@@ -573,6 +583,29 @@ class StorageService {
       console.error('Failed to import data:', error);
       throw error;
     }
+  }
+
+  // ---------- Pinned triage helpers ----------
+
+  async getIssueFilters(): Promise<Record<string, IssueFilterSelection>> {
+    return (await this.get('issueFilters')) || {};
+  }
+
+  async setIssueFilters(filters: Record<string, IssueFilterSelection>): Promise<void> {
+    await this.set('issueFilters', filters);
+  }
+
+  async updateIssueFilter(
+    userId: string,
+    selection: IssueFilterSelection | null
+  ): Promise<void> {
+    const filters = await this.getIssueFilters();
+    if (selection) {
+      filters[userId] = selection;
+    } else {
+      delete filters[userId];
+    }
+    await this.setIssueFilters(filters);
   }
 
   // ---------- Pinned triage helpers ----------
