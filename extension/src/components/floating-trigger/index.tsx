@@ -44,8 +44,8 @@ const FloatingTrigger: React.FC<FloatingTriggerProps> = () => {
       if (state === 'closed') return { w: 45, h: 45 };
       if (state === 'features') return { w: 260, h: 300 };
       // feature-detail
-      if (feature === 'pinned') return { w: 400, h: 340 };
-      return { w: 400, h: 480 };
+      if (feature === 'pinned') return { w: 500, h: 440 };
+      return { w: 500, h: 580 };
     };
 
     const { w, h } = getSizeForState(viewState, selectedFeature);

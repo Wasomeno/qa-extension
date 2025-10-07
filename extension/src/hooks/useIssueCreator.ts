@@ -55,6 +55,7 @@ export const useIssueCreator = ({
       assigneeId: initialData.assigneeId || '',
       slackChannelId: (initialData as any).slackChannelId || '',
       slackUserIds: (initialData as any).slackUserIds || [],
+      labelIds: (initialData as any).labelIds || [],
       ...initialData,
     },
   });
@@ -257,7 +258,7 @@ export const useIssueCreator = ({
             title: data.title,
             description: data.description,
             childDescriptions: data.childDescriptions,
-            labels: data.labelId ? [data.labelId] : [],
+            labels: Array.isArray(data.labelIds) ? data.labelIds : [],
             issueFormat: data.issueFormat,
             assigneeIds: assigneeIdNum ? [assigneeIdNum] : [],
           },

@@ -138,10 +138,11 @@ export const CompactIssueCreator: React.FC<CompactIssueCreatorProps> = ({
     setter(false);
   };
 
-  const createOnOpenChange = (
-    key: 'project' | 'labels' | 'format' | 'assignee' | 'slack',
-    setter: React.Dispatch<React.SetStateAction<boolean>>
-  ) =>
+  const createOnOpenChange =
+    (
+      key: 'project' | 'labels' | 'format' | 'assignee' | 'slack',
+      setter: React.Dispatch<React.SetStateAction<boolean>>
+    ) =>
     (next: boolean) => {
       if (next && suppressOpenRef.current[key]) {
         suppressOpenRef.current[key] = false;
@@ -359,7 +360,7 @@ export const CompactIssueCreator: React.FC<CompactIssueCreatorProps> = ({
   });
 
   const labelOptions = labelQueries.data?.map(label => ({
-    value: label.id,
+    value: label.name,
     label: label.name,
     color: label.color,
   }));
@@ -472,7 +473,7 @@ export const CompactIssueCreator: React.FC<CompactIssueCreatorProps> = ({
     const selectAt = (idx: number) => {
       const l = list[idx];
       if (!l) return;
-      setValue('labelId', l.value.toString(), {
+      setValue('labelIds', [l.value], {
         shouldDirty: true,
         shouldValidate: true,
       });
@@ -954,39 +955,40 @@ export const CompactIssueCreator: React.FC<CompactIssueCreatorProps> = ({
       onPointerUp={e => e.stopPropagation()}
       {...keyboardIsolation}
     >
-      <AnimatePresence>
-        {error && (
-          <motion.div
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -10 }}
-            className="bg-red-50 border border-red-200 rounded-xl p-3"
-          >
-            <div className="flex items-center gap-2">
-              <FiAlertTriangle className="h-3 w-3 text-red-500" />
-              <p className="text-sm text-red-700">
-                {typeof error === 'string'
-                  ? error
-                  : (error as any)?.message || JSON.stringify(error)}
-              </p>
-            </div>
-          </motion.div>
-        )}
-        {success && (
-          <motion.div
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -10 }}
-            className="bg-green-50 border border-green-200 rounded-xl p-3"
-          >
-            <div className="flex items-center gap-2">
-              <FiCheckCircle className="h-3 w-3 text-green-500" />
-              <p className="text-sm text-green-700">{success}</p>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
+      <div className="px-4">
+        <AnimatePresence>
+          {error && (
+            <motion.div
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              className="bg-red-50 border border-red-200 rounded-xl p-3"
+            >
+              <div className="flex items-center gap-2">
+                <FiAlertTriangle className="h-3 w-3 text-red-500" />
+                <p className="text-sm text-red-700">
+                  {typeof error === 'string'
+                    ? error
+                    : (error as any)?.message || JSON.stringify(error)}
+                </p>
+              </div>
+            </motion.div>
+          )}
+          {success && (
+            <motion.div
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              className="bg-green-50 border border-green-200 rounded-xl p-3"
+            >
+              <div className="flex items-center gap-2">
+                <FiCheckCircle className="h-3 w-3 text-green-500" />
+                <p className="text-sm text-green-700">{success}</p>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
       <form onSubmit={handleSubmit}>
         {/* Pointer blocker overlay to prevent clicking covered pills */}
         {anyPillOpen && (
@@ -1009,38 +1011,38 @@ export const CompactIssueCreator: React.FC<CompactIssueCreatorProps> = ({
                   type="button"
                   variant="outline"
                   size="sm"
-                className="h-7 px-2 glass-input"
+                  className="h-7 px-2 glass-input"
                   disabled={isLoading}
                   title="Select project"
-                onPointerDown={event =>
-                  handleTriggerPointerDown(
-                    event,
-                    openProject,
-                    'project',
-                    setOpenProject
-                  )
-                }
+                  onPointerDown={event =>
+                    handleTriggerPointerDown(
+                      event,
+                      openProject,
+                      'project',
+                      setOpenProject
+                    )
+                  }
                 >
                   <LuFolderGit2 />
-                <div className="flex items-center gap-2 text-sm text-neutral-600">
-                  <span>Project</span>
-                  {(() => {
-                    const p = projects.find(
-                      p => p.id === watchedValues.projectId
-                    );
-                    return (
-                      <span className="text-neutral-900 truncate max-w-[140px]">
-                        {p ? p.name : 'Select'}
-                      </span>
-                    );
-                  })()}
-                </div>
-                <ChevronRight
-                  className={cn(
-                    'h-3.5 w-3.5 text-neutral-400 transition-transform duration-200',
-                    openProject && 'rotate-90'
-                  )}
-                />
+                  <div className="flex items-center gap-2 text-sm text-neutral-600">
+                    <span>Project</span>
+                    {(() => {
+                      const p = projects.find(
+                        p => p.id === watchedValues.projectId
+                      );
+                      return (
+                        <span className="text-neutral-900 truncate max-w-[140px]">
+                          {p ? p.name : 'Select'}
+                        </span>
+                      );
+                    })()}
+                  </div>
+                  <ChevronRight
+                    className={cn(
+                      'h-3.5 w-3.5 text-neutral-400 transition-transform duration-200',
+                      openProject && 'rotate-90'
+                    )}
+                  />
                 </Button>
               </PopoverTrigger>
               <PopoverContent
@@ -1063,48 +1065,50 @@ export const CompactIssueCreator: React.FC<CompactIssueCreatorProps> = ({
                   type="button"
                   variant="outline"
                   size="sm"
-                className="h-7 px-2 glass-input"
+                  className="h-7 px-2 glass-input"
                   disabled={isLoading || !watchedValues.projectId}
                   title="Select label"
-                onPointerDown={event =>
-                  handleTriggerPointerDown(
-                    event,
-                    openLabels,
-                    'labels',
-                    setOpenLabels
-                  )
-                }
+                  onPointerDown={event =>
+                    handleTriggerPointerDown(
+                      event,
+                      openLabels,
+                      'labels',
+                      setOpenLabels
+                    )
+                  }
                 >
                   <IoPricetagsOutline />
-                <div className="flex items-center gap-2 text-sm text-neutral-600">
-                  <span>Labels</span>
-                  {(() => {
-                    const selected = labelOptions?.find(
-                      l => l.value.toString() === (watchedValues.labelId || '')
-                    );
-                    return (
-                      <span className="inline-flex items-center gap-1 text-neutral-900 truncate max-w-[160px]">
-                        {selected ? (
-                          <>
-                            <span
-                              className="inline-block w-2 h-2 rounded-full border"
-                              style={{ backgroundColor: selected.color }}
-                            />
-                            <span className="truncate">{selected.label}</span>
-                          </>
-                        ) : (
-                          <span className="text-neutral-900">Select</span>
-                        )}
-                      </span>
-                    );
-                  })()}
-                </div>
-                <ChevronRight
-                  className={cn(
-                    'h-3.5 w-3.5 text-neutral-400 transition-transform duration-200',
-                    openLabels && 'rotate-90'
-                  )}
-                />
+                  <div className="flex items-center gap-2 text-sm text-neutral-600">
+                    <span>Labels</span>
+                    {(() => {
+                      const selectedIds = watchedValues.labelIds || [];
+                      const selected =
+                        selectedIds.length > 0
+                          ? labelOptions?.find(l => l.value === selectedIds[0])
+                          : null;
+                      return (
+                        <span className="inline-flex items-center gap-1 text-neutral-900 truncate max-w-[160px]">
+                          {selected ? (
+                            <>
+                              <span
+                                className="inline-block w-2 h-2 rounded-full border"
+                                style={{ backgroundColor: selected.color }}
+                              />
+                              <span className="truncate">{selected.label}</span>
+                            </>
+                          ) : (
+                            <span className="text-neutral-900">Select</span>
+                          )}
+                        </span>
+                      );
+                    })()}
+                  </div>
+                  <ChevronRight
+                    className={cn(
+                      'h-3.5 w-3.5 text-neutral-400 transition-transform duration-200',
+                      openLabels && 'rotate-90'
+                    )}
+                  />
                 </Button>
               </PopoverTrigger>
               <PopoverContent
@@ -1126,37 +1130,37 @@ export const CompactIssueCreator: React.FC<CompactIssueCreatorProps> = ({
                   type="button"
                   variant="outline"
                   size="sm"
-                className="h-7 px-2 glass-input"
+                  className="h-7 px-2 glass-input"
                   disabled={isLoading}
                   title="Issue format"
-                onPointerDown={event =>
-                  handleTriggerPointerDown(
-                    event,
-                    openFormat,
-                    'format',
-                    setOpenFormat
-                  )
-                }
+                  onPointerDown={event =>
+                    handleTriggerPointerDown(
+                      event,
+                      openFormat,
+                      'format',
+                      setOpenFormat
+                    )
+                  }
                 >
                   <CgNotes />
-                <div className="flex items-center gap-2 text-sm text-neutral-600">
-                  <span>Format</span>
-                  <span className="text-neutral-900 truncate max-w-[120px]">
-                    {(() => {
-                      const f = watchedValues.issueFormat;
-                      if (!f) return 'Select';
-                      if (f === 'single') return 'Single';
-                      if (f === 'multiple') return 'Multiple';
-                      return String(f);
-                    })()}
-                  </span>
-                </div>
-                <ChevronRight
-                  className={cn(
-                    'h-3.5 w-3.5 text-neutral-400 transition-transform duration-200',
-                    openFormat && 'rotate-90'
-                  )}
-                />
+                  <div className="flex items-center gap-2 text-sm text-neutral-600">
+                    <span>Format</span>
+                    <span className="text-neutral-900 truncate max-w-[120px]">
+                      {(() => {
+                        const f = watchedValues.issueFormat;
+                        if (!f) return 'Select';
+                        if (f === 'single') return 'Single';
+                        if (f === 'multiple') return 'Multiple';
+                        return String(f);
+                      })()}
+                    </span>
+                  </div>
+                  <ChevronRight
+                    className={cn(
+                      'h-3.5 w-3.5 text-neutral-400 transition-transform duration-200',
+                      openFormat && 'rotate-90'
+                    )}
+                  />
                 </Button>
               </PopoverTrigger>
               <PopoverContent
@@ -1178,38 +1182,38 @@ export const CompactIssueCreator: React.FC<CompactIssueCreatorProps> = ({
                   type="button"
                   variant="outline"
                   size="sm"
-                className="h-7 px-2 glass-input"
+                  className="h-7 px-2 glass-input"
                   disabled={isLoading || !watchedValues.projectId}
                   title="Assign"
-                onPointerDown={event =>
-                  handleTriggerPointerDown(
-                    event,
-                    openAssignee,
-                    'assignee',
-                    setOpenAssignee
-                  )
-                }
+                  onPointerDown={event =>
+                    handleTriggerPointerDown(
+                      event,
+                      openAssignee,
+                      'assignee',
+                      setOpenAssignee
+                    )
+                  }
                 >
                   <IoPersonOutline />
-                <div className="flex items-center gap-2 text-sm text-neutral-600">
-                  <span>Assignee</span>
-                  {(() => {
-                    const u = users.find(
-                      u => u.id === watchedValues.assigneeId
-                    );
-                    return (
-                      <span className="text-neutral-900 truncate max-w-[140px]">
-                        {u ? u.name : 'Me'}
-                      </span>
-                    );
-                  })()}
-                </div>
-                <ChevronRight
-                  className={cn(
-                    'h-3.5 w-3.5 text-neutral-400 transition-transform duration-200',
-                    openAssignee && 'rotate-90'
-                  )}
-                />
+                  <div className="flex items-center gap-2 text-sm text-neutral-600">
+                    <span>Assignee</span>
+                    {(() => {
+                      const u = users.find(
+                        u => u.id === watchedValues.assigneeId
+                      );
+                      return (
+                        <span className="text-neutral-900 truncate max-w-[140px]">
+                          {u ? u.name : 'Me'}
+                        </span>
+                      );
+                    })()}
+                  </div>
+                  <ChevronRight
+                    className={cn(
+                      'h-3.5 w-3.5 text-neutral-400 transition-transform duration-200',
+                      openAssignee && 'rotate-90'
+                    )}
+                  />
                 </Button>
               </PopoverTrigger>
               <PopoverContent
@@ -1230,50 +1234,50 @@ export const CompactIssueCreator: React.FC<CompactIssueCreatorProps> = ({
                   type="button"
                   variant="outline"
                   size="sm"
-                className="h-7 px-2 glass-input"
+                  className="h-7 px-2 glass-input"
                   disabled={isLoading}
                   title="Slack notification"
-                onPointerDown={event =>
-                  handleTriggerPointerDown(
-                    event,
-                    openSlack,
-                    'slack',
-                    setOpenSlack
-                  )
-                }
+                  onPointerDown={event =>
+                    handleTriggerPointerDown(
+                      event,
+                      openSlack,
+                      'slack',
+                      setOpenSlack
+                    )
+                  }
                 >
                   <PiSlackLogoLight />
-                <div className="flex items-center gap-2 text-sm text-neutral-600">
-                  <span>Slack</span>
-                  {(() => {
-                    const enabled = slackEnabled;
-                    const ch = (slackChannelsQuery.data || []).find(
-                      (c: any) => c.id === watchedValues.slackChannelId
-                    );
-                    return (
-                      <span className="text-neutral-900 truncate max-w-[150px]">
-                        {enabled ? (
-                          ch ? (
-                            <>
-                              On <span className="text-neutral-400">•</span> #
-                              {ch.name}
-                            </>
+                  <div className="flex items-center gap-2 text-sm text-neutral-600">
+                    <span>Slack</span>
+                    {(() => {
+                      const enabled = slackEnabled;
+                      const ch = (slackChannelsQuery.data || []).find(
+                        (c: any) => c.id === watchedValues.slackChannelId
+                      );
+                      return (
+                        <span className="text-neutral-900 truncate max-w-[150px]">
+                          {enabled ? (
+                            ch ? (
+                              <>
+                                On <span className="text-neutral-400">•</span> #
+                                {ch.name}
+                              </>
+                            ) : (
+                              'On'
+                            )
                           ) : (
-                            'On'
-                          )
-                        ) : (
-                          'Off'
-                        )}
-                      </span>
-                    );
-                  })()}
-                </div>
-                <ChevronRight
-                  className={cn(
-                    'h-3.5 w-3.5 text-neutral-400 transition-transform duration-200',
-                    openSlack && 'rotate-90'
-                  )}
-                />
+                            'Off'
+                          )}
+                        </span>
+                      );
+                    })()}
+                  </div>
+                  <ChevronRight
+                    className={cn(
+                      'h-3.5 w-3.5 text-neutral-400 transition-transform duration-200',
+                      openSlack && 'rotate-90'
+                    )}
+                  />
                 </Button>
               </PopoverTrigger>
               <PopoverContent

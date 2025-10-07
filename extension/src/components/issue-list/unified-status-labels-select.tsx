@@ -161,7 +161,7 @@ const UnifiedStatusLabelsSelect: React.FC<UnifiedStatusLabelsSelectProps> = ({
         <PopoverTrigger asChild>
           <button
             type="button"
-            className="inline-flex items-center justify-between w-full h-8 px-3 rounded-xl border glass-input text-xs shadow-sm"
+            className="inline-flex items-center justify-between w-1/2 h-8 px-3 rounded-xl border glass-input text-xs shadow-sm"
             onPointerDown={handleTriggerPointerDown}
           >
             {loading ? (

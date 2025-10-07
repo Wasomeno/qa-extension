@@ -13,6 +13,7 @@ import {
   AuthenticationError,
 } from '../middleware/errorHandler';
 import { logger } from '../utils/logger';
+import { generateAuthSuccessPage, generateAuthErrorPage } from '../templates/authSuccessTemplate';
 
 const router = Router();
 const authService = new AuthService();
@@ -155,10 +156,10 @@ router.get(
         const result = await authService.createFromOAuth({
           provider: 'gitlab',
           providerId: gitlabUser.id.toString(),
-          email: gitlabUser.email,
-          username: gitlabUser.username,
-          fullName: gitlabUser.name,
-          avatarUrl: gitlabUser.avatar_url,
+          email: gitlabUser.email || '',
+          username: gitlabUser.username || '',
+          fullName: gitlabUser.name || '',
+          avatarUrl: gitlabUser.avatar_url || '',
           tokens: gitlabTokens,
         });
         user = result.user;
@@ -202,10 +203,10 @@ router.get(
         },
         user: {
           id: user.id,
-          email: user.email,
-          username: user.username,
-          fullName: user.full_name || user.name,
-          avatarUrl: user.avatar_url,
+          email: user.email || '',
+          username: user.username || '',
+          fullName: user.full_name || user.name || '',
+          avatarUrl: user.avatar_url || '',
         },
       };
 
@@ -229,120 +230,28 @@ router.get(
         );
       }
 
-      // Return success HTML page that notifies extension
-      const html = `
-        <!DOCTYPE html>
-        <html>
-        <head>
-          <title>Authentication Successful</title>
-          <style>
-            body {
-              font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-              display: flex;
-              justify-content: center;
-              align-items: center;
-              min-height: 100vh;
-              margin: 0;
-              background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-              color: white;
-            }
-            .container {
-              text-align: center;
-              padding: 2rem;
-              background: rgba(255,255,255,0.1);
-              border-radius: 1rem;
-              backdrop-filter: blur(10px);
-            }
-            .success-icon {
-              font-size: 4rem;
-              margin-bottom: 1rem;
-            }
-          </style>
-        </head>
-        <body>
-          <div class="container">
-            <div class="success-icon">✅</div>
-            <h1>Authentication Successful!</h1>
-            <p>You have been successfully authenticated with GitLab.</p>
-            <p>Please return to the extension popup.</p>
-            <p><small>Session ID: ${sessionId}</small></p>
-            <p><small>This window will close automatically...</small></p>
-          </div>
-          <script>
-            console.log('OAuth success - Session ID: ${sessionId}');
-
-            // Try to communicate with extension if possible
-            try {
-              window.postMessage({
-                type: 'QA_EXTENSION_OAUTH_SUCCESS',
-                sessionId: '${sessionId}'
-              }, '*');
-            } catch (e) {
-              console.log('PostMessage failed:', e);
-            }
-
-            // Close this window after a delay
-            setTimeout(() => {
-              try {
-                window.close();
-              } catch (e) {
-                console.log('Window close failed, user needs to close manually');
-              }
-            }, 3000);
-          </script>
-        </body>
-        </html>
-      `;
-      res.send(html);
+      // Generate modern success page using template
+      const successHtml = generateAuthSuccessPage({
+        sessionId,
+        provider: 'GitLab',
+        userEmail: user.email || '',
+        username: user.username || user.full_name || '',
+        autoCloseSeconds: 8
+      });
+      
+      res.send(successHtml);
     } catch (error) {
       logger.error('GitLab OAuth callback error:', error);
-      // Return error HTML
-      const html = `
-        <!DOCTYPE html>
-        <html>
-        <head>
-          <title>Authentication Failed</title>
-          <style>
-            body {
-              font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-              display: flex;
-              justify-content: center;
-              align-items: center;
-              min-height: 100vh;
-              margin: 0;
-              background: linear-gradient(135deg, #ff6b6b 0%, #ee5a24 100%);
-              color: white;
-            }
-            .container {
-              text-align: center;
-              padding: 2rem;
-              background: rgba(255,255,255,0.1);
-              border-radius: 1rem;
-              backdrop-filter: blur(10px);
-            }
-            .error-icon {
-              font-size: 4rem;
-              margin-bottom: 1rem;
-            }
-          </style>
-        </head>
-        <body>
-          <div class="container">
-            <div class="error-icon">❌</div>
-            <h1>Authentication Failed</h1>
-            <p>There was an error during authentication.</p>
-            <p>Please try again from the extension.</p>
-            <p><small>This window will close automatically...</small></p>
-          </div>
-          <script>
-            setTimeout(() => {
-              window.close();
-            }, 3000);
-          </script>
-        </body>
-        </html>
-      `;
-      res.send(html);
+      
+      // Generate modern error page using template
+      const errorMessage = error instanceof Error ? error.message : 'Unknown authentication error occurred.';
+      const errorHtml = generateAuthErrorPage({
+        error: errorMessage,
+        provider: 'GitLab',
+        autoCloseSeconds: 5
+      });
+      
+      res.send(errorHtml);
     }
   })
 );
@@ -374,10 +283,10 @@ router.post(
         const result = await authService.createFromOAuth({
           provider: 'gitlab',
           providerId: gitlabUser.id.toString(),
-          email: gitlabUser.email,
-          username: gitlabUser.username,
-          fullName: gitlabUser.name,
-          avatarUrl: gitlabUser.avatar_url,
+          email: gitlabUser.email || '',
+          username: gitlabUser.username || '',
+          fullName: gitlabUser.name || '',
+          avatarUrl: gitlabUser.avatar_url || '',
           tokens: gitlabTokens,
         });
         user = result.user;

@@ -59,7 +59,7 @@ export interface IssueData {
   assigneeId?: string;
   attachments?: string[];
   acceptanceCriteria?: string[];
-  labelId: string;
+  labelIds?: string[];
   issueFormat: string;
   browserInfo?: any;
   childDescriptions?: string[];

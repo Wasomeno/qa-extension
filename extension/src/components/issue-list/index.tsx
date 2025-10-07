@@ -190,7 +190,10 @@ const IssueListInner: React.FC<IssueListProps> = ({
   // Map status selections to API format
   const statusFilter = React.useMemo(() => {
     if (selectedStatuses.length === 0) return undefined;
-    if (selectedStatuses.includes('open') && selectedStatuses.includes('closed')) {
+    if (
+      selectedStatuses.includes('open') &&
+      selectedStatuses.includes('closed')
+    ) {
       return undefined; // Show both, so no filter
     }
     return selectedStatuses.includes('closed') ? 'closed' : undefined;
@@ -349,10 +352,11 @@ const IssueListInner: React.FC<IssueListProps> = ({
     );
   };
 
-  const createOnOpenChange = (
-    key: 'projects' | 'labels' | 'assignees',
-    setter: React.Dispatch<React.SetStateAction<boolean>>
-  ) =>
+  const createOnOpenChange =
+    (
+      key: 'projects' | 'labels' | 'assignees',
+      setter: React.Dispatch<React.SetStateAction<boolean>>
+    ) =>
     (next: boolean) => {
       if (next && suppressOpenRefs.current[key]) {
         suppressOpenRefs.current[key] = false;
@@ -394,7 +398,9 @@ const IssueListInner: React.FC<IssueListProps> = ({
   const [pinnedCount, setPinnedCount] = React.useState(0);
 
   // Evidence mode state - tracks which issue cards are in evidence mode
-  const [evidenceModeIds, setEvidenceModeIds] = React.useState<Set<string>>(new Set());
+  const [evidenceModeIds, setEvidenceModeIds] = React.useState<Set<string>>(
+    new Set()
+  );
 
   React.useEffect(() => {
     let cancelled = false;
@@ -780,7 +786,7 @@ const IssueListInner: React.FC<IssueListProps> = ({
     const palette = projectId ? labelPalettes[projectId] : undefined;
     const selectedLabels = Array.isArray(item.labels) ? item.labels : [];
     const isInEvidenceMode = evidenceModeIds.has(item.id);
-    
+
     return (
       <IssueRow
         key={item.id}
@@ -882,7 +888,10 @@ const IssueListInner: React.FC<IssueListProps> = ({
             onChange={handleSearchChange}
             placeholder="Search issues..."
             className="text-sm glass-input text-white placeholder:text-white"
-            disabled={(isLoading && (!search || search === '')) || projectsQuery.isLoading}
+            disabled={
+              (isLoading && (!search || search === '')) ||
+              projectsQuery.isLoading
+            }
           />
         </div>
         <div className="grid grid-cols-3 gap-2">
@@ -896,65 +905,65 @@ const IssueListInner: React.FC<IssueListProps> = ({
                 <Button
                   type="button"
                   variant="outline"
-                className="text-xs h-8 glass-input w-full justify-between"
+                  className="text-xs h-8 glass-input w-full justify-between"
                   disabled={isLoading || projectsQuery.isLoading}
-                onPointerDown={event =>
-                  handleTriggerPointerDown(
-                    event,
-                    openProjects,
-                    'projects',
-                    setOpenProjects
-                  )
-                }
+                  onPointerDown={event =>
+                    handleTriggerPointerDown(
+                      event,
+                      openProjects,
+                      'projects',
+                      setOpenProjects
+                    )
+                  }
                 >
-                <div className="flex items-center gap-2 truncate">
-                  {selectedProjectIds.length === 0 && (
-                    <span className="truncate">All projects</span>
-                  )}
-                  {selectedProjectIds.length === 1 && (
-                    <Badge
-                      variant="secondary"
-                      className="text-[10px] px-2 py-1 truncate max-w-[140px]"
-                    >
-                      {(() => {
-                        const selected = projects.find(
-                          p => String(p.id) === selectedProjectIds[0]
-                        );
-                        return selected ? selected.name : '1 selected';
-                      })()}
-                    </Badge>
-                  )}
-                  {selectedProjectIds.length > 1 && (
-                    <div className="flex items-center gap-1 truncate">
-                      <span className="truncate">
-                        {(() => {
-                          const [firstId] = selectedProjectIds;
-                          const firstProject = projects.find(
-                            p => String(p.id) === firstId
-                          );
-                          if (!firstProject) {
-                            return `${selectedProjectIds.length} selected`;
-                          }
-                          const remaining = selectedProjectIds.length - 1;
-                          return `${firstProject.name}${remaining > 0 ? ` +${remaining}` : ''}`;
-                        })()}
-                      </span>
-                    </div>
-                  )}
-                </div>
-                <div className="flex items-center gap-2">
-                  {selectedProjectIds.length > 1 && (
-                    <Badge variant="secondary" className="text-[10px]">
-                      {selectedProjectIds.length}
-                    </Badge>
-                  )}
-                  <ChevronRight
-                    className={cn(
-                      'h-3.5 w-3.5 text-neutral-400 transition-transform duration-200',
-                      openProjects && 'rotate-90'
+                  <div className="flex items-center gap-2 truncate">
+                    {selectedProjectIds.length === 0 && (
+                      <span className="truncate">All projects</span>
                     )}
-                  />
-                </div>
+                    {selectedProjectIds.length === 1 && (
+                      <Badge
+                        variant="secondary"
+                        className="text-[10px] px-2 py-1 truncate max-w-[140px]"
+                      >
+                        {(() => {
+                          const selected = projects.find(
+                            p => String(p.id) === selectedProjectIds[0]
+                          );
+                          return selected ? selected.name : '1 selected';
+                        })()}
+                      </Badge>
+                    )}
+                    {selectedProjectIds.length > 1 && (
+                      <div className="flex items-center gap-1 truncate">
+                        <span className="truncate">
+                          {(() => {
+                            const [firstId] = selectedProjectIds;
+                            const firstProject = projects.find(
+                              p => String(p.id) === firstId
+                            );
+                            if (!firstProject) {
+                              return `${selectedProjectIds.length} selected`;
+                            }
+                            const remaining = selectedProjectIds.length - 1;
+                            return `${firstProject.name}${remaining > 0 ? ` +${remaining}` : ''}`;
+                          })()}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {selectedProjectIds.length > 1 && (
+                      <Badge variant="secondary" className="text-[10px]">
+                        {selectedProjectIds.length}
+                      </Badge>
+                    )}
+                    <ChevronRight
+                      className={cn(
+                        'h-3.5 w-3.5 text-neutral-400 transition-transform duration-200',
+                        openProjects && 'rotate-90'
+                      )}
+                    />
+                  </div>
                 </Button>
               </PopoverTrigger>
               <PopoverContent
@@ -1005,61 +1014,67 @@ const IssueListInner: React.FC<IssueListProps> = ({
                 <Button
                   type="button"
                   variant="outline"
-                className="text-xs h-8 glass-input w-full justify-between"
+                  className="text-xs h-8 glass-input w-full justify-between"
                   disabled={isLoading || loadingLabels}
-                onPointerDown={event =>
-                  handleTriggerPointerDown(
-                    event,
-                    openLabels,
-                    'labels',
-                    setOpenLabels
-                  )
-                }
+                  onPointerDown={event =>
+                    handleTriggerPointerDown(
+                      event,
+                      openLabels,
+                      'labels',
+                      setOpenLabels
+                    )
+                  }
                 >
-                <div className="flex items-center gap-2 truncate">
-                  {(selectedLabels.length + selectedStatuses.length) === 0 && (
-                    <span className="truncate">
-                      {selectedProjectIds.length
-                        ? 'Select labels/status'
-                        : 'Select a project first'}
-                    </span>
-                  )}
-                  {(selectedLabels.length + selectedStatuses.length) === 1 && (
-                    <Badge
-                      variant="secondary"
-                      className="text-[10px] px-2 py-1 truncate max-w-[140px]"
-                    >
-                      {(() => {
-                        const combined = [...selectedStatuses, ...selectedLabels];
-                        const name = combined[0];
-                        return name || '1 selected';
-                      })()}
-                    </Badge>
-                  )}
-                  {(selectedLabels.length + selectedStatuses.length) > 1 && (
-                    <span className="truncate">
-                      {(() => {
-                        const combined = [...selectedStatuses, ...selectedLabels];
-                        const first = combined[0];
-                        const remaining = combined.length - 1;
-                        return `${first}${remaining > 0 ? ` +${remaining}` : ''}`;
-                      })()}
-                    </span>
-                  )}
-                </div>
-                <div className="flex items-center gap-2">
-                  {(selectedLabels.length + selectedStatuses.length) > 0 && (
-                    <Badge variant="secondary" className="text-[10px]">
-                      {selectedLabels.length + selectedStatuses.length}
-                    </Badge>
-                  )}
-                  <ChevronRight
-                    className={cn(
-                      'h-3.5 w-3.5 text-neutral-400 transition-transform duration-200',
-                      openLabels && 'rotate-90'
+                  <div className="flex items-center gap-2 truncate">
+                    {selectedLabels.length + selectedStatuses.length === 0 && (
+                      <span className="truncate">
+                        {selectedProjectIds.length
+                          ? 'Select labels/status'
+                          : 'Select a project first'}
+                      </span>
                     )}
-                  />
-                </div>
+                    {selectedLabels.length + selectedStatuses.length === 1 && (
+                      <Badge
+                        variant="secondary"
+                        className="text-[10px] px-2 py-1 truncate max-w-[140px]"
+                      >
+                        {(() => {
+                          const combined = [
+                            ...selectedStatuses,
+                            ...selectedLabels,
+                          ];
+                          const name = combined[0];
+                          return name || '1 selected';
+                        })()}
+                      </Badge>
+                    )}
+                    {selectedLabels.length + selectedStatuses.length > 1 && (
+                      <span className="truncate">
+                        {(() => {
+                          const combined = [
+                            ...selectedStatuses,
+                            ...selectedLabels,
+                          ];
+                          const first = combined[0];
+                          const remaining = combined.length - 1;
+                          return `${first}${remaining > 0 ? ` +${remaining}` : ''}`;
+                        })()}
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {selectedLabels.length + selectedStatuses.length > 0 && (
+                      <Badge variant="secondary" className="text-[10px]">
+                        {selectedLabels.length + selectedStatuses.length}
+                      </Badge>
+                    )}
+                    <ChevronRight
+                      className={cn(
+                        'h-3.5 w-3.5 text-neutral-400 transition-transform duration-200',
+                        openLabels && 'rotate-90'
+                      )}
+                    />
+                  </div>
                 </Button>
               </PopoverTrigger>
               <PopoverContent
@@ -1126,77 +1141,80 @@ const IssueListInner: React.FC<IssueListProps> = ({
                 <Button
                   type="button"
                   variant="outline"
-                className="text-xs h-8 glass-input w-full justify-between"
+                  className="text-xs h-8 glass-input w-full justify-between"
                   disabled={isLoading || usersQuery.isLoading}
-                onPointerDown={event =>
-                  handleTriggerPointerDown(
-                    event,
-                    openAssignees,
-                    'assignees',
-                    setOpenAssignees
-                  )
-                }
+                  onPointerDown={event =>
+                    handleTriggerPointerDown(
+                      event,
+                      openAssignees,
+                      'assignees',
+                      setOpenAssignees
+                    )
+                  }
                 >
-                <div className="flex items-center gap-2 truncate">
-                  {selectedAssigneeIds.length === 0 && (
-                    <span className="truncate">Anyone</span>
-                  )}
-                  {selectedAssigneeIds.length === 1 && (
-                    <Badge
-                      variant="secondary"
-                      className="text-[10px] px-2 py-1 truncate max-w-[140px]"
-                    >
-                      {(() => {
-                        const selectedUser = users.find(
-                          u => String(u.id) === selectedAssigneeIds[0]
-                        );
-                        if (selectedAssigneeIds[0] === 'unassigned') {
-                          return 'Unassigned';
-                        }
-                        return selectedUser
-                          ? selectedUser.name || selectedUser.username
-                          : '1 selected';
-                      })()}
-                    </Badge>
-                  )}
-                  {selectedAssigneeIds.length > 1 && (
-                    <span className="truncate">
-                      {(() => {
-                        const firstId = selectedAssigneeIds[0];
-                        let firstLabel = 'Multiple';
-                        if (firstId === 'unassigned') {
-                          firstLabel = 'Unassigned';
-                        } else {
-                          const firstUser = users.find(u => String(u.id) === firstId);
-                          if (firstUser) {
-                            firstLabel = firstUser.name || `@${firstUser.username}`;
-                          }
-                        }
-                        const remaining = selectedAssigneeIds.length - 1;
-                        return `${firstLabel}${remaining > 0 ? ` +${remaining}` : ''}`;
-                      })()}
-                    </span>
-                  )}
-                </div>
-                <div className="flex items-center gap-2">
-                  {selectedAssigneeIds.length > 0 && (
-                    <Badge variant="secondary" className="text-[10px]">
-                      {selectedAssigneeIds.length}
-                    </Badge>
-                  )}
-                  <ChevronRight
-                    className={cn(
-                      'h-3.5 w-3.5 text-neutral-400 transition-transform duration-200',
-                      openAssignees && 'rotate-90'
+                  <div className="flex items-center gap-2 truncate">
+                    {selectedAssigneeIds.length === 0 && (
+                      <span className="truncate">Anyone</span>
                     )}
-                  />
-                </div>
+                    {selectedAssigneeIds.length === 1 && (
+                      <Badge
+                        variant="secondary"
+                        className="text-[10px] px-2 py-1 truncate max-w-[140px]"
+                      >
+                        {(() => {
+                          const selectedUser = users.find(
+                            u => String(u.id) === selectedAssigneeIds[0]
+                          );
+                          if (selectedAssigneeIds[0] === 'unassigned') {
+                            return 'Unassigned';
+                          }
+                          return selectedUser
+                            ? selectedUser.name || selectedUser.username
+                            : '1 selected';
+                        })()}
+                      </Badge>
+                    )}
+                    {selectedAssigneeIds.length > 1 && (
+                      <span className="truncate">
+                        {(() => {
+                          const firstId = selectedAssigneeIds[0];
+                          let firstLabel = 'Multiple';
+                          if (firstId === 'unassigned') {
+                            firstLabel = 'Unassigned';
+                          } else {
+                            const firstUser = users.find(
+                              u => String(u.id) === firstId
+                            );
+                            if (firstUser) {
+                              firstLabel =
+                                firstUser.name || `@${firstUser.username}`;
+                            }
+                          }
+                          const remaining = selectedAssigneeIds.length - 1;
+                          return `${firstLabel}${remaining > 0 ? ` +${remaining}` : ''}`;
+                        })()}
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {selectedAssigneeIds.length > 0 && (
+                      <Badge variant="secondary" className="text-[10px]">
+                        {selectedAssigneeIds.length}
+                      </Badge>
+                    )}
+                    <ChevronRight
+                      className={cn(
+                        'h-3.5 w-3.5 text-neutral-400 transition-transform duration-200',
+                        openAssignees && 'rotate-90'
+                      )}
+                    />
+                  </div>
                 </Button>
               </PopoverTrigger>
               <PopoverContent
                 className="p-2 w-72"
                 container={portalContainer || undefined}
-                align="start"
+                align="end"
               >
                 <div className="space-y-2">
                   <Input
@@ -1324,6 +1342,8 @@ const IssueListInner: React.FC<IssueListProps> = ({
                       </div>
                     </div>
                   ) : null}
+
+
                 </div>
               </div>
             )}

@@ -227,13 +227,10 @@ const FloatingTriggerPopup: React.FC<FloatingTriggerPopupProps> = ({
                 Issue List
               </div>
               <div className="text-xs text-neutral-500 ">
-                Your saved filter: “Assigned to me”
+                List of issues on your project
               </div>
             </div>
             <div className="ml-3 flex items-center gap-2 text-xs text-neutral-700">
-              <span className="inline-flex items-center rounded-full px-2 py-0.5 bg-neutral-200/70">
-                open
-              </span>
               <ChevronRight className="w-4 h-4 opacity-60 group-hover:opacity-100" />
             </div>
           </div>
@@ -289,7 +286,7 @@ const FloatingTriggerPopup: React.FC<FloatingTriggerPopupProps> = ({
     switch (selectedFeature) {
       case 'issue':
         return (
-          <div className="flex flex-col w-[400px] h-full">
+          <div className="flex flex-col w-[500px] h-full">
             <HeaderBar
               title="Create Issue"
               onBack={onBack}
@@ -311,7 +308,7 @@ const FloatingTriggerPopup: React.FC<FloatingTriggerPopupProps> = ({
         );
       case 'issues':
         return (
-          <div className="flex flex-col w-[400px] h-full">
+          <div className="flex flex-col w-[500px] h-full">
             <HeaderBar
               title="Issues"
               onBack={onBack}
@@ -407,7 +404,7 @@ const FloatingTriggerPopup: React.FC<FloatingTriggerPopupProps> = ({
         );
       case 'scenario-generator':
         return (
-          <div className="flex flex-col w-[400px] h-full">
+          <div className="flex flex-col w-[500px] h-full">
             <HeaderBar
               title="Task Scenario Generator"
               onBack={onBack}

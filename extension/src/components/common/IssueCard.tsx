@@ -73,7 +73,9 @@ const IssueCard: React.FC<IssueCardProps> = ({
   const [submitting, setSubmitting] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [pastingImage, setPastingImage] = React.useState(false);
-  const [successMessage, setSuccessMessage] = React.useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = React.useState<string | null>(
+    null
+  );
   const canAddEvidence = !!(
     evidenceEnabled &&
     evidenceProjectId &&
@@ -152,12 +154,12 @@ const IssueCard: React.FC<IssueCardProps> = ({
       if (!resp.success) throw new Error(resp.error || 'Failed to add note');
       if (onEvidenceAdded)
         onEvidenceAdded((resp as any).data?.note || resp.data);
-      
+
       // Show success message
       const statusText = evidenceStatus === 'passed' ? 'Passed' : 'Not Passed';
       setSuccessMessage(`Evidence submitted successfully (${statusText})`);
       setSubmitting(false);
-      
+
       // Auto-hide success message and reset state after 2 seconds
       setTimeout(() => {
         resetEvidenceState();
@@ -173,15 +175,15 @@ const IssueCard: React.FC<IssueCardProps> = ({
     initial: (direction: number) => {
       return { x: `${110 * direction}%`, opacity: 0 };
     },
-    active: { x: "0%", opacity: 1 },
+    active: { x: '0%', opacity: 1 },
     exit: (direction: number) => {
-      return { x: `${-110 * direction}%`, opacity: 0 };
+      return { x: `${-110 * direction}%`, opacity: 0.3 };
     },
   };
 
   // Create content for both layouts
   const normalContent = (
-    <div className="flex flex-col gap-2">
+    <div className="flex flex-col gap-2 text-left">
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0 flex-1">
           <div className="flex flex-col min-w-0">
@@ -264,41 +266,29 @@ const IssueCard: React.FC<IssueCardProps> = ({
   );
 
   const evidenceContent = (
-    <div className="flex flex-col items-center text-center py-2">
+    <div className="flex flex-col gap-2 text-left">
       {/* Header with back button */}
-      <div className="w-full flex items-center justify-between mb-4">
-        <div className="flex-1" />
-        <div className="flex-1 text-center">
-          <div className="text-[14px] font-semibold text-black truncate">
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0 flex-1">
+          <div className="text-[13px] font-semibold text-black truncate">
             Adding Evidence: {title}
           </div>
-          <div className="text-[12px] text-black/60 truncate">
+          <div className="text-[12px] text-black/70 truncate">
             {projectName} #{number}
           </div>
-        </div>
-        <div className="flex-1 flex justify-end">
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-7 w-7"
-            onClick={handleExitEvidence}
-            title="Back to issue"
-          >
-            <ArrowLeft className="w-4 h-4" />
-          </Button>
         </div>
       </div>
 
       {/* Evidence form */}
-      <div className="w-full max-w-md" onClick={e => e.stopPropagation()}>
+      <div onClick={e => e.stopPropagation()}>
         {error && (
-          <Alert variant="destructive" className="mb-3">
+          <Alert variant="destructive" className="mb-2">
             <div className="text-sm">{error}</div>
           </Alert>
         )}
 
         {successMessage && (
-          <Alert className="mb-3 bg-green-50 border-green-200 text-green-800">
+          <Alert className="mb-2 bg-green-50 border-green-200 text-green-800">
             <div className="text-xs flex items-center gap-2">
               <div className="w-3 h-3 rounded-full bg-green-500 flex items-center justify-center">
                 <span className="text-white text-[8px] leading-none">✓</span>
@@ -308,20 +298,22 @@ const IssueCard: React.FC<IssueCardProps> = ({
           </Alert>
         )}
 
-        <div className="flex flex-col gap-4">
+        <div className="flex flex-col gap-2">
           <div>
-            <Label className="text-[13px] font-medium text-black/80 block mb-3">Result</Label>
+            <Label className="text-[11px] font-medium text-black/70 mb-1 block">
+              Result
+            </Label>
             <RadioGroup
-              className="flex items-center justify-center gap-3"
+              className="flex items-start gap-2"
               value={evidenceStatus}
               onValueChange={(v: any) => setEvidenceStatus(v)}
               disabled={!!successMessage}
             >
               <div
                 className={cn(
-                  'rounded-lg border border-neutral-200 px-4 py-2 flex items-center gap-2 cursor-pointer transition-colors min-w-[100px]',
+                  'rounded-md border border-neutral-200 px-2 py-1 text-sm flex items-center gap-1.5 cursor-pointer transition-colors',
                   evidenceStatus === 'passed'
-                    ? 'bg-emerald-50 border-emerald-300'
+                    ? 'bg-emerald-50 border-emerald-200'
                     : 'hover:bg-gray-50'
                 )}
               >
@@ -329,7 +321,6 @@ const IssueCard: React.FC<IssueCardProps> = ({
                   id="ev-pass"
                   value="passed"
                   className={cn(
-                    'w-5 h-5',
                     evidenceStatus === 'passed'
                       ? 'border-emerald-500 text-emerald-500'
                       : 'border-neutral-300 text-neutral-400'
@@ -338,9 +329,9 @@ const IssueCard: React.FC<IssueCardProps> = ({
                 <Label
                   htmlFor="ev-pass"
                   className={cn(
-                    'text-[12px] cursor-pointer font-medium',
+                    'text-[10px] cursor-pointer',
                     evidenceStatus === 'passed'
-                      ? 'text-emerald-600'
+                      ? 'text-emerald-600 font-medium'
                       : 'text-gray-700'
                   )}
                 >
@@ -349,9 +340,9 @@ const IssueCard: React.FC<IssueCardProps> = ({
               </div>
               <div
                 className={cn(
-                  'rounded-lg border border-neutral-200 px-4 py-2 flex items-center gap-2 cursor-pointer transition-colors min-w-[100px]',
+                  'rounded-md border border-neutral-200 px-2 py-1 text-sm flex items-center gap-1.5 cursor-pointer transition-colors',
                   evidenceStatus === 'not_passed'
-                    ? 'bg-rose-50 border-rose-300'
+                    ? 'bg-rose-50 border-rose-200'
                     : 'hover:bg-gray-50'
                 )}
               >
@@ -359,7 +350,6 @@ const IssueCard: React.FC<IssueCardProps> = ({
                   id="ev-npass"
                   value="not_passed"
                   className={cn(
-                    'w-5 h-5',
                     evidenceStatus === 'not_passed'
                       ? 'border-rose-500 text-rose-500'
                       : 'border-neutral-300 text-neutral-400'
@@ -368,9 +358,9 @@ const IssueCard: React.FC<IssueCardProps> = ({
                 <Label
                   htmlFor="ev-npass"
                   className={cn(
-                    'text-[12px] cursor-pointer font-medium',
+                    'text-[10px] cursor-pointer',
                     evidenceStatus === 'not_passed'
-                      ? 'text-rose-600'
+                      ? 'text-rose-600 font-medium'
                       : 'text-gray-700'
                   )}
                 >
@@ -379,16 +369,18 @@ const IssueCard: React.FC<IssueCardProps> = ({
               </div>
             </RadioGroup>
           </div>
-          
+
           <div>
-            <Label className="text-[13px] font-medium text-black/80 block mb-2">Message</Label>
+            <Label className="text-[11px] font-medium text-black/70 mb-1 block">
+              Message
+            </Label>
             {pastingImage && (
               <Badge variant="secondary" className="mb-2 w-fit">
                 Pasting images…
               </Badge>
             )}
             <Textarea
-              className="h-24 resize-none text-[12px] glass-input"
+              className="h-16 resize-none text-xs glass-input"
               placeholder="Add a short note or paste a link"
               value={message}
               onChange={e => setMessage(e.target.value)}
@@ -414,11 +406,8 @@ const IssueCard: React.FC<IssueCardProps> = ({
                     (cd as any).files &&
                     (cd as any).files.length
                   ) {
-                    for (const f of Array.from(
-                      (cd as any).files as FileList
-                    )) {
-                      if (f.type && f.type.startsWith('image/'))
-                        files.push(f);
+                    for (const f of Array.from((cd as any).files as FileList)) {
+                      if (f.type && f.type.startsWith('image/')) files.push(f);
                     }
                   }
                   if (!files.length) return; // allow normal paste
@@ -442,11 +431,10 @@ const IssueCard: React.FC<IssueCardProps> = ({
             />
           </div>
 
-          <div className="flex items-center gap-3 mt-2">
+          <div className="flex items-center gap-2">
             <Button
-              variant="ghost"
-              size="sm"
-              className="h-9 text-[12px] flex-1 min-w-[100px]"
+              variant="outline"
+              className="h-8 text-[12px] flex-1"
               onClick={handleExitEvidence}
               disabled={submitting || pastingImage || !!successMessage}
             >
@@ -455,7 +443,7 @@ const IssueCard: React.FC<IssueCardProps> = ({
             <Button
               variant="outline"
               size="sm"
-              className="h-9 text-[12px] flex-1 min-w-[100px]"
+              className="h-8 text-[12px] flex-1"
               onClick={handleSubmitEvidence}
               disabled={submitting || pastingImage || !!successMessage}
             >
@@ -468,18 +456,13 @@ const IssueCard: React.FC<IssueCardProps> = ({
   );
 
   return (
-    <MotionConfig transition={{ duration: 0.2, type: "spring", bounce: 0 }}>
-      <motion.div
-        animate={{ height: bounds.height }}
+    <MotionConfig transition={{ duration: 0.2, type: 'spring', bounce: 0 }}>
+      <div
         className={cn(
-          'group glass-card shadow-none w-full text-left rounded-md border border-gray-200',
+          'group glass-card overflow-hidden shadow-none w-full text-left rounded-md border border-gray-200',
           isInEvidenceMode ? 'bg-blue-50/30' : '',
           className
         )}
-        style={{
-          // Performance optimizations for smooth animations
-          willChange: bounds.height > 0 ? 'height' : 'auto',
-        }}
       >
         <Wrapper
           type={as === 'button' ? 'button' : undefined}
@@ -487,32 +470,26 @@ const IssueCard: React.FC<IssueCardProps> = ({
           onMouseEnter={() => setIsHovered(true)}
           onMouseLeave={() => setIsHovered(false)}
           className="px-4 py-3 w-full"
-          aria-label={isInEvidenceMode ? `Adding evidence for ${title}` : ariaLabel}
+          aria-label={
+            isInEvidenceMode ? `Adding evidence for ${title}` : ariaLabel
+          }
         >
-          <div ref={ref}>
-            <AnimatePresence mode="wait" initial={false} custom={direction}>
-              <motion.div
-                key={isInEvidenceMode ? 'evidence' : 'normal'}
-                variants={variants}
-                initial="initial"
-                animate="active"
-                exit="exit"
-                custom={direction}
-                style={{
-                  // Optimize for transform animations
-                  willChange: 'transform, opacity',
-                }}
-              >
-                {isInEvidenceMode ? evidenceContent : normalContent}
-              </motion.div>
-            </AnimatePresence>
-          </div>
+          <AnimatePresence mode="wait" initial={false} custom={direction}>
+            <motion.div
+              key={isInEvidenceMode ? 'evidence' : 'normal'}
+              variants={variants}
+              initial="initial"
+              animate="active"
+              exit="exit"
+              custom={direction}
+            >
+              {isInEvidenceMode ? evidenceContent : normalContent}
+            </motion.div>
+          </AnimatePresence>
         </Wrapper>
-      </motion.div>
+      </div>
     </MotionConfig>
   );
-
-
 };
 
 export default IssueCard;

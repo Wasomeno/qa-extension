@@ -231,7 +231,7 @@ const FloatingTriggerButton: React.FC<FloatingTriggerButtonProps> = ({
               : 25
             : viewState === 'features'
               ? 260
-              : 400,
+              : 500,
         height:
           viewState === 'closed'
             ? isHovered
@@ -240,8 +240,8 @@ const FloatingTriggerButton: React.FC<FloatingTriggerButtonProps> = ({
             : viewState === 'features'
               ? 300
               : selectedFeature === 'pinned'
-                ? 340
-                : 480,
+                ? 440
+                : 580,
         borderRadius: viewState === 'closed' ? (isHovered ? 100 : 100) : 16,
         scale: 1,
         opacity: 1,
