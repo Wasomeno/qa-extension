@@ -1,6 +1,6 @@
 import OpenAI from 'openai';
 import { DatabaseService } from './database';
-import { redisService } from './redis';
+import { RedisService, redisService } from './redis';
 import { logger } from '../utils/logger';
 import { EnvConfig } from '../config/env';
 

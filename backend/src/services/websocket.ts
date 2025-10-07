@@ -1,7 +1,7 @@
 import { Server as SocketIOServer, Socket } from 'socket.io';
 import jwt from 'jsonwebtoken';
 import { DatabaseService } from './database';
-import { redisService } from './redis';
+import { RedisService, redisService } from './redis';
 import { logger } from '../utils/logger';
 import { EnvConfig } from '../config/env';
 

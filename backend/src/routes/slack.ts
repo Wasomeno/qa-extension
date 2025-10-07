@@ -134,8 +134,14 @@ router.post(
         .where('id', req.user!.id)
         .update({ slack_id: null, slack_tokens: null, updated_at: new Date() });
 
-      await redis.connect();
-      await redis.del(`slack_tokens:${req.user!.id}`);
+      try {
+        if (!redisService.isAvailable()) {
+          await redisService.connect();
+        }
+        await redisService.del(`slack_tokens:${req.user!.id}`);
+      } catch (cacheError) {
+        logger.warn('Failed to clear Slack tokens from Redis cache:', cacheError);
+      }
 
       return sendResponse(res, 200, true, 'Slack disconnected');
     } catch (error) {

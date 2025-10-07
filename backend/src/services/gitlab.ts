@@ -1,6 +1,6 @@
 import axios, { AxiosInstance, AxiosRequestConfig } from 'axios';
 import { logger } from '../utils/logger';
-import { redisService } from './redis';
+import { RedisService, redisService } from './redis';
 import { CustomError } from '../middleware/errorHandler';
 
 export interface GitLabProject {
@@ -977,7 +977,7 @@ export class GitLabService {
         if (!keys || keys.length === 0) {
           continue;
         }
-        await Promise.all(keys.map(key => this.redis.del(key)));
+        await Promise.all(keys.map((key: string) => this.redis.del(key)));
         logger.debug(
           `Invalidated ${keys.length} GitLab cache entr${keys.length === 1 ? 'y' : 'ies'} for pattern ${pat}`
         );

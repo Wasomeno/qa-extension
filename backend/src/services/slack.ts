@@ -1,7 +1,7 @@
 import axios, { AxiosInstance } from 'axios';
 import crypto from 'crypto';
 import { DatabaseService, databaseService } from './database';
-import { redisService } from './redis';
+import { RedisService, redisService } from './redis';
 import { logger } from '../utils/logger';
 
 export interface SlackConfig {

@@ -1,15 +1,8 @@
 import dotenv from 'dotenv';
 import path from 'path';
 
-// Load environment variables as early as possible.
-// 1) Load backend/.env (cwd when running `cd backend && npm run dev`)
-dotenv.config();
+// Always load the backend-specific .env file.
+const envPath = path.resolve(__dirname, '../.env');
+dotenv.config({ path: envPath });
 
-// 2) If OPENAI_API_KEY (or other vars) still missing, try root ../.env
-if (!process.env.OPENAI_API_KEY) {
-  const rootEnv = path.resolve(process.cwd(), '../.env');
-  dotenv.config({ path: rootEnv });
-}
-
-// 3) No exports – side-effect only
-
+// No exports – side-effect only
