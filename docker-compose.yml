@@ -9,7 +9,7 @@ services:
       POSTGRES_USER: qa_user
       POSTGRES_PASSWORD: qa_password
     ports:
-      - "5432:5432"
+      - '5432:5432'
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./database/init:/docker-entrypoint-initdb.d
@@ -20,7 +20,7 @@ services:
     image: redis:7-alpine
     container_name: qa-redis
     ports:
-      - "6379:6379"
+      - '6379:6379'
     volumes:
       - redis_data:/data
     networks:
@@ -43,7 +43,7 @@ services:
       OPENAI_API_KEY: ${OPENAI_API_KEY}
       OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4.1-mini}
     ports:
-      - "3000:3000"
+      - '127.0.0.1:3000:3000'
     volumes:
       - ./backend:/app
       - /app/node_modules
