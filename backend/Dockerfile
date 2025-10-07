@@ -15,7 +15,7 @@ COPY . .
 RUN npm run build
 
 # Remove dev dependencies for runtime image and clean npm cache
-RUN npm prune --omit=dev && npm cache clean --force
+RUN npm cache clean --force
 
 # Create non-root user
 RUN addgroup -g 1001 -S nodejs
