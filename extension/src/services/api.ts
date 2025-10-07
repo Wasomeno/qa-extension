@@ -170,7 +170,7 @@ export interface VoiceTranscriptionRequest {
 }
 
 class ApiService {
-  private baseUrl: string = 'http://localhost:3000';
+  private baseUrl: string = process.env.BASE_API_URL;
   private wsConnection: WebSocket | null = null;
 
   constructor() {
@@ -199,7 +199,7 @@ class ApiService {
       console.log('API base URL initialized:', this.baseUrl);
     } catch (error) {
       console.error('Error getting settings for API URL:', error);
-      // baseUrl remains default 'http://localhost:3000'
+      // baseUrl remains the env-configured default
     }
   }
 

@@ -374,7 +374,7 @@ const OptionsApp: React.FC = () => {
           value={tempSettings.apiEndpoint || ''}
           onChange={(e) => setTempSettings(prev => ({ ...prev, apiEndpoint: e.target.value }))}
           className="form-input"
-          placeholder="http://localhost:3000"
+          placeholder={process.env.BASE_API_URL}
         />
         <small className="form-help">Backend API endpoint URL</small>
       </div>

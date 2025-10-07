@@ -6,6 +6,11 @@ const MiniCssExtractPlugin = require('mini-css-extract-plugin');
 
 module.exports = (env, argv) => {
   const isDevelopment = argv.mode === 'development';
+  const baseApiUrl = process.env.BASE_API_URL;
+
+  if (!baseApiUrl) {
+    throw new Error('BASE_API_URL environment variable is required for the extension build');
+  }
   
   return {
   entry: {
@@ -84,6 +89,7 @@ module.exports = (env, argv) => {
   plugins: [
     new webpack.DefinePlugin({
       'process.env.NODE_ENV': JSON.stringify(isDevelopment ? 'development' : 'production'),
+      'process.env.BASE_API_URL': JSON.stringify(baseApiUrl),
     }),
     new MiniCssExtractPlugin({
       filename: '[name].css',

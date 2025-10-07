@@ -111,7 +111,7 @@ const DEFAULT_SETTINGS: ExtensionSettings = {
   shortcuts: {
     createIssue: 'Ctrl+Shift+I',
   },
-  apiEndpoint: 'http://localhost:3000',
+  apiEndpoint: process.env.BASE_API_URL,
 };
 
 class StorageService {

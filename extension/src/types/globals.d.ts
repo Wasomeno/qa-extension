@@ -5,6 +5,14 @@ declare global {
     webkitSpeechRecognition: any;
     SpeechRecognition: any;
   }
+
+  // Webpack injects process.env at build time; provide minimal typings
+  const process: {
+    env: {
+      NODE_ENV?: string;
+      BASE_API_URL: string;
+    };
+  };
 }
 
 // Chrome extension API augmentations
