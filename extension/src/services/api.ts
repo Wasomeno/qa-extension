@@ -1054,10 +1054,12 @@ class ApiService {
   ): Promise<ApiResponse<ListIssuesResponse>> {
     const query = new URLSearchParams();
     if (params.search) query.set('search', params.search);
+    if (params.projectId) query.set('projectId', params.projectId);
     if (params.labels && params.labels.length)
       query.set('labels', params.labels.join(','));
     if (params.assigneeId) query.set('assigneeId', params.assigneeId);
     if (params.createdBy) query.set('createdBy', params.createdBy);
+    if (params.status) query.set('status', params.status);
     if (params.cursor)
       query.set('page', String(parseInt(String(params.cursor)) || 1));
     if (params.limit) query.set('limit', String(params.limit));

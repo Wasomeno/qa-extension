@@ -902,6 +902,8 @@ router.get(
       page = '1',
       limit = '5',
       state = 'opened',
+      status,
+      projectId,
     } = req.query as any;
     const userId = req.user!.id;
 
@@ -922,6 +924,16 @@ router.get(
       }
 
       const gitlab = new GitLabService(oauthConnection.access_token);
+
+      const rawProjectIds = Array.isArray(projectId)
+        ? projectId
+        : typeof projectId === 'string'
+        ? projectId.split(',').map((id: string) => id.trim())
+        : [];
+
+      const projectIdFilters = rawProjectIds
+        .map((id: string) => parseInt(id, 10))
+        .filter((id: number) => !Number.isNaN(id));
 
       // Determine author scope
       let author_id: number | undefined;
@@ -944,6 +956,14 @@ router.get(
       const perPage = parseInt(limit as string, 10) || 5;
       const pageNum = parseInt(page as string, 10) || 1;
 
+      const normalizedState = (() => {
+        const rawState =
+          typeof status === 'string' && status.length > 0 ? status : state;
+        if (rawState === 'closed') return 'closed';
+        if (rawState === 'all') return 'all';
+        return 'opened';
+      })();
+
       const labelString = typeof labels === 'string' ? labels : undefined;
       const selectedLabels = labelString
         ? labelString
@@ -955,7 +975,7 @@ router.get(
       const hasMultipleLabels = selectedLabels.length > 1;
 
       const issues = await gitlab.getAllIssues({
-        state: (state as any) || 'opened',
+        state: normalizedState as any,
         labels: labelString,
         labels_match_mode: hasMultipleLabels ? 'or' : 'and',
         assignee_id,
@@ -963,6 +983,7 @@ router.get(
         search: (search as string) || undefined,
         per_page: perPage,
         page: pageNum,
+        project_ids: projectIdFilters,
         ...(scope ? ({ scope } as any) : {}),
       } as any);
 

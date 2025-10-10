@@ -437,8 +437,15 @@ export class GitLabService {
       if (options.author_id) params.author_id = options.author_id;
       if (options.search) params.search = options.search;
       if (options.scope) params.scope = options.scope;
+      if (options.project_ids && options.project_ids.length === 1) {
+        params.project_id = options.project_ids[0];
+      }
 
-      const cacheKey = `gitlab_global_issues:${JSON.stringify(params)}`;
+      const cacheKey = `gitlab_global_issues:${JSON.stringify({
+        ...params,
+        project_ids: options.project_ids || [],
+        labels_match_mode: options.labels_match_mode || 'and',
+      })}`;
 
       // Check cache first
       const cached = await this.safeRedisGet<GitLabIssue[]>(cacheKey);

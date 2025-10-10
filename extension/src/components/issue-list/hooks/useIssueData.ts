@@ -8,12 +8,17 @@ export const useIssueData = (filters: IssueFilterState, filtersReady: boolean) =
   const [allItems, setAllItems] = useState<any[]>([]);
   const [allProjectLabels, setAllProjectLabels] = useState<Record<string, GitLabLabel[]>>({});
 
+  const projectFilterValue =
+    filters.selectedProjectIds.length > 0
+      ? filters.selectedProjectIds.slice().sort().join(',')
+      : '';
+
   // Create stable query key
   const queryKey = [
     'issues-page',
     {
       search: filters.search,
-      projectId: filters.selectedProjectIds.length === 1 ? filters.selectedProjectIds[0] : '',
+      projectId: projectFilterValue,
       assigneeId: filters.selectedAssigneeIds.length === 1 && filters.selectedAssigneeIds[0] !== 'unassigned'
         ? filters.selectedAssigneeIds[0] : '',
       labels: filters.selectedLabels.slice().sort().join(','),
@@ -38,7 +43,7 @@ export const useIssueData = (filters: IssueFilterState, filtersReady: boolean) =
 
       const res = await api.listGitLabIssuesGlobal({
         search: filters.search || undefined,
-        projectId: filters.selectedProjectIds.length === 1 ? filters.selectedProjectIds[0] : undefined,
+        projectId: projectFilterValue || undefined,
         assigneeId: filters.selectedAssigneeIds.length === 1 && filters.selectedAssigneeIds[0] !== 'unassigned'
           ? filters.selectedAssigneeIds[0] : undefined,
         labels: filters.selectedLabels,
@@ -99,14 +104,6 @@ export const useIssueData = (filters: IssueFilterState, filtersReady: boolean) =
 
   // Filter issues by selected projects and assignees (client-side filtering)
   const visibleIssues = allItems.filter(item => {
-    // Project filter
-    if (filters.selectedProjectIds.length > 0) {
-      const projectId = String(item.project?.id);
-      if (!filters.selectedProjectIds.includes(projectId)) {
-        return false;
-      }
-    }
-
     // Assignee filter
     if (filters.selectedAssigneeIds.length > 0) {
       const assignees = Array.isArray((item as any).assignees)
