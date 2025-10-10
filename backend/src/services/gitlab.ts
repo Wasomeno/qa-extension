@@ -17,6 +17,7 @@ export interface GitLabProject {
 export interface GitLabIssue {
   id: number;
   iid: number;
+  project_id: number;
   title: string;
   description: string;
   state: string;
@@ -414,170 +415,62 @@ export class GitLabService {
       author_id?: number;
       search?: string;
       scope?: 'created_by_me' | 'assigned_to_me' | 'all';
-      per_page?: number; // global per_page
-      page?: number; // global page (1-based)
-      project_ids?: Array<number | string>; // optional project filter
+      per_page?: number;
+      page?: number;
+      project_ids?: Array<number | string>;
       labels_match_mode?: 'and' | 'or';
     } = {}
   ): Promise<GitLabIssue[]> {
-    // Global pagination configuration
-    const globalPerPage = options.per_page && options.per_page > 0 ? options.per_page : 20;
-    const globalPage = options.page && options.page > 0 ? options.page : 1;
-    const globalSkip = (globalPage - 1) * globalPerPage;
-
-    // Filters to forward to per-project issues API
-    const matchMode = options.labels_match_mode || 'and';
-    const initialLabels = options.labels;
-    const labelList = initialLabels
-      ? initialLabels
-          .split(',')
-          .map(label => label.trim())
-          .filter(Boolean)
-      : [];
-
-    const baseIssueParams: Record<string, any> = {
-      state: options.state || 'opened',
-      labels: matchMode === 'and' ? initialLabels : undefined,
-      milestone: options.milestone,
-      assignee_id: options.assignee_id,
-      author_id: options.author_id,
-      search: options.search,
-      scope: options.scope,
-      order_by: 'updated_at',
-      sort: 'desc',
-      // We'll control pagination per project below
-    };
-
     try {
-      // 1) Determine project IDs
-      let projectIds: Array<number | string> = [];
+      const params: Record<string, any> = {
+        state: options.state || 'opened',
+        per_page: options.per_page || 20,
+        page: options.page || 1,
+        order_by: 'updated_at',
+        sort: 'desc',
+      };
+
+      // Add optional filters
+      if (options.labels) params.labels = options.labels;
+      if (options.milestone) params.milestone = options.milestone;
+      if (options.assignee_id) params.assignee_id = options.assignee_id;
+      if (options.author_id) params.author_id = options.author_id;
+      if (options.search) params.search = options.search;
+      if (options.scope) params.scope = options.scope;
+
+      const cacheKey = `gitlab_global_issues:${JSON.stringify(params)}`;
+
+      // Check cache first
+      const cached = await this.safeRedisGet<GitLabIssue[]>(cacheKey);
+      if (cached) {
+        return cached;
+      }
+
+      // Use GitLab's global issues API - much more efficient
+      const response = await this.client.get('/issues', { params });
+      const issues = response.data as GitLabIssue[];
+
+      // Filter by project_ids if specified
+      let filteredIssues = issues;
       if (options.project_ids && options.project_ids.length > 0) {
-        projectIds = options.project_ids;
-      } else {
-        projectIds = await this.listAllAccessibleProjectIds();
+        const projectIdSet = new Set(options.project_ids.map(id => Number(id)));
+        filteredIssues = issues.filter(issue => projectIdSet.has(issue.project_id));
       }
 
-      if (projectIds.length === 0) {
-        return [];
+      // Handle OR logic for labels if needed
+      if (options.labels && options.labels_match_mode === 'or') {
+        const labelList = options.labels.split(',').map(l => l.trim()).filter(Boolean);
+        filteredIssues = filteredIssues.filter(issue =>
+          labelList.some(label => issue.labels.includes(label))
+        );
       }
 
-      // 2) Fetch issues per project, first page for each, with concurrency 2
-      type ProjectPageState = {
-        projectId: number | string;
-        nextPage: number | null; // null when no more pages
-        buffer: GitLabIssue[]; // accumulated issues fetched for this project
-        label?: string;
-      };
+      // Cache for 2 minutes
+      await this.safeRedisSet(cacheKey, filteredIssues, 120);
 
-      const states: ProjectPageState[] =
-        matchMode === 'or' && labelList.length > 0
-          ? projectIds.flatMap(pid =>
-              labelList.map(label => ({
-                projectId: pid,
-                nextPage: 1,
-                buffer: [],
-                label,
-              }))
-            )
-          : projectIds.map(pid => ({
-              projectId: pid,
-              nextPage: 1,
-              buffer: [],
-            }));
-
-      const targetCount = globalSkip + globalPerPage; // how many items we need to collect before slicing
-
-      // Helper: chunked concurrency runner (2 at a time)
-      const runInBatches = async <T>(items: T[], handler: (item: T) => Promise<void>, batchSize = 2) => {
-        for (let i = 0; i < items.length; i += batchSize) {
-          const batch = items.slice(i, i + batchSize);
-          // If any call fails, let it throw to fail the whole request
-          await Promise.all(batch.map(item => handler(item)));
-        }
-      };
-
-      // Helper: fetch a specific page for a project
-      const fetchProjectPage = async (
-        state: ProjectPageState,
-        pageNum: number,
-        overrideLabels?: string
-      ): Promise<{ items: GitLabIssue[]; nextPage: number | null }> => {
-        const params = {
-          ...baseIssueParams,
-          per_page: Math.min(globalPerPage, 100),
-          page: pageNum,
-          ...(overrideLabels ? { labels: overrideLabels } : {}),
-        };
-        const pid =
-          typeof state.projectId === 'number' || /^\d+$/.test(String(state.projectId))
-            ? String(state.projectId)
-            : encodeURIComponent(String(state.projectId));
-        const resp = await this.client.get(`/projects/${pid}/issues`, { params });
-        const items = resp.data as GitLabIssue[];
-        const hdr = resp.headers as Record<string, string>;
-        const next = hdr && hdr['x-next-page'] ? parseInt(hdr['x-next-page'] as any, 10) : null;
-        return { items, nextPage: next && !isNaN(next) ? next : null };
-      };
-
-      // Round 1: fetch page 1 for all projects (2 at a time)
-      await runInBatches(states, async st => {
-        if (st.nextPage === null) return;
-        if (matchMode === 'or' && st.label) {
-          const { items, nextPage } = await fetchProjectPage(st, st.nextPage, st.label);
-          st.buffer.push(...items);
-          st.nextPage = nextPage;
-        } else {
-          const { items, nextPage } = await fetchProjectPage(st, st.nextPage);
-          st.buffer.push(...items);
-          st.nextPage = nextPage;
-        }
-      }, 2);
-
-      // Accumulate and sort
-      let combined: GitLabIssue[] = states.flatMap(s => s.buffer);
-      // Dedupe by global issue id (GitLab id is global)
-      const seen = new Set<number>();
-      combined = combined.filter(it => {
-        if (!it || typeof it.id !== 'number') return false;
-        if (seen.has(it.id)) return false;
-        seen.add(it.id);
-        return true;
-      });
-      combined.sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime());
-
-      // Keep fetching subsequent pages until we have enough or no more pages anywhere
-      while (combined.length < targetCount && states.some(s => s.nextPage)) {
-        const toFetch = states.filter(s => s.nextPage);
-        await runInBatches(toFetch, async st => {
-          if (!st.nextPage) return;
-          if (matchMode === 'or' && st.label) {
-            const { items, nextPage } = await fetchProjectPage(st, st.nextPage, st.label);
-            st.buffer.push(...items);
-            st.nextPage = nextPage;
-          } else {
-            const { items, nextPage } = await fetchProjectPage(st, st.nextPage);
-            st.buffer.push(...items);
-            st.nextPage = nextPage;
-          }
-        }, 2);
-
-        // Rebuild combined, dedupe, and sort again
-        combined = states.flatMap(s => s.buffer);
-        seen.clear();
-        combined = combined.filter(it => {
-          if (!it || typeof it.id !== 'number') return false;
-          if (seen.has(it.id)) return false;
-          seen.add(it.id);
-          return true;
-        });
-        combined.sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime());
-      }
-
-      // Global slice for pagination
-      const sliced = combined.slice(globalSkip, globalSkip + globalPerPage);
-      return sliced;
+      return filteredIssues;
     } catch (error) {
-      logger.error('Failed to fetch GitLab issues across projects:', error);
+      logger.error('Failed to fetch GitLab issues via global API:', error);
       throw new Error('Failed to fetch issues from GitLab');
     }
   }
@@ -746,6 +639,54 @@ export class GitLabService {
       const data = error?.response?.data;
       logger.error(`Failed to fetch GitLab labels ${pid}:`, { status, data });
       throw new Error('Failed to fetch project labels from GitLab');
+    }
+  }
+
+  public async batchFetchProjectLabels(
+    projectIds: Array<number | string>
+  ): Promise<Map<number | string, GitLabLabel[]>> {
+    const labelsMap = new Map<number | string, GitLabLabel[]>();
+
+    if (projectIds.length === 0) {
+      return labelsMap;
+    }
+
+    // Batch size for concurrent requests
+    const batchSize = 8;
+    const batches = [];
+
+    for (let i = 0; i < projectIds.length; i += batchSize) {
+      batches.push(projectIds.slice(i, i + batchSize));
+    }
+
+    try {
+      for (const batch of batches) {
+        const batchResults = await Promise.allSettled(
+          batch.map(async projectId => {
+            try {
+              const labels = await this.getProjectLabels(projectId);
+              return { projectId, labels };
+            } catch (error) {
+              logger.warn(`Failed to fetch labels for project ${projectId}:`, error);
+              return { projectId, labels: [] as GitLabLabel[] };
+            }
+          })
+        );
+
+        // Process batch results
+        batchResults.forEach(result => {
+          if (result.status === 'fulfilled') {
+            const { projectId, labels } = result.value;
+            labelsMap.set(projectId, labels);
+          }
+        });
+      }
+
+      return labelsMap;
+    } catch (error) {
+      logger.error('Failed to batch fetch project labels:', error);
+      // Return partial results instead of failing completely
+      return labelsMap;
     }
   }
 

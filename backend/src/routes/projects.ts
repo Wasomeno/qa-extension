@@ -966,18 +966,34 @@ router.get(
         ...(scope ? ({ scope } as any) : {}),
       } as any);
 
-      // Resolve project names (basic cache)
-      const projectNameMap = new Map<number, string>();
+      // Get unique project IDs from issues
       const uniqueProjectIds = Array.from(
         new Set(issues.map((it: any) => it.project_id).filter(Boolean))
-      );
-      for (const pid of uniqueProjectIds.slice(0, 10)) {
-        // basic cap
-        try {
-          const proj = await gitlab.getProject(pid);
-          projectNameMap.set(pid, proj.name);
-        } catch {}
-      }
+      ).slice(0, 10); // Cap at 10 projects for reasonable response time
+
+      // Fetch project metadata and labels concurrently
+      const [projectDataResults, projectLabelsMap] = await Promise.all([
+        Promise.allSettled(
+          uniqueProjectIds.map(async pid => {
+            try {
+              const project = await gitlab.getProject(pid);
+              return { pid, name: project.name };
+            } catch {
+              return { pid, name: 'Project' };
+            }
+          })
+        ),
+        gitlab.batchFetchProjectLabels(uniqueProjectIds)
+      ]);
+
+      // Process project metadata results
+      const projectNameMap = new Map<number, string>();
+      projectDataResults.forEach(result => {
+        if (result.status === 'fulfilled') {
+          const { pid, name } = result.value;
+          projectNameMap.set(pid, name);
+        }
+      });
 
       const items = issues.map((it: any) => ({
         id: String(it.id),
@@ -987,6 +1003,7 @@ router.get(
         project: {
           id: String(it.project_id),
           name: projectNameMap.get(it.project_id) || 'Project',
+          labels: projectLabelsMap.get(it.project_id) || [],
         },
         labels: Array.isArray(it.labels) ? it.labels : [],
         assignee:
@@ -1009,9 +1026,17 @@ router.get(
       }));
 
       const nextCursor = items.length < perPage ? null : String(pageNum + 1);
+
+      // Convert labels map to object for JSON response
+      const projectLabels: Record<string, any[]> = {};
+      projectLabelsMap.forEach((labels, projectId) => {
+        projectLabels[String(projectId)] = labels;
+      });
+
       sendResponse(res, 200, true, 'GitLab issues fetched', {
         items,
         nextCursor,
+        projectLabels, // Include all project labels for client-side use
       });
     } catch (error) {
       logger.error('Get GitLab issues error:', error);

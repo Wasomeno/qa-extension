@@ -1,6 +1,7 @@
 import React from 'react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/src/components/ui/ui/avatar';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/src/components/ui/ui/tooltip';
+import { Portal as TooltipPortal } from '@radix-ui/react-tooltip';
 
 export type AvatarUser = {
   id: string;
@@ -13,6 +14,7 @@ interface AvatarGroupProps {
   users: AvatarUser[];
   size?: number; // pixel size, defaults to 24
   className?: string;
+  portalContainer?: Element | null;
 }
 
 const getInitials = (name?: string) => {
@@ -23,7 +25,7 @@ const getInitials = (name?: string) => {
   return (first + last).toUpperCase() || first.toUpperCase();
 };
 
-const AvatarGroup: React.FC<AvatarGroupProps> = ({ users, size = 24, className }) => {
+const AvatarGroup: React.FC<AvatarGroupProps> = ({ users, size = 24, className, portalContainer }) => {
   if (!users || users.length === 0) return null;
 
   const dimension = `${size}px`;
@@ -46,7 +48,9 @@ const AvatarGroup: React.FC<AvatarGroupProps> = ({ users, size = 24, className }
                 </Avatar>
               </div>
             </TooltipTrigger>
-            <TooltipContent side="top">{u.name || u.username}</TooltipContent>
+            <TooltipPortal container={portalContainer ?? undefined}>
+              <TooltipContent side="top">{u.name || u.username}</TooltipContent>
+            </TooltipPortal>
           </Tooltip>
         ))}
       </div>

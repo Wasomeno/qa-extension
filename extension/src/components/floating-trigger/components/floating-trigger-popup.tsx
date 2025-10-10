@@ -36,7 +36,7 @@ import {
 } from '@/src/components/ui/ui/card';
 import useAuth from '@/hooks/useAuth';
 import { authService } from '@/services/auth';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { useQueryClient } from '@tanstack/react-query';
 import { storageService } from '@/services/storage';
 import { apiService } from '@/services/api';
 
@@ -90,8 +90,6 @@ interface FloatingTriggerPopupProps {
   onMouseDown: (e: React.MouseEvent) => void;
   onIssueSelect?: (issue: any) => void;
 }
-
-const localQueryClient = new QueryClient();
 
 const FloatingTriggerPopup: React.FC<FloatingTriggerPopupProps> = ({
   viewState,
@@ -422,7 +420,7 @@ const FloatingTriggerPopup: React.FC<FloatingTriggerPopupProps> = ({
   };
 
   return (
-    <QueryClientProvider client={localQueryClient}>
+    <>
       <div
         className="w-full h-full relative z-10 glass-panel overflow-hidden"
         {...keyboardIsolation}
@@ -468,7 +466,7 @@ const FloatingTriggerPopup: React.FC<FloatingTriggerPopupProps> = ({
       </div>
       {/* Portal root inside shadow DOM but outside scroll clipping */}
       <div ref={portalRef} className="pointer-events-none" />
-    </QueryClientProvider>
+    </>
   );
 };
 

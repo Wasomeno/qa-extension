@@ -5,12 +5,14 @@ import { MessageType } from '@/types/messages';
 import { getViewportInfo, getInteractiveElements } from '@/utils/dom';
 import { shadowDOMManager } from '@/utils/shadow-dom';
 import { loadShadowDOMCSS } from '@/utils/css-loader';
+import { createIframeHost } from '@/utils/iframe-host';
 
 class SimpleTrigger {
   private floatingTriggerContainer: HTMLDivElement | null = null;
   private floatingTriggerRoot: any = null;
   private isActive = false;
   private shadowDOMInstance: any = null;
+  private iframeHost: any = null;
   private keepalivePort: chrome.runtime.Port | null = null;
 
   constructor() {
@@ -141,35 +143,64 @@ class SimpleTrigger {
     }
 
     // Check if already injected
-    if (this.shadowDOMInstance) {
+    if (this.shadowDOMInstance || this.iframeHost) {
       return;
     }
 
     try {
-      // Load CSS for shadow DOM
+      // Load CSS bundle (used by both shadow and iframe host)
       const css = await loadShadowDOMCSS();
+
+      // Hosting strategy: default to Shadow DOM for reliability.
+      // You can force iframe mode by setting localStorage.QA_USE_IFRAME_HOST = '1'.
+      const useIframe = (() => {
+        try {
+          return localStorage.getItem('QA_USE_IFRAME_HOST') === '1';
+        } catch { return false; }
+      })();
 
       // NOTE: Avoid injecting global portal styles into the page to
       // prevent leaking Tailwind utilities into the host site.
       // Our components pass a portal container inside the shadow root,
       // so no global CSS injection is necessary.
 
-      // Create Shadow DOM instance
-      this.shadowDOMInstance = shadowDOMManager.create({
-        hostId: 'qa-floating-trigger-root',
-        shadowMode: 'closed',
-        css,
-        isolateEvents: true,
-      });
+      if (useIframe) {
+        console.log('QA Extension: Using iframe host for floating trigger');
+        // Create isolated iframe host
+        this.iframeHost = createIframeHost({ id: 'qa-floating-trigger-iframe', css });
+        // In iframe, allow interactivity at root container
+        this.iframeHost.container.style.pointerEvents = 'none';
+        // Create a child mount node that can receive pointer events
+        const mount = this.iframeHost.document.createElement('div');
+        mount.style.pointerEvents = 'auto';
+        this.iframeHost.container.appendChild(mount);
 
-      // Store container reference for compatibility and mark wrapper for styles
-      this.floatingTriggerContainer = this.shadowDOMInstance.container;
-      try {
-        this.floatingTriggerContainer?.classList.add('qa-floating-trigger');
-      } catch {}
+        // Mark wrapper for styles
+        try { mount.classList.add('qa-floating-trigger'); } catch {}
 
-      // Create React root and render
-      this.floatingTriggerRoot = createRoot(this.shadowDOMInstance.container);
+        this.floatingTriggerContainer = mount as any;
+        this.floatingTriggerRoot = createRoot(mount);
+      } else {
+        console.log('QA Extension: Using Shadow DOM host for floating trigger');
+        // Create Shadow DOM instance
+        this.shadowDOMInstance = shadowDOMManager.create({
+          hostId: 'qa-floating-trigger-root',
+          shadowMode: 'closed',
+          css,
+          isolateEvents: true,
+          // Do not copy host page CSS variables into shadow root for stricter isolation
+          applyTokensFromDocument: false,
+        });
+
+        // Store container reference and mark wrapper for styles
+        this.floatingTriggerContainer = this.shadowDOMInstance.container;
+        try {
+          this.floatingTriggerContainer?.classList.add('qa-floating-trigger');
+        } catch {}
+
+        // Create React root and render
+        this.floatingTriggerRoot = createRoot(this.shadowDOMInstance.container);
+      }
       this.floatingTriggerRoot.render(
         React.createElement(FloatingTrigger, {
           onClose: () => this.removeFloatingTrigger(),
@@ -191,6 +222,11 @@ class SimpleTrigger {
     if (this.shadowDOMInstance) {
       this.shadowDOMInstance.destroy();
       this.shadowDOMInstance = null;
+    }
+
+    if (this.iframeHost) {
+      try { this.iframeHost.destroy(); } catch {}
+      this.iframeHost = null;
     }
 
     this.floatingTriggerContainer = null;

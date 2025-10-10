@@ -40,6 +40,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/src/components/ui/ui/tooltip';
+import { Portal as TooltipPortal } from '@radix-ui/react-tooltip';
 import { Switch } from '@/src/components/ui/ui/switch';
 import { Skeleton } from '@/src/components/ui/ui/skeleton';
 // (no multi-select dropdown needed)
@@ -1579,9 +1580,11 @@ export const CompactIssueCreator: React.FC<CompactIssueCreatorProps> = ({
                           )}
                         </Button>
                       </TooltipTrigger>
-                      <TooltipContent>
-                        Use AI template on description
-                      </TooltipContent>
+                      <TooltipPortal container={portalContainer || undefined}>
+                        <TooltipContent>
+                          Use AI template on description
+                        </TooltipContent>
+                      </TooltipPortal>
                     </Tooltip>
                   </TooltipProvider>
                 </div>

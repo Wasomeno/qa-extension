@@ -177,7 +177,7 @@ const IssueRow: React.FC<IssueRowProps> = ({
           {assignees.length > 0 && (
             <>
               <span className="text-black/70 mx-1">•</span>
-              <AvatarGroup users={assignees as any} size={20} />
+              <AvatarGroup users={assignees as any} size={20} portalContainer={portalContainer || undefined} />
             </>
           )}
         </div>

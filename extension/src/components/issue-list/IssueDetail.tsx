@@ -3,7 +3,7 @@ import api, { IssueListItem } from '@/services/api';
 import { Checkbox } from '@/src/components/ui/ui/checkbox';
 import { useQuery } from '@tanstack/react-query';
 import { Button } from '@/src/components/ui/ui/button';
-import { Copy, ChevronRight, PlusCircle } from 'lucide-react';
+import { Copy } from 'lucide-react';
 import { RxOpenInNewWindow } from 'react-icons/rx';
 import MarkdownIt from 'markdown-it';
 import taskLists from 'markdown-it-task-lists';
@@ -13,6 +13,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/src/components/ui/ui/tooltip';
+import { Portal as TooltipPortal } from '@radix-ui/react-tooltip';
 import {
   Select,
   SelectContent,
@@ -230,25 +231,29 @@ const IssueDetail: React.FC<IssueDetailProps> = ({
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger>
-                <Button size="icon">
+                <Button size="icon" variant="outline">
                   <Copy className="text-black" size={8} />
                 </Button>
               </TooltipTrigger>
-              <TooltipContent side="bottom" sideOffset={-2} className="text-xs">
-                Copy Link
-              </TooltipContent>
+              <TooltipPortal container={portalContainer ?? undefined}>
+                <TooltipContent side="bottom" sideOffset={-2} className="text-xs">
+                  Copy Link
+                </TooltipContent>
+              </TooltipPortal>
             </Tooltip>
           </TooltipProvider>
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger>
-                <Button size="icon">
+                <Button size="icon" variant="outline">
                   <RxOpenInNewWindow className="text-black" size={8} />
                 </Button>
               </TooltipTrigger>
-              <TooltipContent side="bottom" sideOffset={-2} className="text-xs">
-                Open in Gitlab
-              </TooltipContent>
+              <TooltipPortal container={portalContainer ?? undefined}>
+                <TooltipContent side="bottom" sideOffset={-2} className="text-xs">
+                  Open in Gitlab
+                </TooltipContent>
+              </TooltipPortal>
             </Tooltip>
           </TooltipProvider>
         </div>
@@ -433,7 +438,7 @@ const IssueDetail: React.FC<IssueDetailProps> = ({
               Clear
             </Button>
             <Button
-              variant="default"
+              variant="outline"
               className="h-7 text-xs flex-1"
               onClick={handleEvidenceSubmit}
               disabled={

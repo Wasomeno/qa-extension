@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import FloatingTriggerButton from './components/floating-trigger-button';
 import FloatingTriggerPopup from './components/floating-trigger-popup';
 
@@ -8,7 +9,18 @@ interface FloatingTriggerProps {
   onClose?: () => void;
 }
 
-const FloatingTrigger: React.FC<FloatingTriggerProps> = () => {
+// Create a single QueryClient instance for the floating trigger
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      refetchOnWindowFocus: false,
+      staleTime: 300_000, // 5 minutes
+      gcTime: 300_000, // 5 minutes
+    },
+  },
+});
+
+const FloatingTriggerInner: React.FC<FloatingTriggerProps> = ({ onClose }) => {
   const [viewState, setViewState] = useState<ViewState>('closed');
   const [selectedFeature, setSelectedFeature] = useState<string | null>(null);
   const [selectedIssue, setSelectedIssue] = useState<any | null>(null);
@@ -90,6 +102,8 @@ const FloatingTrigger: React.FC<FloatingTriggerProps> = () => {
     });
   };
 
+  const [ownerDoc, setOwnerDoc] = useState<Document | null>(null);
+
   const handleMouseMove = (e: MouseEvent) => {
     if (mouseDownTime === 0) return;
 
@@ -140,16 +154,17 @@ const FloatingTrigger: React.FC<FloatingTriggerProps> = () => {
   };
 
   useEffect(() => {
+    const targetDoc: Document = ownerDoc || document;
     if (mouseDownTime > 0) {
-      document.addEventListener('mousemove', handleMouseMove);
-      document.addEventListener('mouseup', handleMouseUp);
+      targetDoc.addEventListener('mousemove', handleMouseMove);
+      targetDoc.addEventListener('mouseup', handleMouseUp);
 
       return () => {
-        document.removeEventListener('mousemove', handleMouseMove);
-        document.removeEventListener('mouseup', handleMouseUp);
+        targetDoc.removeEventListener('mousemove', handleMouseMove);
+        targetDoc.removeEventListener('mouseup', handleMouseUp);
       };
     }
-  }, [mouseDownTime, isDragging, dragOffset, mouseDownPosition, hasMoved]);
+  }, [mouseDownTime, isDragging, dragOffset, mouseDownPosition, hasMoved, ownerDoc]);
 
   const toggleView = () => {
     setViewState(viewState === 'closed' ? 'features' : 'closed');
@@ -206,6 +221,11 @@ const FloatingTrigger: React.FC<FloatingTriggerProps> = () => {
       viewState={viewState}
       position={position}
       selectedFeature={selectedFeature}
+      containerRef={(el) => {
+        try {
+          setOwnerDoc(el?.ownerDocument || null);
+        } catch {}
+      }}
     >
       <FloatingTriggerPopup
         viewState={viewState}
@@ -219,6 +239,15 @@ const FloatingTrigger: React.FC<FloatingTriggerProps> = () => {
         onIssueSelect={handleIssueSelect}
       />
     </FloatingTriggerButton>
+  );
+};
+
+// Main FloatingTrigger component with QueryClient provider
+const FloatingTrigger: React.FC<FloatingTriggerProps> = (props) => {
+  return (
+    <QueryClientProvider client={queryClient}>
+      <FloatingTriggerInner {...props} />
+    </QueryClientProvider>
   );
 };
 

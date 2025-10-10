@@ -41,6 +41,59 @@ export class ShadowDOMManager {
     // Attach shadow root
     const root = host.attachShadow({ mode: shadowMode });
 
+    // Ensure default tokens are set inline on host so page variables cannot override them via inheritance
+    const setDefaultDesignTokens = () => {
+      const defaults: Record<string, string> = {
+        // shadcn/ui tokens (HSL triplets)
+        '--background': '0 0% 100%',
+        '--foreground': '222.2 84% 4.9%',
+        '--card': '0 0% 100%',
+        '--card-foreground': '222.2 84% 4.9%',
+        '--popover': '0 0% 100%',
+        '--popover-foreground': '222.2 84% 4.9%',
+        '--primary': '221.2 83.2% 53.3%',
+        '--primary-foreground': '210 40% 98%',
+        '--secondary': '210 40% 96%',
+        '--secondary-foreground': '222.2 84% 4.9%',
+        '--muted': '210 40% 96%',
+        '--muted-foreground': '215.4 16.3% 46.9%',
+        '--accent': '210 40% 96%',
+        '--accent-foreground': '222.2 84% 4.9%',
+        '--destructive': '0 84.2% 60.2%',
+        '--destructive-foreground': '210 40% 98%',
+        '--border': '214.3 31.8% 91.4%',
+        '--input': '214.3 31.8% 91.4%',
+        '--ring': '221.2 83.2% 53.3%',
+        '--radius': '0.5rem',
+        '--sidebar-background': '0 0% 98%',
+        '--sidebar-foreground': '240 5.3% 26.1%',
+        '--sidebar-primary': '240 5.9% 10%',
+        '--sidebar-primary-foreground': '0 0% 98%',
+        '--sidebar-accent': '240 4.8% 95.9%',
+        '--sidebar-accent-foreground': '240 5.9% 10%',
+        '--sidebar-border': '220 13% 91%',
+        '--sidebar-ring': '217.2 91.2% 59.8%',
+        // QA-specific tokens
+        '--qa-fg': '#0b1220',
+        '--qa-fg-muted': 'rgba(11, 18, 32, 0.65)',
+        '--qa-border': 'rgba(11, 18, 32, 0.12)',
+        '--qa-glass': 'rgba(255, 255, 255, 0.15)',
+        '--qa-glass-hover': 'rgba(255, 255, 255, 0.25)',
+        '--qa-shadow': '0 8px 32px rgba(0, 0, 0, 0.12)'
+      };
+      for (const [k, v] of Object.entries(defaults)) {
+        try { host.style.setProperty(k, v); } catch {}
+      }
+      // Establish base inherited typography inline so it cannot be overridden from page
+      try {
+        host.style.setProperty('font-family', "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif");
+        host.style.setProperty('font-size', '14px');
+        host.style.setProperty('line-height', '1.4');
+        host.style.setProperty('color', 'var(--qa-fg)');
+      } catch {}
+    };
+    setDefaultDesignTokens();
+
     // Optionally copy design token CSS variables from the document root to the host
     if (applyTokensFromDocument) {
       try {

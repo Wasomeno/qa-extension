@@ -368,18 +368,6 @@ const OptionsApp: React.FC = () => {
       </p>
 
       <div className="form-group">
-        <label className="form-label">API Endpoint</label>
-        <input
-          type="url"
-          value={tempSettings.apiEndpoint || ''}
-          onChange={(e) => setTempSettings(prev => ({ ...prev, apiEndpoint: e.target.value }))}
-          className="form-input"
-          placeholder={process.env.BASE_API_URL}
-        />
-        <small className="form-help">Backend API endpoint URL</small>
-      </div>
-
-      <div className="form-group">
         <label className="form-label">Theme</label>
         <select
           value={tempSettings.theme || 'auto'}

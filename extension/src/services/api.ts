@@ -20,6 +20,14 @@ export interface ApiResponse<T = any> {
   meta?: any;
 }
 
+export interface GitLabLabel {
+  id: number;
+  name: string;
+  color: string;
+  text_color?: string;
+  description?: string;
+}
+
 export interface LoginRequest {
   email: string;
   password: string;
@@ -135,7 +143,11 @@ export interface IssueListItem {
   id: string;
   number?: number;
   title: string;
-  project: { id: string; name: string };
+  project: {
+    id: string;
+    name: string;
+    labels?: GitLabLabel[]; // Project labels from backend optimization
+  };
   labels: string[];
   assignee?: {
     id: string;
@@ -162,6 +174,7 @@ export interface ListIssuesParams {
 export interface ListIssuesResponse {
   items: IssueListItem[];
   nextCursor?: string | null;
+  projectLabels?: Record<string, GitLabLabel[]>; // Project labels from backend optimization
 }
 
 export interface VoiceTranscriptionRequest {
@@ -202,6 +215,7 @@ class ApiService {
       // baseUrl remains the env-configured default
     }
   }
+
 
   private async getAuthHeaders(): Promise<HeadersInit> {
     const auth = await storageService.getAuth();

@@ -14,11 +14,30 @@ export async function loadShadowDOMCSS(): Promise<string> {
     
     // Fallback minimal styles
     return `
-      * {
-        box-sizing: border-box;
-        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+      :host {
+        all: initial;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', Arial, sans-serif;
+        font-size: 14px;
+        line-height: 1.4;
+        color: #0b1220;
+        -webkit-text-size-adjust: 100%;
+        text-size-adjust: 100%;
+        color-scheme: light;
+        contain: layout style;
+        --qa-fg: #0b1220;
+        --qa-border: rgba(11, 18, 32, 0.12);
+        --qa-glass: rgba(255, 255, 255, 0.15);
+        --qa-glass-hover: rgba(255, 255, 255, 0.25);
       }
-      
+      * { box-sizing: border-box; }
+      .glass-panel {
+        background: var(--qa-glass);
+        backdrop-filter: blur(16px);
+        -webkit-backdrop-filter: blur(16px);
+        border: 1px solid var(--qa-border);
+        box-shadow: 0 8px 32px rgba(0,0,0,0.12);
+        border-radius: 16px;
+      }
       .fixed { position: fixed !important; }
       .z-50 { z-index: 50 !important; }
       .rounded-full { border-radius: 9999px !important; }

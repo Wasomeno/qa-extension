@@ -9,6 +9,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/src/components/ui/ui/tooltip';
+import { Portal as TooltipPortal } from '@radix-ui/react-tooltip';
 
 type ViewState = 'closed' | 'features' | 'feature-detail';
 
@@ -18,6 +19,7 @@ interface FloatingTriggerButtonProps {
   position: { x: number; y: number };
   selectedFeature?: string | null;
   children?: React.ReactNode;
+  containerRef?: (el: HTMLDivElement | null) => void;
 }
 
 const FloatingTriggerButton: React.FC<FloatingTriggerButtonProps> = ({
@@ -26,6 +28,7 @@ const FloatingTriggerButton: React.FC<FloatingTriggerButtonProps> = ({
   position,
   selectedFeature,
   children,
+  containerRef,
 }) => {
   const keyboardIsolation = useKeyboardIsolation();
 
@@ -41,6 +44,11 @@ const FloatingTriggerButton: React.FC<FloatingTriggerButtonProps> = ({
     x: number;
     y: number;
   } | null>(null);
+
+  // Provide root element to parent if requested
+  React.useEffect(() => {
+    if (containerRef) containerRef(rootRef.current);
+  }, [containerRef]);
 
   // Lightweight backdrop luminance detection to choose text tone only
   React.useEffect(() => {
@@ -119,15 +127,16 @@ const FloatingTriggerButton: React.FC<FloatingTriggerButtonProps> = ({
     };
 
     detect();
-    const t = window.setTimeout(detect, 220);
+    const ownerWin: Window = rootRef.current?.ownerDocument?.defaultView || window;
+    const t = ownerWin.setTimeout(detect, 220);
     const onScroll = () => detect();
     const onResize = () => detect();
-    window.addEventListener('scroll', onScroll, true);
-    window.addEventListener('resize', onResize);
+    ownerWin.addEventListener('scroll', onScroll, true);
+    ownerWin.addEventListener('resize', onResize);
     return () => {
-      window.removeEventListener('scroll', onScroll, true);
-      window.removeEventListener('resize', onResize);
-      window.clearTimeout(t);
+      ownerWin.removeEventListener('scroll', onScroll, true);
+      ownerWin.removeEventListener('resize', onResize);
+      ownerWin.clearTimeout(t);
     };
   }, [position.x, position.y, viewState]);
 
@@ -163,6 +172,8 @@ const FloatingTriggerButton: React.FC<FloatingTriggerButtonProps> = ({
   React.useEffect(() => {
     if (!dragStartPosition) return;
 
+    const ownerDoc: Document = rootRef.current?.ownerDocument || document;
+
     const handleMouseMove = (e: MouseEvent) => {
       if (!dragStartPosition) return;
 
@@ -183,12 +194,12 @@ const FloatingTriggerButton: React.FC<FloatingTriggerButtonProps> = ({
       setTimeout(() => setIsDragging(false), 100);
     };
 
-    document.addEventListener('mousemove', handleMouseMove);
-    document.addEventListener('mouseup', handleMouseUp);
+    ownerDoc.addEventListener('mousemove', handleMouseMove);
+    ownerDoc.addEventListener('mouseup', handleMouseUp);
 
     return () => {
-      document.removeEventListener('mousemove', handleMouseMove);
-      document.removeEventListener('mouseup', handleMouseUp);
+      ownerDoc.removeEventListener('mousemove', handleMouseMove);
+      ownerDoc.removeEventListener('mouseup', handleMouseUp);
     };
   }, [dragStartPosition, isDragging]);
 
@@ -198,7 +209,7 @@ const FloatingTriggerButton: React.FC<FloatingTriggerButtonProps> = ({
       initial={false}
       onAnimationStart={() => setIsAnimating(true)}
       onAnimationComplete={() => setIsAnimating(false)}
-      className={`floating-trigger ${open ? 'ft-glass' : ''} qa-theme-light ${onDarkBackdrop ? 'qa-text-dark' : 'qa-text-light'} ${viewState === 'closed' && !isHovered ? 'bg-gradient-to-r from-red-500 to-orange-500' : ''}`}
+      className={`floating-trigger ${open ? 'ft-glass' : ''} qa-theme-light ${onDarkBackdrop ? 'qa-text-dark' : 'qa-text-light'} ${viewState === 'closed' && !isHovered ? '' : ''}`}
       style={{
         position: 'fixed',
         left: position.x,
@@ -208,10 +219,8 @@ const FloatingTriggerButton: React.FC<FloatingTriggerButtonProps> = ({
         backdropFilter: viewState === 'closed' ? 'blur(12px)' : 'blur(16px)',
         background:
           viewState === 'closed' && !isHovered
-            ? undefined
-            : viewState === 'closed'
-              ? 'var(--qa-glass)'
-              : 'var(--qa-glass)',
+            ? 'linear-gradient(90deg, #ef4444 0%, #f97316 100%)'
+            : 'var(--qa-glass)',
         border:
           viewState === 'closed' && !isHovered
             ? 'none'
@@ -228,7 +237,7 @@ const FloatingTriggerButton: React.FC<FloatingTriggerButtonProps> = ({
           viewState === 'closed'
             ? isHovered
               ? 50
-              : 25
+              : 36
             : viewState === 'features'
               ? 260
               : 500,
@@ -236,7 +245,7 @@ const FloatingTriggerButton: React.FC<FloatingTriggerButtonProps> = ({
           viewState === 'closed'
             ? isHovered
               ? 50
-              : 25
+              : 36
             : viewState === 'features'
               ? 300
               : selectedFeature === 'pinned'
@@ -292,24 +301,26 @@ const FloatingTriggerButton: React.FC<FloatingTriggerButtonProps> = ({
                 </motion.div>
               </motion.div>
             </TooltipTrigger>
-            <TooltipContent
-              side="top"
-              sideOffset={12}
-              className="animate-in fade-in-0 zoom-in-95 slide-in-from-bottom-2 duration-200"
-            >
-              <motion.div
-                initial={{ y: 5, opacity: 0 }}
-                animate={{ y: 0, opacity: 1 }}
-                transition={{
-                  type: 'spring',
-                  stiffness: 400,
-                  damping: 25,
-                  duration: 0.2,
-                }}
+            <TooltipPortal container={rootRef.current ?? undefined}>
+              <TooltipContent
+                side="top"
+                sideOffset={12}
+                className="animate-in fade-in-0 zoom-in-95 slide-in-from-bottom-2 duration-200"
               >
-                Let's manage some issue!
-              </motion.div>
-            </TooltipContent>
+                <motion.div
+                  initial={{ y: 5, opacity: 0 }}
+                  animate={{ y: 0, opacity: 1 }}
+                  transition={{
+                    type: 'spring',
+                    stiffness: 400,
+                    damping: 25,
+                    duration: 0.2,
+                  }}
+                >
+                  Let's manage some issue!
+                </motion.div>
+              </TooltipContent>
+            </TooltipPortal>
           </Tooltip>
         </TooltipProvider>
       ) : (
