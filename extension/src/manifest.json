@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "QA Command Center",
+  "name": "Gitlab Companion",
   "version": "1.0.0",
   "description": "AI-powered issue creation with seamless GitLab-Slack integration",
   "permissions": [
@@ -37,7 +37,7 @@
   },
   "action": {
     "default_popup": "popup.html",
-    "default_title": "QA Command Center",
+    "default_title": "Gitlab Companion",
     "default_icon": {
       "16": "icons/icon-16.png",
       "32": "icons/icon-32.png",

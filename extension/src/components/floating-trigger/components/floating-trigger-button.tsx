@@ -1,6 +1,5 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { ImMagicWand } from 'react-icons/im';
 
 import { useKeyboardIsolation } from '@/hooks/useKeyboardIsolation';
 import {
@@ -127,7 +126,8 @@ const FloatingTriggerButton: React.FC<FloatingTriggerButtonProps> = ({
     };
 
     detect();
-    const ownerWin: Window = rootRef.current?.ownerDocument?.defaultView || window;
+    const ownerWin: Window =
+      rootRef.current?.ownerDocument?.defaultView || window;
     const t = ownerWin.setTimeout(detect, 220);
     const onScroll = () => detect();
     const onResize = () => detect();

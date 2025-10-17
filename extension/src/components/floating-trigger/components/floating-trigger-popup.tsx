@@ -14,7 +14,9 @@ import {
   CheckCircle2,
   AlertCircle,
   KeyRound,
+  Copy,
 } from 'lucide-react';
+import { RxOpenInNewWindow } from 'react-icons/rx';
 import CompactIssueCreator from '@/components/compact-issue-creator';
 import IssueList from '@/components/issue-list';
 import IssueDetail from '@/components/issue-list/IssueDetail';
@@ -73,6 +75,141 @@ function HeaderBar(props: {
       >
         <X className="w-3 h-3" />
       </Button>
+    </div>
+  );
+}
+
+// Issue Detail Header with full issue information
+function IssueDetailHeaderBar(props: {
+  issue: any;
+  onBack: () => void;
+  onClose: () => void;
+  onMouseDown?: (e: React.MouseEvent) => void;
+}) {
+  const { issue, onBack, onClose, onMouseDown } = props;
+  const [copyStatus, setCopyStatus] = React.useState<'idle' | 'copied' | 'error'>('idle');
+  const copyTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  React.useEffect(() => {
+    return () => {
+      if (copyTimeoutRef.current) {
+        clearTimeout(copyTimeoutRef.current);
+        copyTimeoutRef.current = null;
+      }
+    };
+  }, []);
+
+  const issueWebUrl =
+    issue?.web_url ??
+    (issue as any)?.webUrl ??
+    (issue as any)?.web_url;
+
+  const handleCopyIssueLink = React.useCallback(
+    async (event?: React.MouseEvent<HTMLButtonElement>) => {
+      event?.preventDefault();
+      event?.stopPropagation();
+
+      if (!issueWebUrl) {
+        console.warn('No web URL available to copy for issue:', issue);
+        return;
+      }
+
+      if (copyTimeoutRef.current) {
+        clearTimeout(copyTimeoutRef.current);
+        copyTimeoutRef.current = null;
+      }
+
+      try {
+        if (navigator.clipboard?.writeText) {
+          await navigator.clipboard.writeText(issueWebUrl);
+          setCopyStatus('copied');
+        } else {
+          throw new Error('Clipboard API not available');
+        }
+      } catch (err) {
+        console.error('Failed to copy issue link:', err);
+        setCopyStatus('error');
+      } finally {
+        copyTimeoutRef.current = setTimeout(() => {
+          setCopyStatus('idle');
+        }, 2000);
+      }
+    },
+    [issue, issueWebUrl]
+  );
+
+  const handleOpenInGitlab = React.useCallback(
+    (event: React.MouseEvent<HTMLButtonElement>) => {
+      event.preventDefault();
+      event.stopPropagation();
+
+      if (!issueWebUrl) {
+        console.warn('No web URL available to open for issue:', issue);
+        return;
+      }
+
+      window.open(issueWebUrl, '_blank', 'noopener,noreferrer');
+    },
+    [issue, issueWebUrl]
+  );
+
+  const iid = issue?.number;
+
+  return (
+    <div
+      className="flex items-center justify-between p-4 border-b border-gray-100 gap-4"
+      onMouseDown={onMouseDown}
+    >
+      <div className="flex items-center gap-3 min-w-0 flex-1">
+        <Button
+          onClick={onBack}
+          variant="ghost"
+          size="sm"
+          className="p-0 h-fit w-fit pointer-events-auto shrink-0"
+          aria-label="Back"
+        >
+          <ChevronLeft className="w-4 h-4" />
+        </Button>
+        <div className="min-w-0 flex-1 space-y-0.5">
+          <div className="text-sm font-semibold leading-snug truncate">
+            {issue?.title}
+          </div>
+          <div className="text-[11px] text-neutral-500">
+            #{iid ?? '—'} · {issue.project?.name ?? 'Unknown project'} · by{' '}
+            {issue.author?.name ?? 'Unknown'}
+          </div>
+        </div>
+      </div>
+      <div className="flex gap-2 items-center shrink-0">
+        <Button
+          variant="ghost"
+          className="p-0 h-fit w-fit pointer-events-auto"
+          onClick={handleCopyIssueLink}
+          disabled={!issueWebUrl}
+          aria-label="Copy issue link"
+          title={copyStatus === 'copied' ? 'Copied!' : copyStatus === 'error' ? 'Copy failed' : 'Copy Link'}
+        >
+          <Copy className="text-neutral-400 w-4 h-4" />
+        </Button>
+        <Button
+          variant="ghost"
+          className="p-0 h-fit w-fit pointer-events-auto"
+          onClick={handleOpenInGitlab}
+          disabled={!issueWebUrl}
+          aria-label="Open issue in GitLab"
+          title="Open in GitLab"
+        >
+          <RxOpenInNewWindow className="text-neutral-400 w-4 h-4" />
+        </Button>
+        <Button
+          variant="ghost"
+          onClick={onClose}
+          className="p-0 h-fit w-fit pointer-events-auto"
+          aria-label="Close"
+        >
+          <X className="w-3 h-3" />
+        </Button>
+      </div>
     </div>
   );
 }
@@ -351,30 +488,40 @@ const FloatingTriggerPopup: React.FC<FloatingTriggerPopupProps> = ({
       case 'issue-detail':
         return (
           <div className="flex flex-col h-full">
-            <HeaderBar
-              title="Issue Detail"
-              onBack={onBack}
-              onClose={onClose}
-              onMouseDown={onMouseDown}
-            />
-            <div className="flex-1 overflow-auto">
-              {selectedIssue ? (
-                <ErrorBoundary
-                  fallbackRender={err => (
-                    <div className="p-3 text-xs text-red-400 bg-red-50 border border-red-200 rounded-md">
-                      Issue Detail crashed: {err.message || 'Unknown error'}.
-                    </div>
-                  )}
-                >
-                  <IssueDetail
-                    issue={selectedIssue}
-                    portalContainer={portalRef.current}
-                  />
-                </ErrorBoundary>
-              ) : (
+            {selectedIssue ? (
+              <>
+                <IssueDetailHeaderBar
+                  issue={selectedIssue}
+                  onBack={onBack}
+                  onClose={onClose}
+                  onMouseDown={onMouseDown}
+                />
+                <div className="flex-1 overflow-auto">
+                  <ErrorBoundary
+                    fallbackRender={err => (
+                      <div className="p-3 text-xs text-red-400 bg-red-50 border border-red-200 rounded-md">
+                        Issue Detail crashed: {err.message || 'Unknown error'}.
+                      </div>
+                    )}
+                  >
+                    <IssueDetail
+                      issue={selectedIssue}
+                      portalContainer={portalRef.current}
+                    />
+                  </ErrorBoundary>
+                </div>
+              </>
+            ) : (
+              <>
+                <HeaderBar
+                  title="Issue Detail"
+                  onBack={onBack}
+                  onClose={onClose}
+                  onMouseDown={onMouseDown}
+                />
                 <div className="p-4 text-xs opacity-80">No issue selected.</div>
-              )}
-            </div>
+              </>
+            )}
           </div>
         );
       case 'workflows':

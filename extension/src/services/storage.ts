@@ -1,5 +1,5 @@
 /**
- * Browser storage management service for QA Command Center
+ * Browser storage management service for Gitlab Companion
  */
 
 import { AuthData, UserData, IssueData } from '@/types/messages';

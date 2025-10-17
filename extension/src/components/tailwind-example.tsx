@@ -19,7 +19,7 @@ const TailwindExample: React.FC<TailwindExampleProps> = ({
       {/* Header */}
       <div className="bg-gradient-to-r from-primary-600 to-primary-700 text-white p-6 rounded-b-lg">
         <div className="flex items-center justify-between mb-4">
-          <h1 className="text-xl font-semibold">QA Command Center</h1>
+          <h1 className="text-xl font-semibold">Gitlab Companion</h1>
           <div className="flex items-center space-x-2">
             <div className={`w-2 h-2 rounded-full ${isRecording ? 'bg-error-400 animate-pulse' : 'bg-success-400'}`} />
             <span className="text-sm opacity-90">

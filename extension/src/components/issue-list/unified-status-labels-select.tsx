@@ -230,15 +230,21 @@ const UnifiedStatusLabelsSelect: React.FC<UnifiedStatusLabelsSelectProps> = ({
                           key={l.id}
                           variant="secondary"
                           className={cn(
-                        'gap-1 glass-card border-white/50 bg-white/60 backdrop-blur-sm transition-all duration-200 ease-in-out text-xs h-5 px-1.5 items-center',
-                            isStatusLabel && 'ring-1 ring-blue-200 bg-blue-50/60'
+                            'gap-1 glass-card border-white/50 bg-white/60 backdrop-blur-sm transition-all duration-200 ease-in-out text-xs h-5 px-1.5 items-center',
+                            isStatusLabel &&
+                              'ring-1 ring-blue-200 bg-blue-50/60'
                           )}
                         >
                           <span
                             className="inline-block h-2 w-2 rounded-full border transition-all duration-200 ease-in-out"
                             style={{ backgroundColor: l.color }}
                           />
-                      <span className={cn('leading-none', isStatusLabel && 'capitalize')}>
+                          <span
+                            className={cn(
+                              'leading-none',
+                              isStatusLabel && 'capitalize'
+                            )}
+                          >
                             {l.name}
                           </span>
                           {!isStatusLabel && (
@@ -267,7 +273,7 @@ const UnifiedStatusLabelsSelect: React.FC<UnifiedStatusLabelsSelectProps> = ({
 
               <div className="max-h-[220px] overflow-auto px-1.5 py-1.5">
                 <div className="py-0.5">
-                  <div className="text-[10px] text-neutral-500 px-1.5 mb-0.5">
+                  <div className="text-[10px] text-neutral-500 px-1.5 mb-1">
                     Status
                   </div>
                   <div className="grid">
@@ -278,10 +284,7 @@ const UnifiedStatusLabelsSelect: React.FC<UnifiedStatusLabelsSelectProps> = ({
                           key={l.id}
                           onClick={() => toggleLabel(l.name)}
                           className={cn(
-                            'group flex items-center gap-2 px-1.5 py-1.5 mb-0.5 rounded-md text-left transition-all duration-200 ease-in-out border',
-                            checked
-                              ? 'bg-blue-50/60 border-blue-200 shadow-sm'
-                              : 'border-transparent hover:bg-neutral-100/50'
+                            'group flex items-center gap-2 px-2 py-2 mb-1 text-left transition-all duration-200 ease-in-out'
                           )}
                         >
                           <Checkbox
@@ -306,23 +309,22 @@ const UnifiedStatusLabelsSelect: React.FC<UnifiedStatusLabelsSelectProps> = ({
                 {visibleLabels.filter(l => !statusLabels.includes(l)).length >
                   0 && (
                   <div className="py-0.5 border-t">
-                    <div className="text-[10px] text-neutral-500 px-1.5 mb-0.5">
+                    <div className="text-[10px] text-neutral-500 px-1.5 mb-1">
                       Labels
                     </div>
                     <div className="grid">
                       {visibleLabels
                         .filter(l => !statusLabels.includes(l))
                         .map(l => {
-                          const checked = effectiveSelectedLabels.includes(l.name);
+                          const checked = effectiveSelectedLabels.includes(
+                            l.name
+                          );
                           return (
                             <button
                               key={l.id}
                               onClick={() => toggleLabel(l.name)}
                               className={cn(
-                                'group flex items-center gap-2 px-1.5 py-1.5 mb-0.5 rounded-md text-left transition-all duration-200 ease-in-out border',
-                                checked
-                                  ? 'bg-green-50/60 border-green-200 shadow-sm'
-                                  : 'border-transparent hover:bg-neutral-100/50'
+                                'group flex items-center gap-2 px-2 py-2 mb-1 text-left transition-all duration-200 ease-in-out'
                               )}
                             >
                               <Checkbox
@@ -334,7 +336,9 @@ const UnifiedStatusLabelsSelect: React.FC<UnifiedStatusLabelsSelectProps> = ({
                                 style={{ backgroundColor: l.color }}
                               />
                               <div className="flex-1">
-                                <div className="text-xs leading-none">{l.name}</div>
+                                <div className="text-xs leading-none">
+                                  {l.name}
+                                </div>
                               </div>
                             </button>
                           );
@@ -391,10 +395,15 @@ const UnifiedStatusLabelsSelect: React.FC<UnifiedStatusLabelsSelectProps> = ({
               <Badge
                 key={l.id}
                 variant="secondary"
-                  className={cn('gap-1 glass-card border-white/50 bg-white/60 backdrop-blur-sm transition-all duration-200 ease-in-out items-center', isStatusLabel && 'ring-1 ring-blue-200 bg-blue-50/60')}
+                className={cn(
+                  'gap-1 glass-card border-white/50 bg-white/60 backdrop-blur-sm transition-all duration-200 ease-in-out items-center',
+                  isStatusLabel && 'ring-1 ring-blue-200 bg-blue-50/60'
+                )}
               >
                 <Dot color={l.color} />
-                  <span className={cn('leading-none', isStatusLabel && 'capitalize')}>
+                <span
+                  className={cn('leading-none', isStatusLabel && 'capitalize')}
+                >
                   {l.name}
                 </span>
               </Badge>

@@ -88,6 +88,40 @@ export const IssueFilters: React.FC<IssueFiltersProps> = ({
   const [openAssignees, setOpenAssignees] = useState(false);
   const [openLabels, setOpenLabels] = useState(false);
 
+  type PopoverKey = 'projects' | 'assignees' | 'labels';
+  // Prevent Radix popovers from re-opening immediately when their trigger is re-clicked
+  const suppressOpenRef = React.useRef<Record<PopoverKey, boolean>>({
+    projects: false,
+    assignees: false,
+    labels: false,
+  });
+
+  const handleTriggerPointerDown = (
+    event: React.PointerEvent,
+    isOpen: boolean,
+    key: PopoverKey,
+    setter: React.Dispatch<React.SetStateAction<boolean>>
+  ) => {
+    if (!isOpen) return;
+    event.preventDefault();
+    suppressOpenRef.current[key] = true;
+    setter(false);
+  };
+
+  const createOnOpenChange =
+    (
+      key: PopoverKey,
+      setter: React.Dispatch<React.SetStateAction<boolean>>
+    ) =>
+    (next: boolean) => {
+      if (next && suppressOpenRef.current[key]) {
+        suppressOpenRef.current[key] = false;
+        return;
+      }
+      suppressOpenRef.current[key] = false;
+      setter(next);
+    };
+
   // Search queries for filters
   const [projectQuery, setProjectQuery] = useState('');
   const [assigneeQuery, setAssigneeQuery] = useState('');
@@ -171,7 +205,10 @@ export const IssueFilters: React.FC<IssueFiltersProps> = ({
           projectQuery={projectQuery}
           onProjectQueryChange={setProjectQuery}
           open={openProjects}
-          onOpenChange={setOpenProjects}
+          onOpenChange={createOnOpenChange('projects', setOpenProjects)}
+          onTriggerPointerDown={event =>
+            handleTriggerPointerDown(event, openProjects, 'projects', setOpenProjects)
+          }
           isLoading={projectsQuery.isLoading || isLoading}
           portalContainer={portalContainer}
         />
@@ -187,7 +224,10 @@ export const IssueFilters: React.FC<IssueFiltersProps> = ({
           labelsQuery={labelsQuery}
           onLabelsQueryChange={setLabelsQuery}
           open={openLabels}
-          onOpenChange={setOpenLabels}
+          onOpenChange={createOnOpenChange('labels', setOpenLabels)}
+          onTriggerPointerDown={event =>
+            handleTriggerPointerDown(event, openLabels, 'labels', setOpenLabels)
+          }
           isLoading={isLoading}
           portalContainer={portalContainer}
         />
@@ -200,7 +240,10 @@ export const IssueFilters: React.FC<IssueFiltersProps> = ({
           assigneeQuery={assigneeQuery}
           onAssigneeQueryChange={setAssigneeQuery}
           open={openAssignees}
-          onOpenChange={setOpenAssignees}
+          onOpenChange={createOnOpenChange('assignees', setOpenAssignees)}
+          onTriggerPointerDown={event =>
+            handleTriggerPointerDown(event, openAssignees, 'assignees', setOpenAssignees)
+          }
           isLoading={usersQuery.isLoading || isLoading}
           portalContainer={portalContainer}
         />
@@ -218,6 +261,7 @@ interface ProjectFilterProps {
   onProjectQueryChange: (value: string) => void;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  onTriggerPointerDown: (event: React.PointerEvent) => void;
   isLoading: boolean;
   portalContainer?: Element | null;
 }
@@ -230,6 +274,7 @@ const ProjectFilter: React.FC<ProjectFilterProps> = ({
   onProjectQueryChange,
   open,
   onOpenChange,
+  onTriggerPointerDown,
   isLoading,
   portalContainer,
 }) => {
@@ -245,6 +290,7 @@ const ProjectFilter: React.FC<ProjectFilterProps> = ({
             variant="outline"
             className="text-xs h-8 glass-input w-full justify-between"
             disabled={isLoading}
+            onPointerDown={onTriggerPointerDown}
           >
             <div className="flex items-center gap-2 truncate">
               {selectedProjectIds.length === 0 && (
@@ -341,6 +387,7 @@ interface LabelsStatusFilterProps {
   onLabelsQueryChange: (value: string) => void;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  onTriggerPointerDown: (event: React.PointerEvent) => void;
   isLoading: boolean;
   portalContainer?: Element | null;
 }
@@ -356,6 +403,7 @@ const LabelsStatusFilter: React.FC<LabelsStatusFilterProps> = ({
   onLabelsQueryChange,
   open,
   onOpenChange,
+  onTriggerPointerDown,
   isLoading,
   portalContainer,
 }) => {
@@ -372,6 +420,7 @@ const LabelsStatusFilter: React.FC<LabelsStatusFilterProps> = ({
             variant="outline"
             className="text-xs h-8 glass-input w-full justify-between"
             disabled={isLoading}
+            onPointerDown={onTriggerPointerDown}
           >
             <div className="flex items-center gap-2 truncate">
               {totalSelected === 0 && (
@@ -496,6 +545,7 @@ interface AssigneeFilterProps {
   onAssigneeQueryChange: (value: string) => void;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  onTriggerPointerDown: (event: React.PointerEvent) => void;
   isLoading: boolean;
   portalContainer?: Element | null;
 }
@@ -508,6 +558,7 @@ const AssigneeFilter: React.FC<AssigneeFilterProps> = ({
   onAssigneeQueryChange,
   open,
   onOpenChange,
+  onTriggerPointerDown,
   isLoading,
   portalContainer,
 }) => {
@@ -546,6 +597,7 @@ const AssigneeFilter: React.FC<AssigneeFilterProps> = ({
             variant="outline"
             className="text-xs h-8 glass-input w-full justify-between"
             disabled={isLoading}
+            onPointerDown={onTriggerPointerDown}
           >
             <div className="flex items-center gap-2 truncate">
               {selectedAssigneeIds.length <= 1 ? (

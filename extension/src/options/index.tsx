@@ -691,7 +691,7 @@ const OptionsApp: React.FC = () => {
     <div className="section active">
       <h2 className="section-title">About</h2>
       <p className="section-description">
-        Information about QA Command Center extension
+        Information about Gitlab Companion extension
       </p>
 
       <div className="card">
@@ -707,7 +707,7 @@ const OptionsApp: React.FC = () => {
           </div>
           <div className="info-item">
             <label>Author:</label>
-            <span>QA Command Center Team</span>
+            <span>Gitlab Companion Team</span>
           </div>
           <div className="info-item">
             <label>License:</label>
@@ -779,7 +779,7 @@ const OptionsApp: React.FC = () => {
     <div className="container">
       <div className="header">
         <div className="header-content">
-          <h1>QA Command Center</h1>
+          <h1>Gitlab Companion</h1>
           <p>Configure your testing and issue tracking preferences</p>
         </div>
       </div>

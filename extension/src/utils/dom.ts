@@ -1,5 +1,5 @@
 /**
- * DOM manipulation utilities for the QA Command Center extension
+ * DOM manipulation utilities for the Gitlab Companion extension
  */
 
 export interface ElementInfo {

@@ -11,7 +11,12 @@ import AvatarGroup from '@/components/issue-list/AvatarGroup';
 import { PinnedIssueSnapshot } from '@/services/storage';
 
 function Dot({ color }: { color: string }) {
-  return <span className="inline-block h-3 w-3 rounded-full border" style={{ backgroundColor: color }} />;
+  return (
+    <span
+      className="inline-block h-3 w-3 rounded-full border"
+      style={{ backgroundColor: color }}
+    />
+  );
 }
 
 dayjs.extend(relativeTime);
@@ -62,7 +67,9 @@ const PinnedIssueRow: React.FC<PinnedIssueRowProps> = ({
   const statusValue: 'open' | 'closed' = isClosed ? 'closed' : 'open';
 
   const [localLabels, setLocalLabels] = React.useState<string[]>(
-    Array.isArray(selectedLabels) ? [...selectedLabels, statusValue] : [statusValue]
+    Array.isArray(selectedLabels)
+      ? [...selectedLabels, statusValue]
+      : [statusValue]
   );
   const [saving, setSaving] = React.useState(false);
 
@@ -72,7 +79,9 @@ const PinnedIssueRow: React.FC<PinnedIssueRowProps> = ({
   }, [selectedLabels, statusValue]);
 
   const isDirty = React.useMemo(() => {
-    const a = Array.isArray(selectedLabels) ? [...selectedLabels, statusValue] : [statusValue];
+    const a = Array.isArray(selectedLabels)
+      ? [...selectedLabels, statusValue]
+      : [statusValue];
     const b = Array.isArray(localLabels) ? localLabels : [];
     if (a.length !== b.length) return true;
     const sa = [...a].sort().join('\n');
@@ -89,10 +98,10 @@ const PinnedIssueRow: React.FC<PinnedIssueRowProps> = ({
   const handleGitLabClick = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    
+
     // GitLab API returns web_url field directly
     const webUrl = (issue as any)?.webUrl || (issue as any)?.web_url;
-    
+
     if (webUrl) {
       window.open(webUrl, '_blank', 'noopener,noreferrer');
     } else {
@@ -128,24 +137,29 @@ const PinnedIssueRow: React.FC<PinnedIssueRowProps> = ({
       <span
         className="inline-block w-2.5 h-2.5 rounded-full"
         style={{
-          backgroundColor: statusValue === 'closed' ? '#6b7280' : '#22c55e'
+          backgroundColor: statusValue === 'closed' ? '#6b7280' : '#22c55e',
         }}
       />
       <span className="capitalize">{statusValue}</span>
     </Badge>
   );
 
-  const regularLabelItems = labelsArray.filter(l =>
-    localLabels.includes(l.name) &&
-    l.name.toLowerCase() !== 'open' &&
-    l.name.toLowerCase() !== 'closed'
+  const regularLabelItems = labelsArray.filter(
+    l =>
+      localLabels.includes(l.name) &&
+      l.name.toLowerCase() !== 'open' &&
+      l.name.toLowerCase() !== 'closed'
   );
 
   const staticLabels = (
     <div className="flex flex-wrap gap-2">
       {statusBadge}
-      {regularLabelItems.map((l) => (
-        <Badge key={l.id} variant="secondary" className="gap-1 glass-card border-white/50 bg-white/60 backdrop-blur-sm">
+      {regularLabelItems.map(l => (
+        <Badge
+          key={l.id}
+          variant="secondary"
+          className="gap-1 glass-card border-white/50 bg-white/60 backdrop-blur-sm"
+        >
           <Dot color={l.color} />
           <span className="leading-none">{l.name}</span>
         </Badge>
@@ -160,9 +174,6 @@ const PinnedIssueRow: React.FC<PinnedIssueRowProps> = ({
       title={issue.title}
       projectName={issue.project?.name ?? 'Project'}
       number={issue.number ?? '—'}
-      evidenceEnabled
-      evidenceProjectId={issue.project?.id}
-      evidenceIid={issue.number as number}
       statusControl={null}
       metaLeft={
         <div className="flex items-center gap-2">
@@ -227,8 +238,12 @@ const PinnedIssueRow: React.FC<PinnedIssueRowProps> = ({
               setSaving(true);
 
               // Check if status changed
-              const hasOpenLabel = localLabels.some(label => label.toLowerCase() === 'open');
-              const hasClosedLabel = localLabels.some(label => label.toLowerCase() === 'closed');
+              const hasOpenLabel = localLabels.some(
+                label => label.toLowerCase() === 'open'
+              );
+              const hasClosedLabel = localLabels.some(
+                label => label.toLowerCase() === 'closed'
+              );
               const newStatus = hasClosedLabel ? 'closed' : 'open';
 
               if (newStatus !== statusValue) {
@@ -236,8 +251,10 @@ const PinnedIssueRow: React.FC<PinnedIssueRowProps> = ({
               }
 
               // Update labels (excluding status labels for the API)
-              const regularLabels = localLabels.filter(label =>
-                label.toLowerCase() !== 'open' && label.toLowerCase() !== 'closed'
+              const regularLabels = localLabels.filter(
+                label =>
+                  label.toLowerCase() !== 'open' &&
+                  label.toLowerCase() !== 'closed'
               );
               await onChangeLabels(regularLabels);
             } finally {
@@ -245,16 +262,14 @@ const PinnedIssueRow: React.FC<PinnedIssueRowProps> = ({
             }
           }}
           onCancel={() => {
-            const baseLabels = Array.isArray(selectedLabels) ? selectedLabels : [];
+            const baseLabels = Array.isArray(selectedLabels)
+              ? selectedLabels
+              : [];
             setLocalLabels([...baseLabels, statusValue]);
           }}
         />
       }
       labelsStatic={staticLabels}
-      // Evidence mode props
-      isInEvidenceMode={isInEvidenceMode}
-      onToggleEvidenceMode={onToggleEvidenceMode}
-      onExitEvidenceMode={onExitEvidenceMode}
     />
   );
 };

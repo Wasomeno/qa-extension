@@ -23,28 +23,6 @@ const IssueListInner: React.FC<IssueListProps> = ({
 
   // Local state for UI
   const [selectedIssue, setSelectedIssue] = useState<any | null>(null);
-  const [evidenceModeIds, setEvidenceModeIds] = useState<Set<string>>(new Set());
-
-  // Evidence mode handlers
-  const toggleEvidenceMode = (id: string) => {
-    setEvidenceModeIds(prev => {
-      const newSet = new Set(prev);
-      if (newSet.has(id)) {
-        newSet.delete(id);
-      } else {
-        newSet.add(id);
-      }
-      return newSet;
-    });
-  };
-
-  const exitEvidenceMode = (id: string) => {
-    setEvidenceModeIds(prev => {
-      const newSet = new Set(prev);
-      newSet.delete(id);
-      return newSet;
-    });
-  };
 
   // Handlers
   const handleIssueOpen = (item: any) => {
@@ -91,9 +69,6 @@ const IssueListInner: React.FC<IssueListProps> = ({
         pinnedIds={pinningHook.pinnedIds}
         pinnedCount={pinningHook.pinnedCount}
         onTogglePin={pinningHook.togglePin}
-        evidenceModeIds={evidenceModeIds}
-        onToggleEvidenceMode={toggleEvidenceMode}
-        onExitEvidenceMode={exitEvidenceMode}
         portalContainer={portalContainer}
       />
 

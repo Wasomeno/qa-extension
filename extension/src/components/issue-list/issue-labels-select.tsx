@@ -134,7 +134,7 @@ const IssueLabelsSelect: React.FC<IssueLabelsSelectProps> = ({
             />
             {/* Selected chips */}
             {selectedLabelItems.length > 0 && (
-              <div className="mt-2 flex flex-wrap gap-1.5">
+              <div className="mt-2 flex flex-wrap items-center gap-1.5">
                 {selectedLabelItems.map(l => (
                   <Badge
                     key={l.id}
@@ -156,7 +156,7 @@ const IssueLabelsSelect: React.FC<IssueLabelsSelectProps> = ({
                   variant="ghost"
                   size="sm"
                   onClick={clearAll}
-                  className="h-6 px-2 ml-1 text-xs glass-button"
+                  className="px-2.5 py-1.5 ml-1 text-xs glass-button"
                 >
                   Clear
                 </Button>
@@ -182,11 +182,7 @@ const IssueLabelsSelect: React.FC<IssueLabelsSelectProps> = ({
                       <button
                         key={l.id}
                         onClick={() => toggleLabel(l.name)}
-                        className={`group flex items-center gap-3 px-2 py-2 mb-1 rounded-lg text-left ${
-                          checked
-                            ? 'bg-green-50/60 border border-green-200'
-                            : 'hover:bg-neutral-100/50'
-                        }`}
+                        className="group flex items-center gap-3 px-2 py-2 mb-1 rounded-lg text-left"
                       >
                         <Checkbox
                           checked={checked}
@@ -205,10 +201,10 @@ const IssueLabelsSelect: React.FC<IssueLabelsSelectProps> = ({
           </div>
 
           {/* Footer actions */}
-          <div className="border-t bg-white p-3 flex justify-between items-center">
+          <div className="border-t bg-white p-3 flex flex-1 gap-2 justify-between items-center">
             <Button
               variant="ghost"
-              className="glass-button text-xs"
+              className="glass-button text-xs flex-1"
               onClick={e => {
                 e.stopPropagation();
                 onCancel?.();
@@ -219,7 +215,7 @@ const IssueLabelsSelect: React.FC<IssueLabelsSelectProps> = ({
             </Button>
             <Button
               variant="outline"
-              className="text-xs"
+              className="glass-button text-xs flex-1"
               onClick={async e => {
                 e.stopPropagation();
                 if (onSave) await onSave();

@@ -233,7 +233,7 @@ const ContentPopup: React.FC = () => {
         marginBottom: '8px',
         color: '#111827'
       }}>
-        QA Command Center
+        Gitlab Companion
       </h2>
       <p style={{ 
         fontSize: '14px', 

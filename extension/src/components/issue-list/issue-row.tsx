@@ -34,10 +34,6 @@ interface IssueRowProps {
   onChangeState: (val: 'open' | 'closed') => void;
   portalContainer?: Element | null;
   labelsLoading?: boolean;
-  // Evidence mode props
-  isInEvidenceMode?: boolean;
-  onToggleEvidenceMode?: () => void;
-  onExitEvidenceMode?: () => void;
 }
 
 const IssueRow: React.FC<IssueRowProps> = ({
@@ -52,10 +48,6 @@ const IssueRow: React.FC<IssueRowProps> = ({
   onChangeState,
   portalContainer,
   labelsLoading = false,
-  // Evidence mode props
-  isInEvidenceMode = false,
-  onToggleEvidenceMode,
-  onExitEvidenceMode,
 }) => {
   const isClosed = (item as any)?.state === 'closed';
   const statusValue: 'open' | 'closed' = isClosed ? 'closed' : 'open';
@@ -159,9 +151,6 @@ const IssueRow: React.FC<IssueRowProps> = ({
       title={item.title}
       projectName={item.project?.name ?? 'Project'}
       number={item.number ?? '—'}
-      evidenceEnabled
-      evidenceProjectId={item.project?.id}
-      evidenceIid={item.number}
       statusControl={null}
       metaLeft={
         <div className="flex items-center gap-2">
@@ -250,10 +239,6 @@ const IssueRow: React.FC<IssueRowProps> = ({
         />
       }
       labelsStatic={staticLabels}
-      // Evidence mode props
-      isInEvidenceMode={isInEvidenceMode}
-      onToggleEvidenceMode={onToggleEvidenceMode}
-      onExitEvidenceMode={onExitEvidenceMode}
     />
   );
 };

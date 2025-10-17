@@ -21,9 +21,6 @@ interface IssueListContentProps {
   pinnedIds: Set<string>;
   pinnedCount: number;
   onTogglePin: (id: string, item: any) => void;
-  evidenceModeIds: Set<string>;
-  onToggleEvidenceMode: (id: string) => void;
-  onExitEvidenceMode: (id: string) => void;
   portalContainer?: Element | null;
 }
 
@@ -42,9 +39,6 @@ export const IssueListContent: React.FC<IssueListContentProps> = ({
   pinnedIds,
   pinnedCount,
   onTogglePin,
-  evidenceModeIds,
-  onToggleEvidenceMode,
-  onExitEvidenceMode,
   portalContainer,
 }) => {
   const queryClient = useQueryClient();
@@ -197,7 +191,6 @@ export const IssueListContent: React.FC<IssueListContentProps> = ({
     const iid = item.number as number | undefined;
     const palette = projectId ? labelPalettes[projectId] : undefined;
     const selectedLabels = Array.isArray(item.labels) ? item.labels : [];
-    const isInEvidenceMode = evidenceModeIds.has(item.id);
 
     return (
       <IssueRow
@@ -217,9 +210,6 @@ export const IssueListContent: React.FC<IssueListContentProps> = ({
         }
         portalContainer={portalContainer}
         labelsLoading={projectId ? labelLoadingMap[projectId] : false}
-        isInEvidenceMode={isInEvidenceMode}
-        onToggleEvidenceMode={() => onToggleEvidenceMode(item.id)}
-        onExitEvidenceMode={() => onExitEvidenceMode(item.id)}
       />
     );
   };

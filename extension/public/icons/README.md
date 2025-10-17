@@ -1,4 +1,4 @@
-# QA Command Center Extension Icons
+# Gitlab Companion Extension Icons
 
 This directory should contain the icon files for the Chrome extension. The following icon files are required:
 
@@ -77,7 +77,7 @@ If you need temporary icons for development, you can create simple colored squar
 
 ### Quick Placeholder Creation
 1. Create solid color squares in any image editor
-2. Use QA Command Center brand colors
+2. Use Gitlab Companion brand colors
 3. Add simple text overlay (like "QA" or version number)
 4. Export at required sizes
 
@@ -120,7 +120,7 @@ The extension manifest.json already references these files:
 ## Branding Consistency
 
 Ensure your icons align with:
-- Overall QA Command Center branding
+- Overall Gitlab Companion branding
 - Professional appearance suitable for enterprise use
 - Clear representation of QA/testing functionality
 - Scalability across different sizes and contexts

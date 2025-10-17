@@ -630,7 +630,7 @@ const PopupApp: React.FC = () => {
           <div className="glass-card p-8 space-y-6">
             <div className="space-y-2 text-center mb-6">
               <h1 className="font-bold text-xl text-gray-900">
-                QA Command Center
+                Gitlab Companion
               </h1>
               <p className="text-sm text-gray-600">Sign in with GitLab</p>
             </div>
@@ -706,7 +706,7 @@ const PopupApp: React.FC = () => {
         <div className="flex justify-between">
           <div>
             <h1 className="text-lg font-semibold text-gray-900">
-              QA Command Center
+              Gitlab Companion
             </h1>
             <div className="flex items-center gap-2 mt-1">
               <div

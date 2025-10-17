@@ -8,7 +8,7 @@ The extension has been updated with a minimal test script to verify content scri
 
 1. **Reload Extension:**
    - Go to `chrome://extensions/`
-   - Find "QA Command Center"
+   - Find "Gitlab Companion"
    - Click the reload button (🔄)
 
 2. **Test on a Website:**
