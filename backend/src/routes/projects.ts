@@ -519,6 +519,115 @@ router.get(
 );
 
 // Get GitLab issue comments/notes
+router.get(
+  '/:projectId/gitlab/issues/:iid/notes',
+  authMiddleware.authenticate,
+  asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+    const { projectId, iid } = req.params as any;
+    const issueIid = parseInt(iid, 10);
+    const userId = req.user!.id;
+
+    if (Number.isNaN(issueIid) || issueIid <= 0) {
+      sendResponse(res, 400, false, 'Invalid issue IID');
+      return;
+    }
+
+    let gitlabProjectRef: string | number | undefined = projectId;
+    let localProject: any | null = null;
+
+    try {
+      const oauthConnection = await db
+        .getConnection()
+        .select('*')
+        .from('oauth_connections')
+        .where('user_id', userId)
+        .where('provider', 'gitlab')
+        .first();
+
+      if (!oauthConnection || !oauthConnection.access_token) {
+        sendResponse(res, 401, false, 'GitLab not connected', null, {
+          requiresGitLabAuth: true,
+        });
+        return;
+      }
+
+      if (!/^\d+$/.test(String(projectId))) {
+        localProject = await db.projects().where('id', projectId).first();
+        if (!localProject) {
+          sendResponse(
+            res,
+            400,
+            false,
+            'Invalid project ID: project not found'
+          );
+          return;
+        }
+        gitlabProjectRef =
+          localProject.gitlab_project_id ||
+          localProject.gitlab_project_path ||
+          projectId;
+      } else {
+        localProject = await db
+          .projects()
+          .where('gitlab_project_id', projectId)
+          .first();
+      }
+
+      const gitlab = new GitLabService(oauthConnection.access_token);
+
+      let notes;
+      try {
+        notes = await gitlab.getIssueNotes(gitlabProjectRef!, issueIid);
+      } catch (err: any) {
+        const msg = err?.message || '';
+        if (
+          localProject &&
+          localProject.gitlab_project_path &&
+          String(gitlabProjectRef) !== String(localProject.gitlab_project_path)
+        ) {
+          notes = await gitlab.getIssueNotes(
+            localProject.gitlab_project_path,
+            issueIid
+          );
+        } else {
+          throw err;
+        }
+      }
+
+      sendResponse(res, 200, true, 'GitLab issue notes fetched', {
+        items: notes,
+      });
+    } catch (error: any) {
+      logger.error('Get GitLab issue notes error:', error);
+      const msg = error?.message || 'Failed to fetch issue notes from GitLab';
+      const lower = String(msg).toLowerCase();
+      const code =
+        lower.includes('not found') || lower.includes('inaccessible')
+          ? 404
+          : lower.includes('authentication')
+            ? 401
+            : lower.includes('forbidden')
+              ? 403
+              : 500;
+      try {
+        sendResponse(res, code, false, msg, null, {
+          debug: {
+            projectParam: projectId,
+            usedRef:
+              typeof gitlabProjectRef !== 'undefined'
+                ? String(gitlabProjectRef)
+                : undefined,
+            hasLocalProject: !!localProject,
+            hasLocalPath: !!(localProject && localProject.gitlab_project_path),
+            issueIid,
+          },
+        });
+      } catch (_) {
+        sendResponse(res, code, false, msg);
+      }
+    }
+  })
+);
 
 // Add a GitLab issue comment/note
 router.post(
@@ -931,9 +1040,37 @@ router.get(
         ? projectId.split(',').map((id: string) => id.trim())
         : [];
 
-      const projectIdFilters = rawProjectIds
-        .map((id: string) => parseInt(id, 10))
-        .filter((id: number) => !Number.isNaN(id));
+      const directProjectIds: number[] = [];
+      const localProjectIds: string[] = [];
+
+      rawProjectIds.forEach((id: string) => {
+        if (!id) return;
+        if (/^\d+$/.test(id)) {
+          const parsed = parseInt(id, 10);
+          if (!Number.isNaN(parsed)) {
+            directProjectIds.push(parsed);
+          }
+        } else {
+          localProjectIds.push(id);
+        }
+      });
+
+      if (localProjectIds.length > 0) {
+        const localProjects = await db
+          .projects()
+          .whereIn('id', localProjectIds)
+          .select('id', 'gitlab_project_id');
+
+        localProjects.forEach(project => {
+          const gitlabId = project?.gitlab_project_id;
+          const parsed = gitlabId !== null && gitlabId !== undefined ? Number(gitlabId) : NaN;
+          if (!Number.isNaN(parsed)) {
+            directProjectIds.push(parsed);
+          }
+        });
+      }
+
+      const projectIdFilters = Array.from(new Set(directProjectIds)).sort((a, b) => a - b);
 
       // Determine author scope
       let author_id: number | undefined;
