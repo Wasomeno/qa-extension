@@ -17,6 +17,7 @@ import { filesRouter } from './routes/files';
 import { slackRouter } from './routes/slack';
 import { healthRouter } from './routes/health';
 import { scenariosRouter } from './routes/scenarios';
+import { mergeRequestRouter } from './routes/merge-requests';
 import { databaseService } from './services/database';
 import { redisService } from './services/redis';
 import { WebSocketService } from './services/websocket';
@@ -40,8 +41,8 @@ class App {
     this.io = new SocketIOServer(this.server, {
       cors: {
         origin: EnvConfig.CORS_ORIGIN?.split(',') || '*',
-        methods: ['GET', 'POST']
-      }
+        methods: ['GET', 'POST'],
+      },
     });
 
     this.webSocketService = new WebSocketService(this.io);
@@ -53,59 +54,65 @@ class App {
 
   private initializeMiddleware(): void {
     // Security middleware
-    this.app.use(helmet({
-      contentSecurityPolicy: {
-        directives: {
-          defaultSrc: ["'self'"],
-          styleSrc: ["'self'", "'unsafe-inline'"],
-          scriptSrc: ["'self'"],
-          imgSrc: ["'self'", "data:", "https:"],
+    this.app.use(
+      helmet({
+        contentSecurityPolicy: {
+          directives: {
+            defaultSrc: ["'self'"],
+            styleSrc: ["'self'", "'unsafe-inline'"],
+            scriptSrc: ["'self'"],
+            imgSrc: ["'self'", 'data:', 'https:'],
+          },
         },
-      },
-      crossOriginEmbedderPolicy: false
-    }));
+        crossOriginEmbedderPolicy: false,
+      })
+    );
 
     // CORS configuration
-    this.app.use(cors({
-      origin: (origin, callback) => {
-        const allowedOrigins = process.env.CORS_ORIGIN?.split(',') || ['*'];
+    this.app.use(
+      cors({
+        origin: (origin, callback) => {
+          const allowedOrigins = process.env.CORS_ORIGIN?.split(',') || ['*'];
 
-        // Allow requests with no origin (like curl) or when not in production
-        if (!origin || EnvConfig.NODE_ENV !== 'production') {
-          return callback(null, true);
-        }
-
-        // Check if origin matches any allowed origins
-        const isAllowed = allowedOrigins.some(allowedOrigin => {
-          if (allowedOrigin === '*') return true;
-          if (allowedOrigin === 'chrome-extension://*') {
-            return origin.startsWith('chrome-extension://');
+          // Allow requests with no origin (like curl) or when not in production
+          if (!origin || EnvConfig.NODE_ENV !== 'production') {
+            return callback(null, true);
           }
-          if (allowedOrigin.includes('*')) {
-            // Handle wildcard domains like *.example.com
-            const pattern = allowedOrigin.replace(/\*/g, '.*');
-            const regex = new RegExp(`^${pattern}$`);
-            return regex.test(origin);
-          }
-          return origin === allowedOrigin;
-        });
 
-        if (isAllowed) {
-          callback(null, true);
-        } else {
-          logger.warn(`CORS: Origin ${origin} not allowed`);
-          callback(new Error('Not allowed by CORS'));
-        }
-      },
-      credentials: true,
-      methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-      allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
-    }));
+          // Check if origin matches any allowed origins
+          const isAllowed = allowedOrigins.some(allowedOrigin => {
+            if (allowedOrigin === '*') return true;
+            if (allowedOrigin === 'chrome-extension://*') {
+              return origin.startsWith('chrome-extension://');
+            }
+            if (allowedOrigin.includes('*')) {
+              // Handle wildcard domains like *.example.com
+              const pattern = allowedOrigin.replace(/\*/g, '.*');
+              const regex = new RegExp(`^${pattern}$`);
+              return regex.test(origin);
+            }
+            return origin === allowedOrigin;
+          });
+
+          if (isAllowed) {
+            callback(null, true);
+          } else {
+            logger.warn(`CORS: Origin ${origin} not allowed`);
+            callback(new Error('Not allowed by CORS'));
+          }
+        },
+        credentials: true,
+        methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+        allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+      })
+    );
 
     // Logging
-    this.app.use(morgan('combined', {
-      stream: { write: (message) => logger.info(message.trim()) }
-    }));
+    this.app.use(
+      morgan('combined', {
+        stream: { write: message => logger.info(message.trim()) },
+      })
+    );
 
     // Note: Application-level rate limiting removed. GitLab API limits apply upstream.
 
@@ -128,15 +135,19 @@ class App {
     this.app.use('/api/integrations/slack', slackRouter);
     this.app.use('/api/scenarios', scenariosRouter);
     this.app.use('/api/files', filesRouter);
+    this.app.use('/api/merge-requests', mergeRequestRouter);
 
     // Static serving for uploaded assets (dev-friendly; secure appropriately in prod)
-    this.app.use('/uploads', express.static(path.resolve(EnvConfig.UPLOAD_PATH)));
+    this.app.use(
+      '/uploads',
+      express.static(path.resolve(EnvConfig.UPLOAD_PATH))
+    );
 
     // 404 handler
     this.app.use('*', (req, res) => {
       res.status(404).json({
         success: false,
-        message: 'Route not found'
+        message: 'Route not found',
       });
     });
   }
@@ -167,7 +178,6 @@ class App {
 
       // Graceful shutdown handling
       this.setupGracefulShutdown();
-
     } catch (error) {
       logger.error('Failed to start server:', error);
       process.exit(1);

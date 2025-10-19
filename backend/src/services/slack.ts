@@ -3,6 +3,7 @@ import crypto from 'crypto';
 import { DatabaseService, databaseService } from './database';
 import { RedisService, redisService } from './redis';
 import { logger } from '../utils/logger';
+import { AuthorizationError } from '../middleware/errorHandler';
 
 export interface SlackConfig {
   clientId: string;
@@ -87,12 +88,12 @@ export class SlackService {
   constructor() {
     this.db = databaseService;
     this.redis = redisService;
-    
+
     this.config = {
       clientId: process.env.SLACK_CLIENT_ID!,
       clientSecret: process.env.SLACK_CLIENT_SECRET!,
       signingSecret: process.env.SLACK_SIGNING_SECRET!,
-      redirectUri: process.env.SLACK_REDIRECT_URI!
+      redirectUri: process.env.SLACK_REDIRECT_URI!,
     };
 
     this.apiClient = axios.create({
@@ -100,8 +101,8 @@ export class SlackService {
       timeout: 30000,
       headers: {
         'Content-Type': 'application/json',
-        'User-Agent': 'QA-Command-Center/1.0'
-      }
+        'User-Agent': 'QA-Command-Center/1.0',
+      },
     });
 
     this.setupInterceptors();
@@ -115,36 +116,41 @@ export class SlackService {
       }
     } catch (e) {
       // In dev, Redis may be optional; log and continue
-      logger.warn('Redis not available for SlackService cache. Continuing without cache.');
+      logger.warn(
+        'Redis not available for SlackService cache. Continuing without cache.'
+      );
     }
   }
 
   private setupInterceptors(): void {
     this.apiClient.interceptors.response.use(
-      (response) => {
+      response => {
         if (!response.data.ok) {
           throw new Error(`Slack API Error: ${response.data.error}`);
         }
         return response;
       },
-      (error) => {
+      error => {
         logger.error('Slack API request failed:', error);
         throw error;
       }
     );
   }
 
-  public async exchangeCodeForTokens(code: string, redirectUri: string): Promise<SlackTokens> {
+  public async exchangeCodeForTokens(
+    code: string,
+    redirectUri: string
+  ): Promise<SlackTokens> {
     try {
       const response = await this.apiClient.post('oauth.v2.access', {
         client_id: this.config.clientId,
         client_secret: this.config.clientSecret,
         code,
-        redirect_uri: redirectUri
+        redirect_uri: redirectUri,
       });
 
       const data = response.data;
-      
+
       const tokens: SlackTokens = {
         accessToken: data.access_token,
         scope: data.scope,
@@ -152,7 +158,9 @@ export class SlackService {
         teamName: data.team.name,
         userId: data.authed_user.id,
         refreshToken: data.refresh_token,
-        expiresAt: data.expires_in ? Date.now() + (data.expires_in * 1000) : undefined
+        expiresAt: data.expires_in
+          ? Date.now() + data.expires_in * 1000
+          : undefined,
       };
 
       logger.info(`Slack OAuth completed for team: ${tokens.teamName}`);
@@ -169,11 +177,11 @@ export class SlackService {
         client_id: this.config.clientId,
         client_secret: this.config.clientSecret,
         grant_type: 'refresh_token',
-        refresh_token: refreshToken
+        refresh_token: refreshToken,
       });
 
       const data = response.data;
-      
+
       const tokens: SlackTokens = {
         accessToken: data.access_token,
         scope: data.scope,
@@ -181,7 +189,9 @@ export class SlackService {
         teamName: data.team.name,
         userId: data.authed_user.id,
         refreshToken: data.refresh_token,
-        expiresAt: data.expires_in ? Date.now() + (data.expires_in * 1000) : undefined
+        expiresAt: data.expires_in
+          ? Date.now() + data.expires_in * 1000
+          : undefined,
       };
 
       logger.info(`Slack tokens refreshed for team: ${tokens.teamName}`);
@@ -192,10 +202,13 @@ export class SlackService {
     }
   }
 
-  public async sendMessage(accessToken: string, message: SlackMessage): Promise<any> {
+  public async sendMessage(
+    accessToken: string,
+    message: SlackMessage
+  ): Promise<any> {
     const attemptPost = async () =>
       this.apiClient.post('chat.postMessage', message, {
-        headers: { 'Authorization': `Bearer ${accessToken}` }
+        headers: { Authorization: `Bearer ${accessToken}` },
       });
 
     try {
@@ -213,14 +226,22 @@ export class SlackService {
       // Auto-join public channels if not in channel, then retry once
       if (errCode === 'not_in_channel' || errCode === 'channel_not_found') {
         try {
-          await this.apiClient.post('conversations.join', {
-            channel: (message as any).channel,
-          }, {
-            headers: { 'Authorization': `Bearer ${accessToken}` }
-          });
-          logger.info(`Joined channel ${(<any>message).channel}, retrying post`);
+          await this.apiClient.post(
+            'conversations.join',
+            {
+              channel: (message as any).channel,
+            },
+            {
+              headers: { Authorization: `Bearer ${accessToken}` },
+            }
+          );
+          logger.info(
+            `Joined channel ${(<any>message).channel}, retrying post`
+          );
           const retry = await attemptPost();
-          logger.info(`Message sent to Slack channel after join: ${(<any>message).channel}`);
+          logger.info(
+            `Message sent to Slack channel after join: ${(<any>message).channel}`
+          );
           return retry.data;
         } catch (joinErr: any) {
           const joinCode = joinErr?.response?.data?.error || joinErr?.message;
@@ -234,17 +255,26 @@ export class SlackService {
     }
   }
 
-  public async updateMessage(accessToken: string, channel: string, ts: string, message: Partial<SlackMessage>): Promise<any> {
+  public async updateMessage(
+    accessToken: string,
+    channel: string,
+    ts: string,
+    message: Partial<SlackMessage>
+  ): Promise<any> {
     try {
-      const response = await this.apiClient.post('chat.update', {
-        channel,
-        ts,
-        ...message
-      }, {
-        headers: {
-          'Authorization': `Bearer ${accessToken}`
+      const response = await this.apiClient.post(
+        'chat.update',
+        {
+          channel,
+          ts,
+          ...message,
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+          },
         }
-      });
+      );
 
       logger.info(`Message updated in Slack channel: ${channel}`);
       return response.data;
@@ -254,16 +284,24 @@ export class SlackService {
     }
   }
 
-  public async deleteMessage(accessToken: string, channel: string, ts: string): Promise<any> {
+  public async deleteMessage(
+    accessToken: string,
+    channel: string,
+    ts: string
+  ): Promise<any> {
     try {
-      const response = await this.apiClient.post('chat.delete', {
-        channel,
-        ts
-      }, {
-        headers: {
-          'Authorization': `Bearer ${accessToken}`
+      const response = await this.apiClient.post(
+        'chat.delete',
+        {
+          channel,
+          ts,
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+          },
         }
-      });
+      );
 
       logger.info(`Message deleted from Slack channel: ${channel}`);
       return response.data;
@@ -273,40 +311,48 @@ export class SlackService {
     }
   }
 
-  public async getChannels(accessToken: string, types: string = 'public_channel,private_channel'): Promise<SlackChannel[]> {
+  public async getChannels(
+    accessToken: string,
+    types: string = 'public_channel,private_channel'
+  ): Promise<SlackChannel[]> {
     try {
       const response = await this.apiClient.get('conversations.list', {
         params: {
           types,
-          limit: 1000
+          limit: 1000,
         },
         headers: {
-          'Authorization': `Bearer ${accessToken}`
-        }
+          Authorization: `Bearer ${accessToken}`,
+        },
       });
 
-      return response.data.channels.map((channel: any): SlackChannel => ({
-        id: channel.id,
-        name: channel.name,
-        isChannel: channel.is_channel,
-        isPrivate: channel.is_private,
-        isMember: channel.is_member,
-        topic: channel.topic,
-        purpose: channel.purpose
-      }));
+      return response.data.channels.map(
+        (channel: any): SlackChannel => ({
+          id: channel.id,
+          name: channel.name,
+          isChannel: channel.is_channel,
+          isPrivate: channel.is_private,
+          isMember: channel.is_member,
+          topic: channel.topic,
+          purpose: channel.purpose,
+        })
+      );
     } catch (error) {
       logger.error('Failed to get Slack channels:', error);
       throw error;
     }
   }
 
-  public async getChannelInfo(accessToken: string, channel: string): Promise<SlackChannel> {
+  public async getChannelInfo(
+    accessToken: string,
+    channel: string
+  ): Promise<SlackChannel> {
     try {
       const response = await this.apiClient.get('conversations.info', {
         params: { channel },
         headers: {
-          'Authorization': `Bearer ${accessToken}`
-        }
+          Authorization: `Bearer ${accessToken}`,
+        },
       });
 
       const channelData = response.data.channel;
@@ -317,7 +363,7 @@ export class SlackService {
         isPrivate: channelData.is_private,
         isMember: channelData.is_member,
         topic: channelData.topic,
-        purpose: channelData.purpose
+        purpose: channelData.purpose,
       };
     } catch (error) {
       logger.error('Failed to get Slack channel info:', error);
@@ -329,30 +375,33 @@ export class SlackService {
     try {
       const response = await this.apiClient.get('users.list', {
         headers: {
-          'Authorization': `Bearer ${accessToken}`
-        }
+          Authorization: `Bearer ${accessToken}`,
+        },
       });
 
       return response.data.members
         .filter((member: any) => !member.deleted)
-        .map((member: any): SlackUser => ({
-          id: member.id,
-          name: member.name,
-          realName: member.real_name,
-          email: member.profile.email,
-          isBot: member.is_bot,
-          profile: {
-            displayName: member.profile.display_name || member.profile.real_name,
-            realName: member.profile.real_name,
+        .map(
+          (member: any): SlackUser => ({
+            id: member.id,
+            name: member.name,
+            realName: member.real_name,
             email: member.profile.email,
-            image24: member.profile.image_24,
-            image32: member.profile.image_32,
-            image48: member.profile.image_48,
-            image72: member.profile.image_72,
-            image192: member.profile.image_192,
-            image512: member.profile.image_512
-          }
-        }));
+            isBot: member.is_bot,
+            profile: {
+              displayName:
+                member.profile.display_name || member.profile.real_name,
+              realName: member.profile.real_name,
+              email: member.profile.email,
+              image24: member.profile.image_24,
+              image32: member.profile.image_32,
+              image48: member.profile.image_48,
+              image72: member.profile.image_72,
+              image192: member.profile.image_192,
+              image512: member.profile.image_512,
+            },
+          })
+        );
     } catch (error) {
       logger.error('Failed to get Slack users:', error);
       throw error;
@@ -365,46 +414,49 @@ export class SlackService {
         type: 'header',
         text: {
           type: 'plain_text',
-          text: `🐛 New Issue: ${issueData.title}`
-        }
+          text: `🐛 New Issue: ${issueData.title}`,
+        },
       },
       {
         type: 'section',
         text: {
           type: 'mrkdwn',
-          text: `*Description:*\n${issueData.description}`
-        }
+          text: `*Description:*\n${issueData.description}`,
+        },
       },
       {
         type: 'section',
         fields: [
           {
             type: 'mrkdwn',
-            text: `*Severity:* ${this.getSeverityEmoji(issueData.severity)} ${issueData.severity.toUpperCase()}`
+            text: `*Severity:* ${this.getSeverityEmoji(issueData.severity)} ${issueData.severity.toUpperCase()}`,
           },
           {
             type: 'mrkdwn',
-            text: `*Priority:* ${this.getPriorityEmoji(issueData.priority)} ${issueData.priority.toUpperCase()}`
+            text: `*Priority:* ${this.getPriorityEmoji(issueData.priority)} ${issueData.priority.toUpperCase()}`,
           },
           {
             type: 'mrkdwn',
-            text: `*Project:* ${issueData.project?.name || 'Unknown'}`
+            text: `*Project:* ${issueData.project?.name || 'Unknown'}`,
           },
           {
             type: 'mrkdwn',
-            text: `*Reporter:* ${issueData.user?.full_name || 'Unknown'}`
-          }
-        ]
-      }
+            text: `*Reporter:* ${issueData.user?.full_name || 'Unknown'}`,
+          },
+        ],
+      },
     ];
 
-    if (issueData.acceptance_criteria && issueData.acceptance_criteria.length > 0) {
+    if (
+      issueData.acceptance_criteria &&
+      issueData.acceptance_criteria.length > 0
+    ) {
       blocks.push({
         type: 'section',
         text: {
           type: 'mrkdwn',
-          text: `*Acceptance Criteria:*\n${issueData.acceptance_criteria.map((criteria: string, index: number) => `${index + 1}. ${criteria}`).join('\n')}`
-        }
+          text: `*Acceptance Criteria:*\n${issueData.acceptance_criteria.map((criteria: string, index: number) => `${index + 1}. ${criteria}`).join('\n')}`,
+        },
       });
     }
 
@@ -413,8 +465,8 @@ export class SlackService {
         type: 'section',
         text: {
           type: 'mrkdwn',
-          text: `*Attachments:* ${issueData.attachments.length} file(s)`
-        }
+          text: `*Attachments:* ${issueData.attachments.length} file(s)`,
+        },
       });
     }
 
@@ -425,18 +477,200 @@ export class SlackService {
           type: 'button',
           text: {
             type: 'plain_text',
-            text: 'View Issue'
+            text: 'View Issue',
           },
           url: `${process.env.FRONTEND_URL}/issues/${issueData.id}`,
-          action_id: 'view_issue'
-        }
-      ]
+          action_id: 'view_issue',
+        },
+      ],
     });
 
     return { blocks };
   }
 
-  public async verifyWebhookSignature(body: string, signature: string, timestamp: string): Promise<boolean> {
+  public async sendMergeRequestNotification(options: {
+    userId: string;
+    channelId: string;
+    mergeRequest: any;
+    slackUserIds?: string[] | null;
+  }): Promise<{ channel: string; ts: string; message?: any }> {
+    const { userId, channelId, mergeRequest, slackUserIds } = options;
+
+    const tokens = await this.getUserTokens(userId);
+    const accessToken = tokens?.accessToken || process.env.SLACK_BOT_TOKEN;
+
+    if (!accessToken) {
+      throw new AuthorizationError(
+        'Slack bot not configured for notifications. Please connect Slack or set SLACK_BOT_TOKEN.'
+      );
+    }
+
+    const enrichedMergeRequest = {
+      ...mergeRequest,
+      slackUserIds:
+        slackUserIds && slackUserIds.length > 0
+          ? slackUserIds
+          : mergeRequest.slackUserIds,
+    };
+
+    const messageBlocks =
+      await this.createMergeRequestMessage(enrichedMergeRequest);
+
+    const mentionIds = Array.isArray(enrichedMergeRequest.slackUserIds)
+      ? enrichedMergeRequest.slackUserIds
+      : [];
+
+    const textSegments = [
+      `New merge request: ${mergeRequest.title}`,
+      mergeRequest.source_branch && mergeRequest.target_branch
+        ? `Source: ${mergeRequest.source_branch} → ${mergeRequest.target_branch}`
+        : '',
+      mentionIds.length > 0
+        ? `Reviewers: ${mentionIds.map((id: string) => `<@${id}>`).join(', ')}`
+        : '',
+      mergeRequest.web_url ? String(mergeRequest.web_url) : '',
+    ].filter(Boolean);
+
+    if (textSegments.length === 0) {
+      textSegments.push('New merge request created');
+    }
+
+    const result = await this.sendMessage(accessToken, {
+      channel: channelId,
+      text: textSegments.join('\n'),
+      blocks: messageBlocks.blocks,
+      unfurlLinks: true,
+      unfurlMedia: false,
+    });
+
+    return {
+      channel: result.channel,
+      ts: result.ts,
+      message: result.message,
+    };
+  }
+
+  public async createMergeRequestMessage(mrData: any): Promise<any> {
+    // Parse description to extract features (look for Feature Updated section)
+    let features: string[] = [];
+    const descriptionLines = (mrData.description || '').split('\n');
+    let inFeaturesSection = false;
+
+    for (const line of descriptionLines) {
+      if (
+        line.includes('**Feature Updated**') ||
+        line.includes('Feature Updated')
+      ) {
+        inFeaturesSection = true;
+        continue;
+      }
+      if (inFeaturesSection && line.trim().startsWith('- [ ]')) {
+        const feature = line.replace('- [ ]', '').trim();
+        if (
+          feature &&
+          feature !== 'Feature A' &&
+          feature !== 'Feature B' &&
+          feature !== 'Feature C'
+        ) {
+          features.push(feature);
+        }
+      }
+      if (inFeaturesSection && line.trim().startsWith('---')) {
+        break;
+      }
+    }
+
+    // Truncate features if too many
+    if (features.length > 5) {
+      features = features.slice(0, 5);
+      features.push(`...and ${descriptionLines.length - 5} more`);
+    }
+
+    const blocks: any[] = [
+      {
+        type: 'header',
+        text: {
+          type: 'plain_text',
+          text: `🔀 New Merge Request: ${mrData.title}`,
+        },
+      },
+      {
+        type: 'section',
+        fields: [
+          {
+            type: 'mrkdwn',
+            text: `*Source:* \`${mrData.source_branch}\``,
+          },
+          {
+            type: 'mrkdwn',
+            text: `*Target:* \`${mrData.target_branch}\``,
+          },
+          {
+            type: 'mrkdwn',
+            text: `*Author:* ${mrData.author?.name || mrData.user?.full_name || 'Unknown'}`,
+          },
+          {
+            type: 'mrkdwn',
+            text: `*Project:* ${mrData.project?.name || 'Unknown'}`,
+          },
+        ],
+      },
+    ];
+
+    // Add features list if we extracted any
+    if (features.length > 0) {
+      blocks.push({
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: `*Changes:*\n${features.map(f => `• ${f}`).join('\n')}`,
+        },
+      });
+    }
+
+    // Add reviewers if specified
+    if (mrData.reviewers && mrData.reviewers.length > 0) {
+      const reviewerMentions =
+        mrData.slackUserIds && mrData.slackUserIds.length > 0
+          ? mrData.slackUserIds.map((id: string) => `<@${id}>`).join(', ')
+          : mrData.reviewers.map((r: any) => r.name || r.username).join(', ');
+
+      blocks.push({
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: `*Reviewers:* ${reviewerMentions}`,
+        },
+      });
+    }
+
+    // Add action button
+    blocks.push({
+      type: 'actions',
+      elements: [
+        {
+          type: 'button',
+          text: {
+            type: 'plain_text',
+            text: '👀 Review MR',
+          },
+          url:
+            mrData.web_url ||
+            `${process.env.FRONTEND_URL}/merge-requests/${mrData.iid}`,
+          action_id: 'view_mr',
+          style: 'primary',
+        },
+      ],
+    });
+
+    return { blocks };
+  }
+
+  public async verifyWebhookSignature(
+    body: string,
+    signature: string,
+    timestamp: string
+  ): Promise<boolean> {
     try {
       const signingSecret = this.config.signingSecret;
       const requestTimestamp = parseInt(timestamp);
@@ -471,11 +705,11 @@ export class SlackService {
         case 'url_verification':
           // This is handled in the webhook route
           break;
-        
+
         case 'event_callback':
           await this.handleEventCallback(event);
           break;
-        
+
         default:
           logger.warn(`Unhandled webhook event type: ${event.type}`);
       }
@@ -485,7 +719,9 @@ export class SlackService {
     }
   }
 
-  private async handleEventCallback(webhookEvent: SlackWebhookEvent): Promise<void> {
+  private async handleEventCallback(
+    webhookEvent: SlackWebhookEvent
+  ): Promise<void> {
     const { event } = webhookEvent;
 
     switch (event.type) {
@@ -494,11 +730,11 @@ export class SlackService {
           await this.handleMentionEvent(event);
         }
         break;
-      
+
       case 'app_mention':
         await this.handleMentionEvent(event);
         break;
-      
+
       default:
         logger.debug(`Unhandled event type: ${event.type}`);
     }
@@ -508,10 +744,11 @@ export class SlackService {
     try {
       // Extract issue information from the mention
       const text = event.text.toLowerCase();
-      
+
       if (text.includes('create issue') || text.includes('report bug')) {
         // Send a response asking for more details
-        const user = await this.db.users()
+        const user = await this.db
+          .users()
           .where('slack_id', event.user)
           .first();
 
@@ -525,15 +762,15 @@ export class SlackService {
                 type: 'section',
                 text: {
                   type: 'mrkdwn',
-                  text: "I can help you create an issue! Here are your options:"
-                }
+                  text: 'I can help you create an issue! Here are your options:',
+                },
               },
               {
                 type: 'section',
                 text: {
                   type: 'mrkdwn',
-                  text: "• Use the QA Extension in your browser to capture bug details automatically\n• Click the button below to create an issue manually"
-                }
+                  text: '• Use the QA Extension in your browser to capture bug details automatically\n• Click the button below to create an issue manually',
+                },
               },
               {
                 type: 'actions',
@@ -542,14 +779,14 @@ export class SlackService {
                     type: 'button',
                     text: {
                       type: 'plain_text',
-                      text: 'Create Issue'
+                      text: 'Create Issue',
                     },
                     url: `${process.env.FRONTEND_URL}/issues/new`,
-                    action_id: 'create_issue'
-                  }
-                ]
-              }
-            ]
+                    action_id: 'create_issue',
+                  },
+                ],
+              },
+            ],
           });
         }
       }
@@ -558,23 +795,26 @@ export class SlackService {
     }
   }
 
-  public async storeUserTokens(userId: string, tokens: SlackTokens): Promise<void> {
+  public async storeUserTokens(
+    userId: string,
+    tokens: SlackTokens
+  ): Promise<void> {
     try {
-      await this.db.users()
-        .where('id', userId)
-        .update({
-          slack_id: tokens.userId,
-          slack_tokens: tokens,
-          updated_at: new Date()
-        });
+      await this.db.users().where('id', userId).update({
+        slack_id: tokens.userId,
+        slack_tokens: tokens,
+        updated_at: new Date(),
+      });
 
       // Cache tokens in Redis for quick access
       await this.ensureRedisConnected();
       try {
         await this.redis.set(
-        `slack_tokens:${userId}`,
-        JSON.stringify(tokens),
-        tokens.expiresAt ? Math.floor((tokens.expiresAt - Date.now()) / 1000) : 86400 * 30
+          `slack_tokens:${userId}`,
+          JSON.stringify(tokens),
+          tokens.expiresAt
+            ? Math.floor((tokens.expiresAt - Date.now()) / 1000)
+            : 86400 * 30
         );
       } catch {}
 
@@ -597,7 +837,8 @@ export class SlackService {
       } catch {}
 
       // Fallback to database
-      const user = await this.db.users()
+      const user = await this.db
+        .users()
         .where('id', userId)
         .select('slack_tokens')
         .first();
@@ -616,7 +857,13 @@ export class SlackService {
       }
 
       return null;
-    } catch (error) {
+    } catch (error: any) {
+      if (error?.code === '42703') {
+        logger.warn(
+          'Slack tokens column not found in users table; falling back to bot token'
+        );
+        return null;
+      }
       logger.error('Failed to get Slack tokens:', error);
       return null;
     }
@@ -627,7 +874,7 @@ export class SlackService {
       critical: '🔴',
       high: '🟡',
       medium: '🟠',
-      low: '🟢'
+      low: '🟢',
     };
     return emojiMap[severity] || '⚪';
   }
@@ -637,7 +884,7 @@ export class SlackService {
       urgent: '🚨',
       high: '⚡',
       normal: '📋',
-      low: '📝'
+      low: '📝',
     };
     return emojiMap[priority] || '📋';
   }
@@ -646,8 +893,8 @@ export class SlackService {
     try {
       await this.apiClient.get('auth.test', {
         headers: {
-          'Authorization': `Bearer ${accessToken}`
-        }
+          Authorization: `Bearer ${accessToken}`,
+        },
       });
       return true;
     } catch (error) {

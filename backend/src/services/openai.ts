@@ -280,7 +280,8 @@ Rules:
         const text = this.extractResponsesText(res);
         if (text && text.trim()) return text;
         // Surface status/reason from Responses API when output is empty
-        const status = (res && (res.status || res.response?.status)) || 'unknown';
+        const status =
+          (res && (res.status || res.response?.status)) || 'unknown';
         const reason =
           res?.incomplete_details?.reason ||
           res?.response?.incomplete_details?.reason ||
@@ -289,7 +290,8 @@ Rules:
           'no reason provided';
         const safety =
           (res?.safety_ratings && JSON.stringify(res.safety_ratings)) ||
-          (res?.response?.safety_ratings && JSON.stringify(res.response.safety_ratings)) ||
+          (res?.response?.safety_ratings &&
+            JSON.stringify(res.response.safety_ratings)) ||
           undefined;
         const meta: Record<string, any> = { status, reason };
         if (safety) meta.safety = safety;
@@ -632,6 +634,144 @@ ${additionalContext ? `Additional Context: ${JSON.stringify(additionalContext, n
     } catch (error) {
       logger.error('Failed to improve issue description:', error);
       return originalDescription; // Return original if improvement fails
+    }
+  }
+
+  /**
+   * Generate a merge request description by filling a template with commit information and code diffs
+   */
+  public async generateMergeRequestDescription(
+    template: string,
+    commits: Array<{ title: string; message: string; author_name: string }>,
+    sourceBranch: string,
+    targetBranch: string,
+    diffs?: Array<{ old_path: string; new_path: string; diff: string }>
+  ): Promise<string> {
+    this.ensureOpenAIAvailable();
+
+    if (!commits || commits.length === 0) {
+      // No commits, return template as-is
+      return template;
+    }
+
+    try {
+      const systemPrompt = `You are a senior technical writer who creates professional merge request descriptions by analyzing code changes.
+
+Your task is to analyze commit messages AND code diffs to intelligently fill a merge request template with ACTUAL, SPECIFIC information.
+
+CRITICAL RULES:
+1. NEVER write "N/A" or leave placeholder text - ALWAYS extract real information from commits and diffs
+2. Analyze the code diffs to understand WHAT was actually changed (new features, bug fixes, refactoring)
+3. Extract feature names from both commit messages AND code changes
+4. Infer technical requirements from code (e.g., new package.json dependencies → "need to run npm install")
+5. List specific files/components that were updated based on diffs
+6. Keep all markdown formatting (headings, lists, checkboxes) EXACTLY as in template
+7. Keep ALL checkboxes unchecked [ ]
+8. DO NOT include any meta-commentary or context sections
+9. Return ONLY the filled template - nothing extra
+
+Code diff analysis tips:
+- Look for new files/functions/classes to identify features
+- Check for package.json/requirements.txt changes for dependencies
+- Identify bug fixes from modified logic
+- Note refactoring vs new features
+
+If you cannot extract specific information, make intelligent inferences from the code patterns rather than writing "N/A".`;
+
+      // Format commits with full messages for better context
+      const commitDetails = commits
+        .slice(0, 20)
+        .map((c, idx) => {
+          return `Commit ${idx + 1}:
+  Title: ${c.title}
+  Author: ${c.author_name}
+  Full message: ${c.message.trim()}`;
+        })
+        .join('\n\n');
+
+      // Format diffs - limit size to avoid token limits
+      let diffSummary = '';
+      if (diffs && diffs.length > 0) {
+        const limitedDiffs = diffs.slice(0, 15); // Limit to 15 files
+        diffSummary = limitedDiffs
+          .map((d, idx) => {
+            const path = d.new_path || d.old_path;
+            // Truncate very large diffs
+            const truncatedDiff =
+              d.diff.length > 2000
+                ? d.diff.substring(0, 2000) + '\n... (diff truncated)'
+                : d.diff;
+
+            return `File ${idx + 1}: ${path}
+\`\`\`diff
+${truncatedDiff}
+\`\`\``;
+          })
+          .join('\n\n');
+
+        if (diffs.length > 15) {
+          diffSummary += `\n\n... and ${diffs.length - 15} more files changed`;
+        }
+      }
+
+      const userPrompt = `Analyze these commits and code changes, then fill the template with SPECIFIC information:
+
+COMMITS TO ANALYZE:
+${commitDetails}
+
+${
+  diffSummary
+    ? `CODE CHANGES (DIFFS):
+${diffSummary}
+
+`
+    : ''
+}TEMPLATE TO FILL (preserve exact structure):
+${template}
+
+INSTRUCTIONS:
+- Analyze the code diffs to understand what was actually built/changed
+- Extract actual feature names from code changes (e.g., new API endpoints, UI components, services)
+- Identify technical requirements from code (new dependencies, migrations, environment variables)
+- For "Feature Updated" section: write SHORT, CONCISE bullet points (max 5-7 words each) that are descriptive
+  * Good: "AI-powered MR description generation"
+  * Good: "GitLab branch comparison API"
+  * Bad: "AI-assisted merge request description generation with OpenAI integration"
+  * Bad: "Implementation of new feature for creating merge requests"
+- List SPECIFIC files/components/features changed based on the diffs
+- Explain WHAT changed and WHY (infer from commit messages + code)
+- Write like a developer explaining their work to reviewers
+- Be concise but specific and accurate
+
+NOW FILL THE TEMPLATE:`;
+
+      const response = await this.safeChatCompletion(
+        [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt },
+        ],
+        2500, // Increased token limit for diffs
+        0.5 // Slightly higher temperature for more creative extraction
+      );
+
+      if (!response) {
+        throw new Error('No response from OpenAI');
+      }
+
+      logger.info(
+        `Successfully generated MR description from ${commits.length} commits and ${diffs?.length || 0} file diffs`
+      );
+      await this.trackUsage('mr_description', response.length);
+
+      return response.trim();
+    } catch (error) {
+      logger.error('Failed to generate MR description:', error);
+      // Fallback: return template with commit list appended
+      const commitList = commits
+        .slice(0, 10)
+        .map(c => `- ${c.title || c.message.split('\n')[0]}`)
+        .join('\n');
+      return `${template}\n\n---\n\n**Commits in this MR:**\n${commitList}`;
     }
   }
 

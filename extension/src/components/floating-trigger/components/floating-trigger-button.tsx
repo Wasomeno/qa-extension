@@ -79,50 +79,63 @@ const FloatingTriggerButton: React.FC<FloatingTriggerButtonProps> = ({
     };
 
     const detect = () => {
-      const el = rootRef.current;
-      if (!el) return;
-      const { w, h } = getSizeForState(viewState);
-      const clamp = (val: number, min: number, max: number) =>
-        Math.min(Math.max(val, min), max);
-      const points = [
-        [position.x + w / 2, position.y + h / 2],
-        [position.x + w * 0.25, position.y + h * 0.25],
-        [position.x + w * 0.75, position.y + h * 0.25],
-        [position.x + w * 0.25, position.y + h * 0.75],
-        [position.x + w * 0.75, position.y + h * 0.75],
-      ].map(([x, y]) => [
-        clamp(x, 0, window.innerWidth - 1),
-        clamp(y, 0, window.innerHeight - 1),
-      ]);
+      try {
+        const el = rootRef.current;
+        if (!el) return;
+        const { w, h } = getSizeForState(viewState);
+        const clamp = (val: number, min: number, max: number) =>
+          Math.min(Math.max(val, min), max);
+        const points = [
+          [position.x + w / 2, position.y + h / 2],
+          [position.x + w * 0.25, position.y + h * 0.25],
+          [position.x + w * 0.75, position.y + h * 0.25],
+          [position.x + w * 0.25, position.y + h * 0.75],
+          [position.x + w * 0.75, position.y + h * 0.75],
+        ].map(([x, y]) => [
+          clamp(x, 0, window.innerWidth - 1),
+          clamp(y, 0, window.innerHeight - 1),
+        ]);
 
-      const sampleAt = (x: number, y: number) => {
-        const prevPointer = el.style.pointerEvents;
-        el.style.pointerEvents = 'none';
-        let under = document.elementFromPoint(x, y) as HTMLElement | null;
-        el.style.pointerEvents = prevPointer;
+        const sampleAt = (x: number, y: number) => {
+          try {
+            const prevPointer = el.style.pointerEvents;
+            el.style.pointerEvents = 'none';
+            let under = document.elementFromPoint(x, y) as HTMLElement | null;
+            el.style.pointerEvents = prevPointer;
 
-        let depth = 0;
-        while (under && depth < 12) {
-          const cs = getComputedStyle(under);
-          const rgba = parseRGBA(cs.backgroundColor || 'rgba(255,255,255,1)');
-          if (rgba.a && rgba.a > 0) return rgba;
-          under = under.parentElement;
-          depth += 1;
-        }
-        const bodyBG = getComputedStyle(document.body).backgroundColor;
-        const htmlBG = getComputedStyle(
-          document.documentElement
-        ).backgroundColor;
-        const rb = parseRGBA(bodyBG || 'rgba(255,255,255,1)');
-        const rh = parseRGBA(htmlBG || 'rgba(255,255,255,1)');
-        return rb.a > 0 ? rb : rh;
-      };
+            let depth = 0;
+            while (under && depth < 12) {
+              const cs = getComputedStyle(under);
+              const rgba = parseRGBA(
+                cs.backgroundColor || 'rgba(255,255,255,1)'
+              );
+              if (rgba.a && rgba.a > 0) return rgba;
+              under = under.parentElement;
+              depth += 1;
+            }
+            const bodyBG = getComputedStyle(document.body).backgroundColor;
+            const htmlBG = getComputedStyle(
+              document.documentElement
+            ).backgroundColor;
+            const rb = parseRGBA(bodyBG || 'rgba(255,255,255,1)');
+            const rh = parseRGBA(htmlBG || 'rgba(255,255,255,1)');
+            return rb.a > 0 ? rb : rh;
+          } catch (error) {
+            // If backdrop detection fails, return default light background
+            return { r: 255, g: 255, b: 255, a: 1 };
+          }
+        };
 
-      const samples = points.map(([x, y]) => sampleAt(x, y));
-      const luminances = samples.map(s => luminance(s.r, s.g, s.b));
-      const avgL = luminances.reduce((a, b) => a + b, 0) / luminances.length;
-      // If backdrop is dark, switch text to light for contrast
-      setOnDarkBackdrop(avgL < 0.6);
+        const samples = points.map(([x, y]) => sampleAt(x, y));
+        const luminances = samples.map(s => luminance(s.r, s.g, s.b));
+        const avgL = luminances.reduce((a, b) => a + b, 0) / luminances.length;
+        // If backdrop is dark, switch text to light for contrast
+        setOnDarkBackdrop(avgL < 0.6);
+      } catch (error) {
+        // If detection fails, default to light text on dark backdrop assumption
+        console.warn('Backdrop detection failed, using default:', error);
+        setOnDarkBackdrop(false);
+      }
     };
 
     detect();

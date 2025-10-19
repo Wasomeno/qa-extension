@@ -53,6 +53,92 @@ export interface GitLabLabel {
   description?: string;
 }
 
+export interface GitLabBranch {
+  name: string;
+  merged: boolean;
+  protected: boolean;
+  default: boolean;
+  developers_can_push: boolean;
+  developers_can_merge: boolean;
+  can_push: boolean;
+  web_url: string;
+  commit?: {
+    id: string;
+    short_id: string;
+    title: string;
+    author_name: string;
+    created_at: string;
+  };
+}
+
+export interface GitLabMergeRequest {
+  id: number;
+  iid: number;
+  project_id: number;
+  title: string;
+  description: string;
+  state: string;
+  merged_by: GitLabUser | null;
+  merged_at: string | null;
+  closed_by: GitLabUser | null;
+  closed_at: string | null;
+  created_at: string;
+  updated_at: string;
+  target_branch: string;
+  source_branch: string;
+  upvotes: number;
+  downvotes: number;
+  author: GitLabUser;
+  assignee: GitLabUser | null;
+  assignees: GitLabUser[];
+  reviewers: GitLabUser[];
+  source_project_id: number;
+  target_project_id: number;
+  labels: string[];
+  draft: boolean;
+  work_in_progress: boolean;
+  milestone: any;
+  merge_when_pipeline_succeeds: boolean;
+  merge_status: string;
+  sha: string;
+  merge_commit_sha: string | null;
+  squash_commit_sha: string | null;
+  user_notes_count: number;
+  discussion_locked: boolean | null;
+  should_remove_source_branch: boolean | null;
+  force_remove_source_branch: boolean;
+  web_url: string;
+  references: {
+    short: string;
+    relative: string;
+    full: string;
+  };
+  time_stats: {
+    time_estimate: number;
+    total_time_spent: number;
+    human_time_estimate: string | null;
+    human_total_time_spent: string | null;
+  };
+  squash: boolean;
+  has_conflicts: boolean;
+  blocking_discussions_resolved: boolean;
+}
+
+export interface CreateMergeRequestData {
+  source_branch: string;
+  target_branch: string;
+  title: string;
+  description?: string;
+  assignee_id?: number;
+  assignee_ids?: number[];
+  reviewer_ids?: number[];
+  milestone_id?: number;
+  labels?: string;
+  remove_source_branch?: boolean;
+  squash?: boolean;
+  allow_collaboration?: boolean;
+}
+
 export interface CreateIssueData {
   title: string;
   description: string;
@@ -61,6 +147,29 @@ export interface CreateIssueData {
   milestone_id?: number;
   due_date?: string;
   weight?: number;
+}
+
+export interface GitLabCommit {
+  id: string;
+  short_id: string;
+  title: string;
+  message: string;
+  author_name: string;
+  author_email: string;
+  authored_date: string;
+  committer_name: string;
+  committer_email: string;
+  committed_date: string;
+  created_at: string;
+  web_url: string;
+}
+
+export interface GitLabComparison {
+  commit: GitLabCommit;
+  commits: GitLabCommit[];
+  diffs: any[];
+  compare_timeout: boolean;
+  compare_same_ref: boolean;
 }
 
 export class GitLabService {
@@ -461,12 +570,17 @@ export class GitLabService {
       let filteredIssues = issues;
       if (options.project_ids && options.project_ids.length > 0) {
         const projectIdSet = new Set(options.project_ids.map(id => Number(id)));
-        filteredIssues = issues.filter(issue => projectIdSet.has(issue.project_id));
+        filteredIssues = issues.filter(issue =>
+          projectIdSet.has(issue.project_id)
+        );
       }
 
       // Handle OR logic for labels if needed
       if (options.labels && options.labels_match_mode === 'or') {
-        const labelList = options.labels.split(',').map(l => l.trim()).filter(Boolean);
+        const labelList = options.labels
+          .split(',')
+          .map(l => l.trim())
+          .filter(Boolean);
         filteredIssues = filteredIssues.filter(issue =>
           labelList.some(label => issue.labels.includes(label))
         );
@@ -505,7 +619,10 @@ export class GitLabService {
         for (const p of projects) {
           if (p && typeof p.id === 'number') ids.push(p.id);
         }
-        const next = resp.headers && resp.headers['x-next-page'] ? parseInt(resp.headers['x-next-page'] as any, 10) : null;
+        const next =
+          resp.headers && resp.headers['x-next-page']
+            ? parseInt(resp.headers['x-next-page'] as any, 10)
+            : null;
         if (!next) break;
         page = next;
       }
@@ -674,7 +791,10 @@ export class GitLabService {
               const labels = await this.getProjectLabels(projectId);
               return { projectId, labels };
             } catch (error) {
-              logger.warn(`Failed to fetch labels for project ${projectId}:`, error);
+              logger.warn(
+                `Failed to fetch labels for project ${projectId}:`,
+                error
+              );
               return { projectId, labels: [] as GitLabLabel[] };
             }
           })
@@ -893,7 +1013,11 @@ export class GitLabService {
     }
   }
 
-  private async safeRedisSet(key: string, value: any, ttl?: number): Promise<void> {
+  private async safeRedisSet(
+    key: string,
+    value: any,
+    ttl?: number
+  ): Promise<void> {
     if (!this.redis.isAvailable()) {
       return;
     }
@@ -1093,6 +1217,244 @@ export class GitLabService {
     } catch (error) {
       logger.error('Failed to get GitLab user:', error);
       throw new Error('Failed to get GitLab user information');
+    }
+  }
+
+  // ==================== Merge Request Methods ====================
+
+  public async getProjectBranches(
+    projectId: string | number,
+    options: {
+      search?: string;
+      per_page?: number;
+      page?: number;
+    } = {}
+  ): Promise<GitLabBranch[]> {
+    try {
+      const pid = this.normalizeProjectId(projectId);
+      const params = {
+        per_page: options.per_page || 100,
+        page: options.page || 1,
+        ...options,
+      };
+
+      const cacheKey = `gitlab_branches:${pid}:${JSON.stringify(params)}`;
+
+      // Check cache first
+      const cached = await this.safeRedisGet<GitLabBranch[]>(cacheKey);
+      if (cached) {
+        return cached;
+      }
+
+      const response = await this.client.get(
+        `/projects/${pid}/repository/branches`,
+        {
+          params,
+        }
+      );
+      const branches = response.data;
+
+      // Cache for 5 minutes
+      await this.safeRedisSet(cacheKey, branches, 300);
+
+      return branches;
+    } catch (error) {
+      logger.error(
+        `Failed to fetch GitLab branches for project ${projectId}:`,
+        error
+      );
+      throw new Error('Failed to fetch branches from GitLab');
+    }
+  }
+
+  public async createMergeRequest(
+    projectId: string | number,
+    mrData: CreateMergeRequestData
+  ): Promise<GitLabMergeRequest> {
+    try {
+      const pid = this.normalizeProjectId(projectId);
+      const response = await this.client.post(
+        `/projects/${pid}/merge_requests`,
+        mrData
+      );
+      const mr = response.data;
+
+      logger.info(`Created GitLab merge request: ${mr.web_url}`);
+
+      // Invalidate MR cache
+      await this.invalidateCache(`gitlab_merge_requests:${projectId}:*`);
+
+      return mr;
+    } catch (error) {
+      const status = (error as any)?.response?.status;
+      const statusText = (error as any)?.response?.statusText;
+      const data = (error as any)?.response?.data;
+      logger.error('Failed to create GitLab merge request:', {
+        status,
+        statusText,
+        data,
+      });
+      const message =
+        data?.message ||
+        data?.error ||
+        `GitLab API error${status ? ` (${status} ${statusText || ''})` : ''}`;
+      throw new CustomError(
+        message || 'Failed to create merge request in GitLab',
+        status || 502,
+        'GITLAB_API_ERROR',
+        data
+      );
+    }
+  }
+
+  public async getMergeRequests(
+    projectId: string | number,
+    options: {
+      state?: 'opened' | 'closed' | 'locked' | 'merged' | 'all';
+      order_by?: 'created_at' | 'updated_at';
+      sort?: 'asc' | 'desc';
+      milestone?: string;
+      labels?: string;
+      author_id?: number;
+      assignee_id?: number;
+      reviewer_id?: number;
+      source_branch?: string;
+      target_branch?: string;
+      search?: string;
+      per_page?: number;
+      page?: number;
+    } = {}
+  ): Promise<GitLabMergeRequest[]> {
+    try {
+      const pid = this.normalizeProjectId(projectId);
+      const params = {
+        per_page: options.per_page || 20,
+        page: options.page || 1,
+        ...options,
+      };
+
+      const cacheKey = `gitlab_merge_requests:${pid}:${JSON.stringify(params)}`;
+
+      // Check cache first
+      const cached = await this.safeRedisGet<GitLabMergeRequest[]>(cacheKey);
+      if (cached) {
+        return cached;
+      }
+
+      const response = await this.client.get(
+        `/projects/${pid}/merge_requests`,
+        { params }
+      );
+      const mrs = response.data;
+
+      // Cache for 2 minutes
+      await this.safeRedisSet(cacheKey, mrs, 120);
+
+      return mrs;
+    } catch (error) {
+      logger.error('Failed to fetch GitLab merge requests:', error);
+      throw new Error('Failed to fetch merge requests from GitLab');
+    }
+  }
+
+  public async getMergeRequest(
+    projectId: string | number,
+    mrIid: number
+  ): Promise<GitLabMergeRequest> {
+    try {
+      const pid = this.normalizeProjectId(projectId);
+      const cacheKey = `gitlab_merge_request:${pid}:${mrIid}`;
+
+      // Check cache first
+      const cached = await this.safeRedisGet<GitLabMergeRequest>(cacheKey);
+      if (cached) {
+        return cached;
+      }
+
+      const response = await this.client.get(
+        `/projects/${pid}/merge_requests/${mrIid}`
+      );
+      const mr = response.data;
+
+      // Cache for 5 minutes
+      await this.safeRedisSet(cacheKey, mr, 300);
+
+      return mr;
+    } catch (error) {
+      logger.error(
+        `Failed to fetch GitLab merge request ${projectId}:${mrIid}:`,
+        error
+      );
+      throw new Error('Failed to fetch merge request from GitLab');
+    }
+  }
+
+  /**
+   * Compare two branches and get commits between them
+   * Uses GitLab's repository compare API
+   */
+  public async compareBranches(
+    projectId: string | number,
+    fromBranch: string,
+    toBranch: string
+  ): Promise<GitLabComparison> {
+    try {
+      const pid = this.normalizeProjectId(projectId);
+
+      // Don't cache this as branches change frequently
+      const response = await this.client.get(
+        `/projects/${pid}/repository/compare`,
+        {
+          params: {
+            from: fromBranch,
+            to: toBranch,
+            straight: false, // Use merge-base comparison (default GitLab behavior)
+          },
+        }
+      );
+
+      logger.info(
+        `Compared branches ${fromBranch}...${toBranch} in project ${pid}: ${response.data.commits?.length || 0} commits`
+      );
+
+      return response.data;
+    } catch (error: any) {
+      logger.error(
+        `Failed to compare branches ${fromBranch}...${toBranch} in project ${projectId}:`,
+        error
+      );
+
+      if (error.response?.status === 404) {
+        throw new Error('One or both branches not found');
+      }
+
+      throw new Error('Failed to compare branches in GitLab');
+    }
+  }
+
+  /**
+   * Get commits between two branches (convenience method)
+   * Returns only the commit list without diffs
+   */
+  public async getCommitsBetweenBranches(
+    projectId: string | number,
+    sourceBranch: string,
+    targetBranch: string
+  ): Promise<GitLabCommit[]> {
+    try {
+      const comparison = await this.compareBranches(
+        projectId,
+        targetBranch, // from
+        sourceBranch // to
+      );
+
+      return comparison.commits || [];
+    } catch (error) {
+      logger.error(
+        `Failed to get commits between branches ${targetBranch}...${sourceBranch}:`,
+        error
+      );
+      throw error;
     }
   }
 }

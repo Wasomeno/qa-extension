@@ -216,7 +216,6 @@ class ApiService {
     }
   }
 
-
   private async getAuthHeaders(): Promise<HeadersInit> {
     const auth = await storageService.getAuth();
     const headers: HeadersInit = {
@@ -448,7 +447,9 @@ class ApiService {
           headers: { ...headers, 'Content-Type': 'application/json' },
           // Backend now always returns XLSX. Support multi-sheet payload.
           body: JSON.stringify(
-            payload.sheets ? { sheets: payload.sheets } : { scenarios: payload.scenarios || [] }
+            payload.sheets
+              ? { sheets: payload.sheets }
+              : { scenarios: payload.scenarios || [] }
           ),
         },
         responseType: 'arrayBuffer',
@@ -707,11 +708,13 @@ class ApiService {
   /**
    * Search GitLab projects (server-side search via backend proxy)
    */
-  async searchProjects(params: {
-    search?: string;
-    limit?: number;
-    page?: number;
-  } = {}): Promise<ApiResponse<Project[]>> {
+  async searchProjects(
+    params: {
+      search?: string;
+      limit?: number;
+      page?: number;
+    } = {}
+  ): Promise<ApiResponse<Project[]>> {
     const q = new URLSearchParams();
     if (params.search) q.set('search', params.search);
     if (params.limit) q.set('limit', String(params.limit));
@@ -1555,6 +1558,153 @@ class ApiService {
         data: { status: 'unknown', version: '1.0.0' },
       };
     }
+  }
+
+  // ==================== Merge Request Methods ====================
+
+  /**
+   * Get branches for a project
+   */
+  async getProjectBranches(
+    projectId: string | number,
+    options?: {
+      search?: string;
+      per_page?: number;
+      page?: number;
+    }
+  ): Promise<
+    ApiResponse<{
+      items: Array<{
+        name: string;
+        merged: boolean;
+        protected: boolean;
+        default: boolean;
+        web_url: string;
+        commit?: {
+          id: string;
+          short_id: string;
+          title: string;
+          author_name: string;
+          created_at: string;
+        };
+      }>;
+      total: number;
+    }>
+  > {
+    const params = new URLSearchParams();
+    if (options?.search) params.append('search', options.search);
+    if (options?.per_page) params.append('per_page', String(options.per_page));
+    if (options?.page) params.append('page', String(options.page));
+
+    const query = params.toString();
+    const endpoint = `/api/merge-requests/${encodeURIComponent(String(projectId))}/branches${query ? `?${query}` : ''}`;
+    return this.request(endpoint);
+  }
+
+  /**
+   * Create a merge request
+   */
+  async createMergeRequest(
+    projectId: string | number,
+    data: {
+      source_branch: string;
+      target_branch: string;
+      title: string;
+      description?: string;
+      assignee_ids?: number[];
+      reviewer_ids?: number[];
+      labels?: string;
+      remove_source_branch?: boolean;
+      squash?: boolean;
+      slack_channel_id?: string;
+      slack_user_ids?: string[];
+    }
+  ): Promise<
+    ApiResponse<{
+      mergeRequest: any;
+      slackNotification?: {
+        status: 'sent' | 'failed';
+        channel: string;
+        ts?: string;
+        error?: string;
+      } | null;
+    }>
+  > {
+    const endpoint = `/api/merge-requests/${encodeURIComponent(String(projectId))}/gitlab/merge-requests`;
+    return this.request(endpoint, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  /**
+   * Get merge requests for a project
+   */
+  async getMergeRequests(
+    projectId: string | number,
+    options?: {
+      state?: 'opened' | 'closed' | 'locked' | 'merged' | 'all';
+      order_by?: 'created_at' | 'updated_at';
+      sort?: 'asc' | 'desc';
+      search?: string;
+      per_page?: number;
+      page?: number;
+    }
+  ): Promise<
+    ApiResponse<{
+      items: Array<any>;
+      total: number;
+    }>
+  > {
+    const params = new URLSearchParams();
+    if (options?.state) params.append('state', options.state);
+    if (options?.order_by) params.append('order_by', options.order_by);
+    if (options?.sort) params.append('sort', options.sort);
+    if (options?.search) params.append('search', options.search);
+    if (options?.per_page) params.append('per_page', String(options.per_page));
+    if (options?.page) params.append('page', String(options.page));
+
+    const query = params.toString();
+    const endpoint = `/api/merge-requests/${encodeURIComponent(String(projectId))}/gitlab/merge-requests${query ? `?${query}` : ''}`;
+    return this.request(endpoint);
+  }
+
+  /**
+   * Get a single merge request
+   */
+  async getMergeRequest(
+    projectId: string | number,
+    mrIid: number
+  ): Promise<ApiResponse<any>> {
+    const endpoint = `/api/merge-requests/${encodeURIComponent(String(projectId))}/gitlab/merge-requests/${mrIid}`;
+    return this.request(endpoint);
+  }
+
+  /**
+   * Generate AI description for a merge request
+   */
+  async generateMergeRequestDescription(
+    projectId: string | number,
+    data: {
+      source_branch: string;
+      target_branch: string;
+      template?: string;
+    }
+  ): Promise<
+    ApiResponse<{
+      description: string;
+      commits: Array<{
+        title: string;
+        author: string;
+        date: string;
+      }>;
+    }>
+  > {
+    const endpoint = `/api/merge-requests/${encodeURIComponent(String(projectId))}/generate-description`;
+    return this.request(endpoint, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
   }
 }
 

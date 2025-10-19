@@ -19,6 +19,9 @@ export enum MessageType {
   AUTH_GET_SESSION = 'AUTH_GET_SESSION',
   AUTH_LOGOUT = 'AUTH_LOGOUT',
   AUTH_SESSION_UPDATED = 'AUTH_SESSION_UPDATED',
+  CREATE_MERGE_REQUEST = 'CREATE_MERGE_REQUEST',
+  GET_PROJECT_BRANCHES = 'GET_PROJECT_BRANCHES',
+  GET_MERGE_REQUESTS = 'GET_MERGE_REQUESTS',
 }
 
 export interface ExtensionMessage {
@@ -66,6 +69,22 @@ export interface IssueData {
   browserContext?: any;
   errorDetails?: any;
   checkDuplicates?: boolean;
+  // Optional Slack notification fields
+  slackChannelId?: string;
+  slackUserIds?: string[];
+}
+
+export interface MergeRequestData {
+  projectId: string;
+  sourceBranch: string;
+  targetBranch: string;
+  title: string;
+  description?: string;
+  assigneeIds?: number[];
+  reviewerIds?: number[];
+  labelIds?: string[];
+  removeSourceBranch?: boolean;
+  squash?: boolean;
   // Optional Slack notification fields
   slackChannelId?: string;
   slackUserIds?: string[];

@@ -1,11 +1,10 @@
+const { fn } = require('jest-mock');
+
 module.exports = {
   preset: 'ts-jest',
   testEnvironment: 'jsdom',
   roots: ['<rootDir>/src', '<rootDir>/tests'],
-  testMatch: [
-    '**/__tests__/**/*.{ts,tsx}',
-    '**/?(*.)+(spec|test).{ts,tsx}'
-  ],
+  testMatch: ['**/__tests__/**/*.{ts,tsx}', '**/?(*.)+(spec|test).{ts,tsx}'],
   transform: {
     '^.+\\.(ts|tsx)$': 'ts-jest',
   },
@@ -13,19 +12,12 @@ module.exports = {
     'src/**/*.{ts,tsx}',
     '!src/**/*.d.ts',
     '!src/**/*.stories.{ts,tsx}',
-    '!src/index.tsx'
+    '!src/index.tsx',
   ],
   coverageDirectory: 'coverage',
-  coverageReporters: [
-    'text',
-    'lcov',
-    'html'
-  ],
-  setupFilesAfterEnv: [
-    '<rootDir>/tests/setup.ts',
-    '@testing-library/jest-dom'
-  ],
-  moduleNameMapping: {
+  coverageReporters: ['text', 'lcov', 'html'],
+  setupFilesAfterEnv: ['<rootDir>/tests/setup.ts'],
+  moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/src/$1',
     '^@components/(.*)$': '<rootDir>/src/components/$1',
     '^@services/(.*)$': '<rootDir>/src/services/$1',
@@ -39,22 +31,22 @@ module.exports = {
   globals: {
     chrome: {
       runtime: {
-        sendMessage: jest.fn(),
+        sendMessage: fn(),
         onMessage: {
-          addListener: jest.fn()
-        }
+          addListener: fn(),
+        },
       },
       storage: {
         local: {
-          get: jest.fn(),
-          set: jest.fn(),
-          remove: jest.fn()
-        }
+          get: fn(),
+          set: fn(),
+          remove: fn(),
+        },
       },
       tabs: {
-        query: jest.fn(),
-        sendMessage: jest.fn()
-      }
-    }
-  }
+        query: fn(),
+        sendMessage: fn(),
+      },
+    },
+  },
 };

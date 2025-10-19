@@ -33,10 +33,11 @@ export class ShadowDOMManager {
       throw new Error(`Shadow DOM instance with id "${hostId}" already exists`);
     }
 
-    // Create shadow host
+    // Create shadow host with full viewport dimensions
     const host = document.createElement('div');
     host.id = hostId;
-    host.style.cssText = 'position: fixed; z-index: 999999; pointer-events: none;';
+    host.style.cssText =
+      'position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 999999; pointer-events: none; overflow: visible;';
 
     // Attach shadow root
     const root = host.attachShadow({ mode: shadowMode });
@@ -79,14 +80,19 @@ export class ShadowDOMManager {
         '--qa-border': 'rgba(11, 18, 32, 0.12)',
         '--qa-glass': 'rgba(255, 255, 255, 0.15)',
         '--qa-glass-hover': 'rgba(255, 255, 255, 0.25)',
-        '--qa-shadow': '0 8px 32px rgba(0, 0, 0, 0.12)'
+        '--qa-shadow': '0 8px 32px rgba(0, 0, 0, 0.12)',
       };
       for (const [k, v] of Object.entries(defaults)) {
-        try { host.style.setProperty(k, v); } catch {}
+        try {
+          host.style.setProperty(k, v);
+        } catch {}
       }
       // Establish base inherited typography inline so it cannot be overridden from page
       try {
-        host.style.setProperty('font-family', "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif");
+        host.style.setProperty(
+          'font-family',
+          "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif"
+        );
         host.style.setProperty('font-size', '14px');
         host.style.setProperty('line-height', '1.4');
         host.style.setProperty('color', 'var(--qa-fg)');
@@ -152,7 +158,7 @@ export class ShadowDOMManager {
       host,
       root,
       container,
-      destroy: () => this.destroy(hostId)
+      destroy: () => this.destroy(hostId),
     };
 
     // Store instance

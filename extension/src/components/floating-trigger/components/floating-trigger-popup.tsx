@@ -15,9 +15,11 @@ import {
   AlertCircle,
   KeyRound,
   Copy,
+  GitMerge,
 } from 'lucide-react';
 import { RxOpenInNewWindow } from 'react-icons/rx';
 import CompactIssueCreator from '@/components/compact-issue-creator';
+import CompactMergeRequestCreator from '@/components/compact-merge-request-creator';
 import IssueList from '@/components/issue-list';
 import IssueDetail from '@/components/issue-list/IssueDetail';
 import ErrorBoundary from '@/components/common/error-boundary';
@@ -87,8 +89,12 @@ function IssueDetailHeaderBar(props: {
   onMouseDown?: (e: React.MouseEvent) => void;
 }) {
   const { issue, onBack, onClose, onMouseDown } = props;
-  const [copyStatus, setCopyStatus] = React.useState<'idle' | 'copied' | 'error'>('idle');
-  const copyTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [copyStatus, setCopyStatus] = React.useState<
+    'idle' | 'copied' | 'error'
+  >('idle');
+  const copyTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(
+    null
+  );
 
   React.useEffect(() => {
     return () => {
@@ -100,9 +106,7 @@ function IssueDetailHeaderBar(props: {
   }, []);
 
   const issueWebUrl =
-    issue?.web_url ??
-    (issue as any)?.webUrl ??
-    (issue as any)?.web_url;
+    issue?.web_url ?? (issue as any)?.webUrl ?? (issue as any)?.web_url;
 
   const handleCopyIssueLink = React.useCallback(
     async (event?: React.MouseEvent<HTMLButtonElement>) => {
@@ -187,7 +191,13 @@ function IssueDetailHeaderBar(props: {
           onClick={handleCopyIssueLink}
           disabled={!issueWebUrl}
           aria-label="Copy issue link"
-          title={copyStatus === 'copied' ? 'Copied!' : copyStatus === 'error' ? 'Copy failed' : 'Copy Link'}
+          title={
+            copyStatus === 'copied'
+              ? 'Copied!'
+              : copyStatus === 'error'
+                ? 'Copy failed'
+                : 'Copy Link'
+          }
         >
           <Copy className="text-neutral-400 w-4 h-4" />
         </Button>
@@ -349,6 +359,28 @@ const FloatingTriggerPopup: React.FC<FloatingTriggerPopupProps> = ({
           </div>
         </button>
 
+        {/* Create Merge Request */}
+        <button
+          disabled={!isAuthenticated}
+          onClick={() => onFeatureSelect('merge-request')}
+          className="group w-full text-left hover:bg-neutral-100/60 rounded-lg px-3 py-2 transition-colors pointer-events-auto disabled:opacity-60 disabled:cursor-not-allowed"
+        >
+          <div className="flex items-center">
+            <GitMerge className="w-4 h-4 mr-3" />
+            <div className="flex-1 min-w-0">
+              <div className="text-sm font-medium text-neutral-900">
+                Create Merge Request
+              </div>
+              <span className="text-xs text-neutral-500">
+                Open a new merge request
+              </span>
+            </div>
+            <div className="ml-3">
+              <ChevronRight className="w-4 h-4 opacity-60 group-hover:opacity-100" />
+            </div>
+          </div>
+        </button>
+
         {/* Issue List */}
         <button
           disabled={!isAuthenticated}
@@ -393,26 +425,6 @@ const FloatingTriggerPopup: React.FC<FloatingTriggerPopupProps> = ({
             <ChevronRight className="w-4 h-4 opacity-60 group-hover:opacity-100" />
           </div>
         </button>
-
-        {/* Task Scenario Generator */}
-        <button
-          disabled={!isAuthenticated}
-          onClick={() => onFeatureSelect('scenario-generator')}
-          className="group w-full text-left hover:bg-neutral-100/60 rounded-lg px-3 py-2 transition-colors pointer-events-auto disabled:opacity-60 disabled:cursor-not-allowed"
-        >
-          <div className="flex items-center">
-            <WorkflowIcon className="w-4 h-4 mr-3 text-neutral-700" />
-            <div className="flex-1 min-w-0">
-              <div className="text-sm font-medium text-neutral-900">
-                Task Scenario Generator
-              </div>
-              <div className="text-xs text-neutral-500">
-                Generate scenarios from Google Sheet
-              </div>
-            </div>
-            <ChevronRight className="w-4 h-4 opacity-60 group-hover:opacity-100" />
-          </div>
-        </button>
       </div>
     );
   };
@@ -437,6 +449,31 @@ const FloatingTriggerPopup: React.FC<FloatingTriggerPopupProps> = ({
                 )}
               >
                 <CompactIssueCreator portalContainer={portalRef.current} />
+              </ErrorBoundary>
+            </div>
+          </div>
+        );
+      case 'merge-request':
+        return (
+          <div className="flex flex-col w-[500px] h-full">
+            <HeaderBar
+              title="Create Merge Request"
+              onBack={onBack}
+              onClose={onClose}
+              onMouseDown={onMouseDown}
+            />
+            <div className="flex-1">
+              <ErrorBoundary
+                fallbackRender={err => (
+                  <div className="p-3 text-xs text-red-400 bg-red-50 border border-red-200 rounded-md">
+                    Merge Request Creator crashed:{' '}
+                    {err.message || 'Unknown error'}.
+                  </div>
+                )}
+              >
+                <CompactMergeRequestCreator
+                  portalContainer={portalRef.current}
+                />
               </ErrorBoundary>
             </div>
           </div>
