@@ -984,6 +984,46 @@ export class GitLabService {
     }
   }
 
+  public async getRepositoryFileContent(
+    projectId: string | number,
+    filePath: string,
+    ref: string
+  ): Promise<string> {
+    try {
+      const pid = this.normalizeProjectId(projectId);
+      const encodedPath = encodeURIComponent(filePath);
+      const response = await this.client.get(
+        `/projects/${pid}/repository/files/${encodedPath}/raw`,
+        {
+          params: { ref },
+          responseType: 'text',
+        }
+      );
+      return response.data;
+    } catch (error: any) {
+      const status = error?.response?.status;
+      const statusText = error?.response?.statusText;
+      logger.error(
+        `Failed to fetch GitLab file content ${projectId}:${filePath}@${ref}:`,
+        {
+          status,
+          statusText,
+          data: error?.response?.data,
+        }
+      );
+      if (status === 404) {
+        throw new Error('File not found in GitLab repository');
+      }
+      if (status === 401) {
+        throw new Error('GitLab authentication failed while fetching file');
+      }
+      if (status === 403) {
+        throw new Error('GitLab access forbidden for repository file');
+      }
+      throw new Error('Failed to fetch repository file from GitLab');
+    }
+  }
+
   private normalizeProjectId(projectId: string | number): string {
     const value = String(projectId);
     return /^\d+$/.test(value) ? value : encodeURIComponent(value);
@@ -1267,6 +1307,101 @@ export class GitLabService {
     }
   }
 
+  public async getBranch(
+    projectId: string | number,
+    branchName: string
+  ): Promise<GitLabBranch> {
+    try {
+      const pid = this.normalizeProjectId(projectId);
+      const response = await this.client.get(
+        `/projects/${pid}/repository/branches/${encodeURIComponent(branchName)}`
+      );
+      return response.data;
+    } catch (error: any) {
+      const status = error?.response?.status;
+      if (status === 404) {
+        throw new Error('Branch not found in GitLab repository');
+      }
+      logger.error(
+        `Failed to fetch GitLab branch ${branchName} for project ${projectId}:`,
+        error
+      );
+      throw new Error('Failed to fetch branch from GitLab');
+    }
+  }
+
+  public async createCommit(
+    projectId: string | number,
+    data: {
+      branch: string;
+      commitMessage: string;
+      actions: Array<{
+        action: 'create' | 'update' | 'delete' | 'move' | 'chmod';
+        file_path: string;
+        content?: string;
+        previous_path?: string;
+        execute_filemode?: boolean;
+        last_commit_id?: string;
+      }>;
+      authorName?: string;
+      authorEmail?: string;
+      lastCommitId?: string;
+    }
+  ): Promise<{ id: string }> {
+    try {
+      const pid = this.normalizeProjectId(projectId);
+      const payload: any = {
+        branch: data.branch,
+        commit_message: data.commitMessage,
+        actions: data.actions.map(action => ({
+          ...action,
+          file_path: action.file_path,
+        })),
+      };
+
+      if (data.authorName) {
+        payload.author_name = data.authorName;
+      }
+      if (data.authorEmail) {
+        payload.author_email = data.authorEmail;
+      }
+      if (data.lastCommitId) {
+        payload.last_commit_id = data.lastCommitId;
+      }
+
+      const response = await this.client.post(
+        `/projects/${pid}/repository/commits`,
+        payload
+      );
+      return response.data;
+    } catch (error: any) {
+      const status = error?.response?.status;
+      const statusText = error?.response?.statusText;
+      const dataResp = error?.response?.data;
+      logger.error('Failed to create GitLab commit:', {
+        projectId,
+        branch: data.branch,
+        status,
+        statusText,
+        data: dataResp,
+      });
+      if (status === 400 && dataResp?.message) {
+        throw new Error(
+          Array.isArray(dataResp.message)
+            ? dataResp.message.join(', ')
+            : dataResp.message
+        );
+      }
+      if (status === 409) {
+        throw new Error(
+          dataResp?.message ||
+            'Failed to create commit due to conflicting changes. Please refresh and try again.'
+        );
+      }
+      throw new Error('Failed to create commit in GitLab');
+    }
+  }
+
   public async createMergeRequest(
     projectId: string | number,
     mrData: CreateMergeRequestData
@@ -1386,6 +1521,44 @@ export class GitLabService {
         error
       );
       throw new Error('Failed to fetch merge request from GitLab');
+    }
+  }
+
+  /**
+   * Get notes (comments) for a merge request
+   */
+  public async getMergeRequestNotes(
+    projectId: string | number,
+    mrIid: number
+  ): Promise<any[]> {
+    const pid = this.normalizeProjectId(projectId);
+    const urlPath = `/projects/${pid}/merge_requests/${mrIid}/notes`;
+    try {
+      const response = await this.client.get(urlPath, {
+        params: { per_page: 50, sort: 'asc' },
+      });
+      return response.data;
+    } catch (error: any) {
+      const status = error?.response?.status;
+      const statusText = error?.response?.statusText;
+      const data = error?.response?.data;
+      logger.error(`Failed to fetch GitLab MR notes ${pid}:${mrIid}:`, {
+        status,
+        statusText,
+        data,
+      });
+      if (status === 404) {
+        throw new Error('GitLab merge request notes not found or inaccessible');
+      }
+      if (status === 401) {
+        throw new Error('GitLab authentication failed while fetching MR notes');
+      }
+      if (status === 403) {
+        throw new Error('GitLab access forbidden for MR notes');
+      }
+      throw new Error(
+        `Failed to fetch MR notes from GitLab${status ? ` (${status} ${statusText || ''})` : ''}`
+      );
     }
   }
 

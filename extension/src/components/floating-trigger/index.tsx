@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import FloatingTriggerButton from './components/floating-trigger-button';
-import FloatingTriggerPopup from './components/floating-trigger-popup';
-
-type ViewState = 'closed' | 'features' | 'feature-detail';
+import FloatingTriggerPopup, {
+  type ViewState,
+} from './components/floating-trigger-popup';
 
 interface FloatingTriggerProps {
   onClose?: () => void;
@@ -24,6 +24,7 @@ const FloatingTriggerInner: React.FC<FloatingTriggerProps> = ({ onClose }) => {
   const [viewState, setViewState] = useState<ViewState>('closed');
   const [selectedFeature, setSelectedFeature] = useState<string | null>(null);
   const [selectedIssue, setSelectedIssue] = useState<any | null>(null);
+  const [selectedMR, setSelectedMR] = useState<any | null>(null);
   const [position, setPosition] = useState({
     x: window.innerWidth - 80,
     y: window.innerHeight / 2,
@@ -164,7 +165,14 @@ const FloatingTriggerInner: React.FC<FloatingTriggerProps> = ({ onClose }) => {
         targetDoc.removeEventListener('mouseup', handleMouseUp);
       };
     }
-  }, [mouseDownTime, isDragging, dragOffset, mouseDownPosition, hasMoved, ownerDoc]);
+  }, [
+    mouseDownTime,
+    isDragging,
+    dragOffset,
+    mouseDownPosition,
+    hasMoved,
+    ownerDoc,
+  ]);
 
   const toggleView = () => {
     setViewState(viewState === 'closed' ? 'features' : 'closed');
@@ -181,12 +189,24 @@ const FloatingTriggerInner: React.FC<FloatingTriggerProps> = ({ onClose }) => {
     setViewState('feature-detail');
   };
 
+  const handleMRSelect = (mr: any) => {
+    setSelectedMR(mr);
+    setSelectedFeature('mr-detail');
+    setViewState('feature-detail');
+  };
+
   const handleBack = () => {
     if (viewState === 'feature-detail') {
       // If viewing issue detail, go back to issue list
       if (selectedFeature === 'issue-detail') {
         setSelectedIssue(null);
         setSelectedFeature('issues');
+        setViewState('feature-detail');
+      }
+      // If viewing MR detail, go back to MR list
+      else if (selectedFeature === 'mr-detail') {
+        setSelectedMR(null);
+        setSelectedFeature('merge-requests');
         setViewState('feature-detail');
       } else {
         setViewState('features');
@@ -201,6 +221,7 @@ const FloatingTriggerInner: React.FC<FloatingTriggerProps> = ({ onClose }) => {
     setViewState('closed');
     setSelectedFeature(null);
     setSelectedIssue(null);
+    setSelectedMR(null);
   };
 
   const handleQuickAction = async (action: string) => {
@@ -221,7 +242,7 @@ const FloatingTriggerInner: React.FC<FloatingTriggerProps> = ({ onClose }) => {
       viewState={viewState}
       position={position}
       selectedFeature={selectedFeature}
-      containerRef={(el) => {
+      containerRef={el => {
         try {
           setOwnerDoc(el?.ownerDocument || null);
         } catch {}
@@ -231,19 +252,21 @@ const FloatingTriggerInner: React.FC<FloatingTriggerProps> = ({ onClose }) => {
         viewState={viewState}
         selectedFeature={selectedFeature}
         selectedIssue={selectedIssue}
+        selectedMR={selectedMR}
         onFeatureSelect={handleFeatureSelect}
         onBack={handleBack}
         onClose={handleClose}
         onQuickAction={handleQuickAction}
         onMouseDown={handleMouseDown}
         onIssueSelect={handleIssueSelect}
+        onMRSelect={handleMRSelect}
       />
     </FloatingTriggerButton>
   );
 };
 
 // Main FloatingTrigger component with QueryClient provider
-const FloatingTrigger: React.FC<FloatingTriggerProps> = (props) => {
+const FloatingTrigger: React.FC<FloatingTriggerProps> = props => {
   return (
     <QueryClientProvider client={queryClient}>
       <FloatingTriggerInner {...props} />

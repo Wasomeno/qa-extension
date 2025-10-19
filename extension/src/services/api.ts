@@ -11,6 +11,13 @@ import {
   IssueData,
   InteractionEvent,
 } from '@/types/messages';
+import type {
+  MRNote,
+  MRNoteSnippet,
+  MRNoteFixSuggestion,
+  MRNoteFixPreview,
+  MRNoteFixApplyResult,
+} from '@/types/merge-requests';
 
 export interface ApiResponse<T = any> {
   success: boolean;
@@ -1704,6 +1711,115 @@ class ApiService {
     return this.request(endpoint, {
       method: 'POST',
       body: JSON.stringify(data),
+    });
+  }
+
+  /**
+   * Get notes (comments) for a merge request
+   */
+  async getMergeRequestNotes(
+    projectId: string | number,
+    mrIid: number
+  ): Promise<ApiResponse<{ items: MRNote[] }>> {
+    const endpoint = `/api/merge-requests/${encodeURIComponent(String(projectId))}/gitlab/merge-requests/${mrIid}/notes`;
+    return this.request(endpoint);
+  }
+
+  async getMergeRequestNoteSnippet(
+    projectId: string | number,
+    mrIid: number,
+    params: {
+      filePath: string;
+      ref: string;
+      startLine: number;
+      endLine: number;
+      contextBefore?: number;
+      contextAfter?: number;
+    }
+  ): Promise<ApiResponse<{ snippet: MRNoteSnippet }>> {
+    const searchParams = new URLSearchParams({
+      filePath: params.filePath,
+      ref: params.ref,
+      startLine: String(params.startLine),
+      endLine: String(params.endLine),
+    });
+
+    if (params.contextBefore !== undefined) {
+      searchParams.append('contextBefore', String(params.contextBefore));
+    }
+
+    if (params.contextAfter !== undefined) {
+      searchParams.append('contextAfter', String(params.contextAfter));
+    }
+
+    const endpoint = `/api/merge-requests/${encodeURIComponent(String(projectId))}/gitlab/merge-requests/${mrIid}/note-snippet?${searchParams.toString()}`;
+    return this.request(endpoint);
+  }
+
+  async generateMergeRequestNoteFix(
+    projectId: string | number,
+    mrIid: number,
+    payload: {
+      filePath: string;
+      ref: string;
+      startLine: number;
+      endLine: number;
+      comment: string;
+      contextBefore?: number;
+      contextAfter?: number;
+      languageHint?: string;
+      additionalInstructions?: string;
+    }
+  ): Promise<
+    ApiResponse<{ snippet: MRNoteSnippet; fix: MRNoteFixSuggestion }>
+  > {
+    const endpoint = `/api/merge-requests/${encodeURIComponent(String(projectId))}/gitlab/merge-requests/${mrIid}/note-fix`;
+    return this.request(
+      endpoint,
+      {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      },
+      40000
+    );
+  }
+
+  async applyMergeRequestNoteFix(
+    projectId: string | number,
+    mrIid: number,
+    payload: {
+      filePath: string;
+      ref: string;
+      startLine: number;
+      endLine: number;
+      originalCode: string;
+      updatedCode: string;
+      commitMessage?: string;
+      dryRun?: boolean;
+    }
+  ): Promise<
+    ApiResponse<
+      MRNoteFixPreview | (MRNoteFixApplyResult & { undoToken?: string | null })
+    >
+  > {
+    const endpoint = `/api/merge-requests/${encodeURIComponent(String(projectId))}/gitlab/merge-requests/${mrIid}/note-fix/apply`;
+    return this.request(endpoint, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  }
+
+  async undoMergeRequestNoteFix(
+    projectId: string | number,
+    mrIid: number,
+    undoToken: string
+  ): Promise<
+    ApiResponse<{ diff: string; commitSha: string; snippet: MRNoteSnippet }>
+  > {
+    const endpoint = `/api/merge-requests/${encodeURIComponent(String(projectId))}/gitlab/merge-requests/${mrIid}/note-fix/undo`;
+    return this.request(endpoint, {
+      method: 'POST',
+      body: JSON.stringify({ undoToken }),
     });
   }
 }

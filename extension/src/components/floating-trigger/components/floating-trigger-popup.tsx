@@ -22,6 +22,8 @@ import CompactIssueCreator from '@/components/compact-issue-creator';
 import CompactMergeRequestCreator from '@/components/compact-merge-request-creator';
 import IssueList from '@/components/issue-list';
 import IssueDetail from '@/components/issue-list/IssueDetail';
+import MRList from '@/components/merge-request-list';
+import { MRDetail } from '@/components/merge-request-list/components/MRDetail';
 import ErrorBoundary from '@/components/common/error-boundary';
 import { useKeyboardIsolation } from '@/hooks/useKeyboardIsolation';
 import WorkflowList from '@/components/workflows';
@@ -43,6 +45,14 @@ import { authService } from '@/services/auth';
 import { useQueryClient } from '@tanstack/react-query';
 import { storageService } from '@/services/storage';
 import { apiService } from '@/services/api';
+
+// Export ViewState type
+export type ViewState =
+  | 'closed'
+  | 'features'
+  | 'feature-detail'
+  | 'mrList'
+  | 'mrDetail';
 
 // Unified header bar matching Workflows style
 function HeaderBar(props: {
@@ -224,29 +234,31 @@ function IssueDetailHeaderBar(props: {
   );
 }
 
-type ViewState = 'closed' | 'features' | 'feature-detail';
-
 interface FloatingTriggerPopupProps {
   viewState: ViewState;
   selectedFeature: string | null;
   selectedIssue?: any | null;
+  selectedMR?: any | null;
   onFeatureSelect: (feature: string) => void;
   onBack: () => void;
   onClose: () => void;
   onQuickAction: (action: string) => void;
   onMouseDown: (e: React.MouseEvent) => void;
   onIssueSelect?: (issue: any) => void;
+  onMRSelect?: (mr: any) => void;
 }
 
 const FloatingTriggerPopup: React.FC<FloatingTriggerPopupProps> = ({
   viewState,
   selectedFeature,
   selectedIssue,
+  selectedMR,
   onFeatureSelect,
   onBack,
   onClose,
   onMouseDown,
   onIssueSelect,
+  onMRSelect,
 }) => {
   const keyboardIsolation = useKeyboardIsolation();
   const portalRef = useRef<HTMLDivElement>(null);
@@ -269,6 +281,14 @@ const FloatingTriggerPopup: React.FC<FloatingTriggerPopupProps> = ({
     return () => {
       if (unsub) unsub();
     };
+  }, []);
+
+  // Handler for generating fixes from DiffNote comments
+  const handleGenerateFix = React.useCallback((note: any) => {
+    console.log('Generate fix for DiffNote:', note);
+    // TODO: Implement AI-powered fix generation
+    // This will integrate with the AI service to generate code fixes
+    // based on the review comment and diff context
   }, []);
 
   // Recording summary removed
@@ -359,28 +379,6 @@ const FloatingTriggerPopup: React.FC<FloatingTriggerPopupProps> = ({
           </div>
         </button>
 
-        {/* Create Merge Request */}
-        <button
-          disabled={!isAuthenticated}
-          onClick={() => onFeatureSelect('merge-request')}
-          className="group w-full text-left hover:bg-neutral-100/60 rounded-lg px-3 py-2 transition-colors pointer-events-auto disabled:opacity-60 disabled:cursor-not-allowed"
-        >
-          <div className="flex items-center">
-            <GitMerge className="w-4 h-4 mr-3" />
-            <div className="flex-1 min-w-0">
-              <div className="text-sm font-medium text-neutral-900">
-                Create Merge Request
-              </div>
-              <span className="text-xs text-neutral-500">
-                Open a new merge request
-              </span>
-            </div>
-            <div className="ml-3">
-              <ChevronRight className="w-4 h-4 opacity-60 group-hover:opacity-100" />
-            </div>
-          </div>
-        </button>
-
         {/* Issue List */}
         <button
           disabled={!isAuthenticated}
@@ -395,6 +393,28 @@ const FloatingTriggerPopup: React.FC<FloatingTriggerPopupProps> = ({
               </div>
               <div className="text-xs text-neutral-500 ">
                 List of issues on your project
+              </div>
+            </div>
+            <div className="ml-3 flex items-center gap-2 text-xs text-neutral-700">
+              <ChevronRight className="w-4 h-4 opacity-60 group-hover:opacity-100" />
+            </div>
+          </div>
+        </button>
+
+        {/* Merge Requests */}
+        <button
+          disabled={!isAuthenticated}
+          onClick={() => onFeatureSelect('merge-requests')}
+          className="group w-full text-left hover:bg-neutral-100/60 rounded-lg px-3 py-2 transition-colors pointer-events-auto disabled:opacity-60 disabled:cursor-not-allowed"
+        >
+          <div className="flex items-center">
+            <GitMerge className="w-4 h-4 mr-3 text-neutral-700" />
+            <div className="flex-1 min-w-0">
+              <div className="text-sm font-medium text-neutral-900">
+                Merge Requests
+              </div>
+              <div className="text-xs text-neutral-500 ">
+                List of merge requests
               </div>
             </div>
             <div className="ml-3 flex items-center gap-2 text-xs text-neutral-700">
@@ -504,6 +524,33 @@ const FloatingTriggerPopup: React.FC<FloatingTriggerPopupProps> = ({
             </div>
           </div>
         );
+      case 'merge-requests':
+        return (
+          <div className="flex flex-col w-[500px] h-full">
+            <HeaderBar
+              title="Merge Requests"
+              onBack={onBack}
+              onClose={onClose}
+              onMouseDown={onMouseDown}
+            />
+            <div className="flex-1 min-h-0">
+              <ErrorBoundary
+                fallbackRender={err => (
+                  <div className="p-3 text-xs text-red-400 bg-red-50 border border-red-200 rounded-md">
+                    MR List crashed: {err.message || 'Unknown error'}. Try
+                    Refresh or adjust filters.
+                  </div>
+                )}
+              >
+                <MRList
+                  portalContainer={portalRef.current}
+                  onSelect={mr => onMRSelect && onMRSelect(mr)}
+                  onCreateClick={() => onFeatureSelect('merge-request')}
+                />
+              </ErrorBoundary>
+            </div>
+          </div>
+        );
       // Recording detail removed
       case 'pinned':
         return (
@@ -596,6 +643,46 @@ const FloatingTriggerPopup: React.FC<FloatingTriggerPopupProps> = ({
             <div className="flex-1 min-h-0 overflow-auto p-3">
               <ScenarioGeneratorPaneV2 />
             </div>
+          </div>
+        );
+      case 'mr-detail':
+        return (
+          <div className="flex flex-col w-[500px] h-full">
+            {selectedMR ? (
+              <>
+                <HeaderBar
+                  title={`!${selectedMR.iid} - ${selectedMR.title}`}
+                  onBack={onBack}
+                  onClose={onClose}
+                  onMouseDown={onMouseDown}
+                />
+                <div className="flex-1 overflow-auto">
+                  <ErrorBoundary
+                    fallbackRender={err => (
+                      <div className="p-3 text-xs text-red-400 bg-red-50 border border-red-200 rounded-md">
+                        MR Detail crashed: {err.message || 'Unknown error'}.
+                      </div>
+                    )}
+                  >
+                    <MRDetail
+                      mr={selectedMR}
+                      portalContainer={portalRef.current}
+                      onGenerateFix={handleGenerateFix}
+                    />
+                  </ErrorBoundary>
+                </div>
+              </>
+            ) : (
+              <>
+                <HeaderBar
+                  title="MR Detail"
+                  onBack={onBack}
+                  onClose={onClose}
+                  onMouseDown={onMouseDown}
+                />
+                <div className="p-4 text-xs opacity-80">No MR selected.</div>
+              </>
+            )}
           </div>
         );
       default:

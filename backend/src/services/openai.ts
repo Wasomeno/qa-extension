@@ -58,6 +58,12 @@ export interface GeneratedTestScript {
   expectedOutcome: string;
 }
 
+export interface CodeFixSuggestion {
+  summary: string;
+  updatedCode: string;
+  warnings?: string[];
+}
+
 export interface VoiceTranscriptionRequest {
   audioBlob: Buffer;
   language?: string;
@@ -775,6 +781,88 @@ NOW FILL THE TEMPLATE:`;
     }
   }
 
+  public async generateCodeFixSuggestion(params: {
+    filePath: string;
+    comment: string;
+    codeContext: string;
+    highlightedBlock: string;
+    highlightStart: number;
+    highlightEnd: number;
+    languageHint?: string;
+    additionalInstructions?: string;
+  }): Promise<CodeFixSuggestion> {
+    this.ensureOpenAIAvailable();
+
+    const {
+      filePath,
+      comment,
+      codeContext,
+      highlightedBlock,
+      highlightStart,
+      highlightEnd,
+      languageHint,
+      additionalInstructions,
+    } = params;
+
+    const language =
+      languageHint ||
+      this.detectLanguageFromPath(filePath) ||
+      'the relevant programming language';
+
+    const trimmedContext =
+      codeContext.length > 6000
+        ? `${codeContext.slice(0, 6000)}\n... (context truncated)`
+        : codeContext;
+
+    const systemPrompt = `You are a senior ${language} engineer reviewing code review comments.
+
+Your job is to suggest precise code fixes that fully address the reviewer feedback while maintaining code quality.
+
+Constraints:
+- Provide safe, production-ready code that passes linting and formatting rules implicit to the language/framework.
+- Only modify the lines that were highlighted in the diff (between the provided line numbers). Do not introduce unrelated changes.
+- Respect the surrounding coding style and patterns.
+- If the reviewer is incorrect or the code is already correct, explain why in the summary and return the original code unchanged.
+- Output must be valid JSON with the shape: {"summary": string, "updated_code": string, "warnings": string[] | []}
+- Keep "updated_code" as the exact replacement block with no extra commentary or markdown.`;
+
+    const userPrompt = `Repository file: ${filePath}
+Language: ${language}
+Target lines: ${highlightStart}-${highlightEnd}
+
+Reviewer comment:
+${comment.trim()}
+
+${additionalInstructions ? `Additional developer instructions:\n${additionalInstructions.trim()}\n\n` : ''}
+Current code context (">>" marks the lines under review):
+${trimmedContext}
+
+Highlighted lines (exact block to replace):
+${highlightedBlock}
+
+Respond with JSON only.`;
+
+    try {
+      const response = await this.safeChatCompletion(
+        [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt },
+        ],
+        900,
+        0.1
+      );
+
+      if (!response) {
+        throw new Error('No response from OpenAI');
+      }
+
+      return this.parseCodeFixResponse(response);
+    } catch (error) {
+      logger.error('Failed to generate code fix suggestion:', error);
+      throw new Error('Failed to generate code fix suggestion');
+    }
+  }
+
   private buildIssueGenerationSystemPrompt(): string {
     return `You are a QA expert who creates detailed bug reports from user context and error information.
 
@@ -970,6 +1058,97 @@ Page Title: ${request.browserInfo.title}`;
       return 'typescript';
     }
     return 'javascript';
+  }
+
+  private parseCodeFixResponse(response: string): CodeFixSuggestion {
+    const tryParse = (input: string): CodeFixSuggestion | null => {
+      try {
+        const parsed = JSON.parse(input);
+        const summary = (parsed.summary || parsed.overview || '')
+          .toString()
+          .trim();
+        const updatedCode = (
+          parsed.updated_code ||
+          parsed.updatedCode ||
+          ''
+        ).toString();
+        if (!summary || !updatedCode) {
+          return null;
+        }
+        const warningsArray = Array.isArray(parsed.warnings)
+          ? parsed.warnings.map((w: any) => w?.toString()).filter(Boolean)
+          : undefined;
+
+        return {
+          summary,
+          updatedCode: updatedCode.replace(/\r\n/g, '\n'),
+          warnings:
+            warningsArray && warningsArray.length > 0
+              ? warningsArray
+              : undefined,
+        };
+      } catch {
+        return null;
+      }
+    };
+
+    const candidates: string[] = [];
+    const trimmed = response.trim();
+
+    const fencedMatch = trimmed.match(/```json\s*([\s\S]*?)```/i);
+    if (fencedMatch) {
+      candidates.push(fencedMatch[1].trim());
+    }
+
+    const firstBrace = trimmed.indexOf('{');
+    const lastBrace = trimmed.lastIndexOf('}');
+    if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+      candidates.push(trimmed.slice(firstBrace, lastBrace + 1).trim());
+    }
+
+    candidates.push(trimmed);
+
+    for (const candidate of candidates) {
+      const parsed = tryParse(candidate);
+      if (parsed) {
+        return parsed;
+      }
+    }
+
+    logger.error('Unable to parse code fix suggestion response', {
+      responsePreview: trimmed.slice(0, 500),
+    });
+    throw new Error('AI returned an unreadable fix suggestion');
+  }
+
+  private detectLanguageFromPath(filePath: string): string {
+    const lower = filePath.toLowerCase();
+    if (lower.endsWith('.tsx')) return 'TypeScript React';
+    if (lower.endsWith('.ts')) return 'TypeScript';
+    if (lower.endsWith('.jsx')) return 'React';
+    if (lower.endsWith('.js')) return 'JavaScript';
+    if (lower.endsWith('.py')) return 'Python';
+    if (lower.endsWith('.java')) return 'Java';
+    if (lower.endsWith('.rb')) return 'Ruby';
+    if (lower.endsWith('.go')) return 'Go';
+    if (lower.endsWith('.php')) return 'PHP';
+    if (lower.endsWith('.cs')) return 'C#';
+    if (lower.endsWith('.swift')) return 'Swift';
+    if (lower.endsWith('.kt') || lower.endsWith('.kts')) return 'Kotlin';
+    if (lower.endsWith('.rs')) return 'Rust';
+    if (lower.endsWith('.scala')) return 'Scala';
+    if (lower.endsWith('.sql')) return 'SQL';
+    if (lower.endsWith('.html') || lower.endsWith('.htm')) return 'HTML';
+    if (
+      lower.endsWith('.css') ||
+      lower.endsWith('.scss') ||
+      lower.endsWith('.sass')
+    )
+      return 'CSS';
+    if (lower.endsWith('.json')) return 'JSON';
+    if (lower.endsWith('.yml') || lower.endsWith('.yaml')) return 'YAML';
+    if (lower.endsWith('.sh') || lower.endsWith('.bash')) return 'Shell';
+    return 'JavaScript';
   }
 
   private hashRequest(request: any): string {

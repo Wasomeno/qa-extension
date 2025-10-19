@@ -9,8 +9,7 @@ import {
   TooltipTrigger,
 } from '@/src/components/ui/ui/tooltip';
 import { Portal as TooltipPortal } from '@radix-ui/react-tooltip';
-
-type ViewState = 'closed' | 'features' | 'feature-detail';
+import type { ViewState } from './floating-trigger-popup';
 
 interface FloatingTriggerButtonProps {
   onMouseDown: (e: React.MouseEvent) => void;
