@@ -114,6 +114,117 @@ const DEFAULT_SETTINGS: ExtensionSettings = {
   apiEndpoint: process.env.BASE_API_URL,
 };
 
+function isPromiseLike<T>(value: any): value is PromiseLike<T> {
+  return (
+    !!value && typeof value === 'object' && typeof value.then === 'function'
+  );
+}
+
+async function storageGet(
+  keys?: string | string[] | object | null
+): Promise<Record<string, any>> {
+  try {
+    const result = chrome.storage.local.get(keys as any);
+    if (isPromiseLike(result)) {
+      return (await result) as Record<string, any>;
+    }
+    return await new Promise<Record<string, any>>((resolve, reject) => {
+      try {
+        chrome.storage.local.get(keys as any, items => {
+          const err = chrome.runtime.lastError;
+          if (err) {
+            reject(err);
+            return;
+          }
+          resolve(items || {});
+        });
+      } catch (error) {
+        reject(error);
+      }
+    });
+  } catch (error) {
+    throw error;
+  }
+}
+
+async function storageSet(items: Record<string, any>): Promise<void> {
+  try {
+    const result = chrome.storage.local.set(items);
+    if (isPromiseLike(result)) {
+      await result;
+      return;
+    }
+    await new Promise<void>((resolve, reject) => {
+      try {
+        chrome.storage.local.set(items, () => {
+          const err = chrome.runtime.lastError;
+          if (err) {
+            reject(err);
+            return;
+          }
+          resolve();
+        });
+      } catch (error) {
+        reject(error);
+      }
+    });
+  } catch (error) {
+    throw error;
+  }
+}
+
+async function storageRemove(keys: string | string[]): Promise<void> {
+  try {
+    const result = chrome.storage.local.remove(keys);
+    if (isPromiseLike(result)) {
+      await result;
+      return;
+    }
+    await new Promise<void>((resolve, reject) => {
+      try {
+        chrome.storage.local.remove(keys, () => {
+          const err = chrome.runtime.lastError;
+          if (err) {
+            reject(err);
+            return;
+          }
+          resolve();
+        });
+      } catch (error) {
+        reject(error);
+      }
+    });
+  } catch (error) {
+    throw error;
+  }
+}
+
+async function storageClear(): Promise<void> {
+  try {
+    const result = chrome.storage.local.clear();
+    if (isPromiseLike(result)) {
+      await result;
+      return;
+    }
+    await new Promise<void>((resolve, reject) => {
+      try {
+        chrome.storage.local.clear(() => {
+          const err = chrome.runtime.lastError;
+          if (err) {
+            reject(err);
+            return;
+          }
+          resolve();
+        });
+      } catch (error) {
+        reject(error);
+      }
+    });
+  } catch (error) {
+    throw error;
+  }
+}
+
 class StorageService {
   private cache = new Map<string, any>();
   private listeners = new Map<string, Set<(value: any) => void>>();
@@ -141,7 +252,7 @@ class StorageService {
     }
 
     try {
-      const result = await chrome.storage.local.get(key);
+      const result = await storageGet(key);
       const value = result[key];
 
       // Cache the result
@@ -164,7 +275,7 @@ class StorageService {
     value: StorageData[T]
   ): Promise<void> {
     try {
-      await chrome.storage.local.set({ [key]: value });
+      await storageSet({ [key]: value });
 
       // Update cache
       this.cache.set(key, value);
@@ -185,7 +296,7 @@ class StorageService {
    */
   async remove<T extends keyof StorageData>(key: T): Promise<void> {
     try {
-      await chrome.storage.local.remove(key);
+      await storageRemove(key as string);
       this.cache.delete(key);
 
       // Notify listeners
@@ -204,7 +315,7 @@ class StorageService {
    */
   async clear(): Promise<void> {
     try {
-      await chrome.storage.local.clear();
+      await storageClear();
       this.cache.clear();
 
       // Notify all listeners
@@ -222,7 +333,7 @@ class StorageService {
    */
   async getAll(): Promise<Partial<StorageData>> {
     try {
-      const result = await chrome.storage.local.get();
+      const result = await storageGet(null);
 
       // Update cache
       Object.entries(result).forEach(([key, value]) => {
@@ -305,7 +416,10 @@ class StorageService {
       }
 
       if (!existing.issueFilters) {
-        await this.set('issueFilters', {} as Record<string, IssueFilterSelection>);
+        await this.set(
+          'issueFilters',
+          {} as Record<string, IssueFilterSelection>
+        );
       }
 
       // Session migration: if session missing but legacy auth/user exist, synthesize session
@@ -591,7 +705,9 @@ class StorageService {
     return (await this.get('issueFilters')) || {};
   }
 
-  async setIssueFilters(filters: Record<string, IssueFilterSelection>): Promise<void> {
+  async setIssueFilters(
+    filters: Record<string, IssueFilterSelection>
+  ): Promise<void> {
     await this.set('issueFilters', filters);
   }
 

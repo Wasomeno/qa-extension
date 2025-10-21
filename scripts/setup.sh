@@ -154,17 +154,17 @@ done
 if [ "$DOCKER_AVAILABLE" = true ] && [ "$DOCKER_COMPOSE_AVAILABLE" = true ]; then
     echo ""
     log_info "Setting up services with Docker..."
-    
+
     # Check if containers are already running
     if docker-compose ps | grep -q "Up"; then
         log_warning "Some containers are already running. Stopping them first..."
         docker-compose down
     fi
-    
+
     # Start PostgreSQL and Redis
     log_info "Starting PostgreSQL and Redis containers..."
     docker-compose up -d postgres redis
-    
+
     # Wait for PostgreSQL to be ready
     log_info "Waiting for PostgreSQL to be ready..."
     for i in {1..30}; do
@@ -178,7 +178,7 @@ if [ "$DOCKER_AVAILABLE" = true ] && [ "$DOCKER_COMPOSE_AVAILABLE" = true ]; the
         fi
         sleep 1
     done
-    
+
     # Wait for Redis to be ready
     log_info "Waiting for Redis to be ready..."
     for i in {1..10}; do
@@ -192,14 +192,14 @@ if [ "$DOCKER_AVAILABLE" = true ] && [ "$DOCKER_COMPOSE_AVAILABLE" = true ]; the
         fi
         sleep 1
     done
-    
+
     # Initialize database
     log_info "Initializing database..."
     if [ -f "database/init/001_setup.sql" ]; then
         docker-compose exec -T postgres psql -U qa_user -d qa_command_center -f /docker-entrypoint-initdb.d/001_setup.sql
         log_success "Database initialized"
     fi
-    
+
     SERVICES_SETUP=true
 else
     log_warning "Docker setup not available. Please ensure PostgreSQL and Redis are running manually"
@@ -244,9 +244,9 @@ echo ""
 # Database setup
 if [ "$SERVICES_SETUP" = true ]; then
     log_info "Setting up database..."
-    
+
     cd backend
-    
+
     # Run migrations
     log_info "Running database migrations..."
     if npm run db:migrate; then
@@ -255,7 +255,7 @@ if [ "$SERVICES_SETUP" = true ]; then
         log_error "Database migrations failed"
         exit 1
     fi
-    
+
     # Run seeds
     log_info "Running database seeds..."
     if npm run db:seed; then
@@ -263,7 +263,7 @@ if [ "$SERVICES_SETUP" = true ]; then
     else
         log_warning "Database seeds failed (this might be expected if data already exists)"
     fi
-    
+
     cd ..
 fi
 
@@ -324,7 +324,7 @@ echo ""
 # Setup Git hooks (if in a Git repository)
 if [ -d ".git" ]; then
     log_info "Setting up Git hooks..."
-    
+
     # Check if husky is available
     if [ -f "node_modules/.bin/husky" ]; then
         npx husky install
@@ -369,7 +369,7 @@ echo "Extension PID: $EXTENSION_PID"
 echo ""
 echo "Services:"
 echo "- Backend API: http://localhost:3000"
-echo "- Extension: Load from extension/dist/"
+echo "- Extension: Load from extension/dist/chrome/"
 echo ""
 echo "Press Ctrl+C to stop all services"
 
@@ -427,7 +427,7 @@ if [ "$SERVICES_SETUP" = true ]; then
     if ! docker-compose ps | grep postgres | grep -q "Up"; then
         SETUP_ISSUES+=("PostgreSQL container not running")
     fi
-    
+
     if ! docker-compose ps | grep redis | grep -q "Up"; then
         SETUP_ISSUES+=("Redis container not running")
     fi
@@ -442,7 +442,7 @@ if [ ${#SETUP_ISSUES[@]} -eq 0 ]; then
     echo "Next steps:"
     echo "1. Review and update .env file with your configuration"
     echo "2. Start development servers: ./scripts/start-dev.sh"
-    echo "3. Load extension in Chrome from extension/dist/"
+    echo "3. Load extension in Chrome from extension/dist/chrome/"
     echo "4. Visit http://localhost:3000/api/health to verify backend"
     echo ""
     echo "Default admin credentials:"
@@ -470,17 +470,17 @@ echo "============================================="
 if [ "$SERVICES_SETUP" = true ]; then
     echo ""
     log_info "Running health check..."
-    
+
     # Wait a moment for services to be fully ready
     sleep 3
-    
+
     # Test database connection
     if docker-compose exec -T postgres psql -U qa_user -d qa_command_center -c "SELECT 1;" >/dev/null 2>&1; then
         log_success "Database connection: OK"
     else
         log_error "Database connection: FAILED"
     fi
-    
+
     # Test Redis connection
     if docker-compose exec -T redis redis-cli ping >/dev/null 2>&1; then
         log_success "Redis connection: OK"

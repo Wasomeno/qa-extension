@@ -11,12 +11,14 @@ This guide will help you develop the extension efficiently without needing to re
    cd extension
    npm run dev
    ```
+   _Firefox:_ use `npm run dev:firefox` instead to watch the Firefox build output.
 
 2. **Load the extension in Chrome:**
    - Open Chrome and go to `chrome://extensions/`
    - Enable "Developer mode" (top right toggle)
-   - Click "Load unpacked" and select the `extension/dist` folder
+   - Click "Load unpacked" and select the `extension/dist/chrome` folder
    - The extension will appear in your extensions list
+   - **Firefox:** Go to `about:debugging#/runtime/this-firefox` → "Load Temporary Add-on" → pick any file within `extension/dist/firefox` (e.g. `manifest.json`). This bundle targets Manifest V2 so it works without enabling experimental flags.
 
 3. **Make changes and see them instantly:**
    - Edit any file in `src/`
@@ -78,7 +80,9 @@ extension/
 │   ├── options/            # Extension options page
 │   ├── background/         # Background service worker
 │   └── content/            # Content scripts
-├── dist/                   # Built extension (load this in Chrome)
+├── dist/
+│   ├── chrome/             # Chrome-ready build output
+│   └── firefox/            # Firefox-ready build output
 ├── scripts/
 │   └── dev-reload.js       # Hot reload server
 └── webpack.config.js       # ✅ Enhanced with dev optimizations
@@ -87,7 +91,7 @@ extension/
 ## 🐛 Debugging Tips
 
 ### Common Issues
-1. **Extension not loading**: Check `dist/manifest.json` exists
+1. **Extension not loading**: Check `dist/chrome/manifest.json` (or `dist/firefox/manifest.json`) exists
 2. **Styles not applying**: Verify Tailwind classes in DevTools
 3. **Hot reload not working**: Check WebSocket connection in background script console
 4. **TypeScript errors**: Run `npm run typecheck` to see all errors
@@ -107,8 +111,12 @@ npm run dev
 # Development with hot reload
 npm run dev:hot
 
-# Production build
+# Production build (Chrome + Firefox)
 npm run build
+
+# Individual production builds
+npm run build:chrome
+npm run build:firefox
 
 # Type checking
 npm run typecheck

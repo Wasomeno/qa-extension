@@ -48,6 +48,6 @@ The extension has been updated with a minimal test script to verify content scri
 ### Files Currently in Use:
 - **Content Script:** `test-minimal.js` (simplified test version)
 - **Manifest:** Updated to load test script
-- **Build:** All files compiled to `dist/` folder
+- **Build:** All files compiled to `dist/chrome/` or `dist/firefox/` folders
 
 Once the test button appears, we'll know content scripts are working and can proceed to debug the actual floating trigger implementation.

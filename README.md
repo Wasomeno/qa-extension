@@ -103,7 +103,7 @@ npm run db:seed
 # Setup extension
 cd ../extension
 npm install
-npm run build
+npm run build # Builds chrome and firefox bundles (requires BASE_API_URL)
 
 # Start development servers
 npm run dev
@@ -113,8 +113,9 @@ npm run dev
 
 1. Open Chrome and navigate to `chrome://extensions/`
 2. Enable "Developer mode"
-3. Click "Load unpacked" and select `extension/dist/`
-4. Pin the QA Command Center extension
+3. Click "Load unpacked" and select `extension/dist/chrome/`
+4. (Optional) In Firefox/Zen, open `about:debugging#/runtime/this-firefox` → "Load Temporary Add-on" → pick `extension/dist/firefox/manifest.json` (Firefox build ships as a Manifest V2 background page, so no feature flags required)
+5. Pin the QA Command Center extension
 
 ## Architecture
 
@@ -128,9 +129,9 @@ QA Command Center
 │   │   ├── routes/       # API routes
 │   │   └── middleware/   # Custom middleware
 │   └── tests/           # Backend tests
-├── extension/           # Chrome extension
+├── extension/           # Browser extension (Chrome & Firefox)
 │   ├── src/
-│   │   ├── background/  # Service worker
+│   │   ├── background/  # Chrome service worker / Firefox background script
 │   │   ├── content/     # Content scripts  
 │   │   ├── popup/       # Extension popup
 │   │   ├── options/     # Settings page
@@ -181,8 +182,15 @@ npm install
 # Development build with watch mode
 npm run dev
 
-# Production build
+# Firefox development watch build
+npm run dev:firefox
+
+# Production build (Chrome + Firefox)
 npm run build
+
+# Individual builds
+npm run build:chrome
+npm run build:firefox
 
 # Run tests
 npm test

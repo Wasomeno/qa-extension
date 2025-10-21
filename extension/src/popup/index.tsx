@@ -399,10 +399,39 @@ const PopupApp: React.FC = () => {
       if (!contentScriptAvailable) {
         try {
           // Try to inject content script if it's not already there
-          await chrome.scripting.executeScript({
-            target: { tabId: tab.id },
-            files: ['content.js'],
-          });
+          if (chrome.scripting && chrome.scripting.executeScript) {
+            await chrome.scripting.executeScript({
+              target: { tabId: tab.id },
+              files: ['content.js'],
+            });
+          } else {
+            await new Promise<void>((resolve, reject) => {
+              try {
+                chrome.tabs.executeScript(
+                  tab.id!,
+                  { file: 'content.js' },
+                  () => {
+                    const err = chrome.runtime.lastError;
+                    if (err) {
+                      reject(
+                        new Error(
+                          err.message || 'Legacy executeScript injection failed'
+                        )
+                      );
+                      return;
+                    }
+                    resolve();
+                  }
+                );
+              } catch (err) {
+                reject(
+                  err instanceof Error
+                    ? err
+                    : new Error('Failed to call tabs.executeScript')
+                );
+              }
+            });
+          }
           // Wait a bit for content script to initialize
           await new Promise(resolve => setTimeout(resolve, 100));
         } catch (injectionError) {

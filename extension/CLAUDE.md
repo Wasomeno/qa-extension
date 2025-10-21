@@ -19,7 +19,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - `npm run typecheck` - Run TypeScript type checking
 
 ### Extension Development
-- Load unpacked extension from `dist/` folder in Chrome
+- Load unpacked extension from `dist/chrome/` (Chrome) or `dist/firefox/` (Firefox temporary add-on)
 - Use Chrome DevTools for debugging:
   - Background script: chrome://extensions/ → "background page"
   - Popup: Right-click extension popup → "Inspect"
@@ -28,7 +28,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Architecture Overview
 
 ### Browser Extension Structure
-This is a Manifest V3 Chrome extension with the following key components:
+Chrome ships as a Manifest V3 extension, while the Firefox build uses a Manifest V2 background page fallback. Key components:
 
 - **Background Service Worker** (`src/background/index.ts`) - Handles API requests, authentication, file uploads, and cross-context communication
 - **Content Scripts** (`src/content/`) - Injected into web pages to capture context and show floating UI
@@ -122,11 +122,10 @@ This is a Manifest V3 Chrome extension with the following key components:
 - Injection may fail on certain pages (chrome://, extension pages)
 - Always check for content script availability before messaging
 
-### Manifest V3 Requirements
-- Background scripts are service workers (stateless)
-- No direct DOM access from background
-- File uploads must go through background script
-- WebSocket connections should be managed carefully
+### Manifest Requirements
+- Chrome (MV3): background runs as a stateless service worker, so avoid global mutable state
+- Firefox/Zen (MV2): background runs persistently via `background.scripts`, allowing long-lived state but no MV3-only APIs (`chrome.scripting` guarded already)
+- In both builds, file uploads go through the background bridge and CSP disallows inline scripts
 
 ### Security Patterns
 - All sensitive operations happen in background script

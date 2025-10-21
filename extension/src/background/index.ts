@@ -115,18 +115,30 @@ class BackgroundService {
     chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       console.log(
         'Background received message:',
-        message.type,
+        'message.type' in message ? message.type : '<no type>',
         'from:',
         sender
       );
 
-      this.handleMessage(message, sender, sendResponse).catch(error => {
-        console.error('Background message handler error:', error);
-        sendResponse({
-          success: false,
-          error: error.message || 'Unknown error',
-        });
-      });
+      // Immediately start handling the message and catch errors
+      // This ensures sendResponse is always called synchronously or within the async chain
+      (async () => {
+        try {
+          await this.handleMessage(message, sender, sendResponse);
+        } catch (error) {
+          console.error('Background message handler error:', error);
+          try {
+            sendResponse({
+              success: false,
+              error: error instanceof Error ? error.message : 'Unknown error',
+            });
+          } catch (e) {
+            // If sendResponse fails, the channel was already closed
+            console.warn('Failed to send error response (channel closed):', e);
+          }
+        }
+      })();
+
       return true; // Keep message channel open for async response
     });
 
@@ -333,11 +345,37 @@ class BackgroundService {
     }
 
     try {
-      await chrome.scripting.executeScript({
-        target: { tabId },
-        files: ['content.js'],
-        world: 'ISOLATED',
-      } as any);
+      if (chrome.scripting && chrome.scripting.executeScript) {
+        await chrome.scripting.executeScript({
+          target: { tabId },
+          files: ['content.js'],
+          world: 'ISOLATED',
+        } as any);
+      } else {
+        await new Promise<void>((resolve, reject) => {
+          try {
+            // Fallback for browsers without the scripting API (e.g. Firefox)
+            chrome.tabs.executeScript(tabId, { file: 'content.js' }, () => {
+              const err = chrome.runtime.lastError;
+              if (err) {
+                reject(
+                  new Error(
+                    err.message || 'Legacy executeScript injection failed'
+                  )
+                );
+                return;
+              }
+              resolve();
+            });
+          } catch (err) {
+            reject(
+              err instanceof Error
+                ? err
+                : new Error('Failed to call tabs.executeScript')
+            );
+          }
+        });
+      }
       // Give it a brief moment to initialize, then verify
       await new Promise(r => setTimeout(r, 150));
       const alive2 = await new Promise<boolean>(resolve => {
@@ -395,39 +433,85 @@ class BackgroundService {
       switch (message.type) {
         case MessageType.AUTH_START: {
           try {
+            console.log('[AUTH_START] Starting OAuth flow...');
             const reqSessionId = (message?.data &&
               (message as any).data.sessionId) as string | undefined;
             const sessionId =
               reqSessionId ||
               `oauth_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+
+            console.log('[AUTH_START] Session ID:', sessionId);
+            console.log('[AUTH_START] Requesting OAuth URL from backend...');
+
             // Ask backend for OAuth URL
             const res =
               await apiService.getGitLabOAuthUrlWithSession(sessionId);
+
+            console.log('[AUTH_START] Backend response:', res);
+
             if (!res.success || !res.data?.authUrl) {
-              console.log('Failed to get OAuth URL:', res);
-              sendResponse({
-                success: false,
-                error: res.error || 'Failed to get OAuth URL',
-              });
+              console.log('[AUTH_START] Failed to get OAuth URL:', res);
+              try {
+                sendResponse({
+                  success: false,
+                  error: res.error || 'Failed to get OAuth URL',
+                  message: res.message,
+                  meta: res.meta,
+                });
+              } catch (respErr) {
+                console.warn(
+                  '[AUTH_START] Failed to send error response:',
+                  respErr
+                );
+              }
               break;
             }
+
+            console.log('[AUTH_START] Got OAuth URL, persisting session...');
+
             // Persist pending session for visibility/debug
             try {
               await chrome.storage.local.set({
                 pendingOAuthSession: sessionId,
               });
-            } catch {}
+            } catch (storageErr) {
+              console.warn(
+                '[AUTH_START] Failed to persist session:',
+                storageErr
+              );
+            }
+
+            console.log('[AUTH_START] Starting background polling...');
+
             // Start background polling for completion (best effort; SW may unload; popup can also poll)
             this.pollOAuthSession(sessionId).catch(() => {});
-            sendResponse({
-              success: true,
-              data: { authUrl: res.data.authUrl, sessionId },
-            });
+
+            console.log('[AUTH_START] Sending success response...');
+
+            try {
+              sendResponse({
+                success: true,
+                data: { authUrl: res.data.authUrl, sessionId },
+              });
+            } catch (respErr) {
+              console.warn(
+                '[AUTH_START] Failed to send success response:',
+                respErr
+              );
+            }
           } catch (e: any) {
-            sendResponse({
-              success: false,
-              error: e?.message || 'AUTH_START failed',
-            });
+            console.error('[AUTH_START] Exception:', e);
+            try {
+              sendResponse({
+                success: false,
+                error: e?.message || 'AUTH_START failed',
+              });
+            } catch (respErr) {
+              console.warn(
+                '[AUTH_START] Failed to send exception response:',
+                respErr
+              );
+            }
           }
           break;
         }

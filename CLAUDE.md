@@ -24,8 +24,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ### Extension Development
 - `cd extension && npm run dev` - Start development build with watch mode
 - `cd extension && npm run dev:hot` - Start development with hot reload (includes auto-dependency installation)
-- `cd extension && npm run build` - Production build for Chrome extension
-- Load unpacked extension from `extension/dist/` folder in Chrome
+- `cd extension && npm run build` - Production build for Chrome & Firefox bundles
+- Load unpacked extension from `extension/dist/chrome/` in Chrome (Firefox: load temporary add-on from `extension/dist/firefox/manifest.json`)
 
 ## Architecture Overview
 
@@ -52,11 +52,11 @@ This is a **monorepo** containing a QA Command Center platform with two main com
 - `websocket.ts` - Socket.io real-time communication
 - `auth.ts` - JWT authentication with refresh tokens
 
-### 2. Extension (`extension/`) - Manifest V3 Chrome Extension
+### 2. Extension (`extension/`) - Chrome MV3 / Firefox MV2
 **Framework**: React 18 + TypeScript with Webpack 5 build system
 **UI Library**: Tailwind CSS + shadcn/ui components with Radix UI primitives
 **State Management**: Redux Toolkit + React Query for server state
-**Architecture**: Background Service Worker + Content Scripts + Popup + Options page
+**Architecture**: Chrome ships a service-worker background (MV3) while Firefox uses a persistent background script (MV2), alongside shared content scripts, popup, and options page
 
 **Key Components**:
 - **Background Service Worker** (`src/background/index.ts`) - Handles API requests, authentication, file uploads
@@ -67,7 +67,7 @@ This is a **monorepo** containing a QA Command Center platform with two main com
 **Critical Design Patterns**:
 - **Fetch Bridge Pattern** - Routes UI requests through background script to avoid CORS
 - **Message Passing System** - Typed interfaces for all extension communication
-- **Service Worker Limitations** - Stateless background with graceful degradation
+- **Manifest Differences** - Guard MV3-only APIs (e.g., `chrome.scripting`) for Firefox MV2, and avoid relying on long-lived globals in Chrome's service worker
 - **Auto Token Refresh** - Automatic JWT refresh on 401 responses
 
 ## Development Workflow
@@ -76,7 +76,7 @@ This is a **monorepo** containing a QA Command Center platform with two main com
 1. **Service Check**: Run `cd backend && npm run check` to validate external service availability
 2. **Environment Setup**: Copy `.env.example` to `.env` in backend directory
 3. **Development**: Use `npm run dev` from root to start both services concurrently
-4. **Extension Loading**: Load unpacked extension from `extension/dist/` in Chrome
+4. **Extension Loading**: Load unpacked extension from `extension/dist/chrome/` in Chrome (or `extension/dist/firefox/manifest.json` in Firefox)
 
 ### Common Development Tasks
 1. **Database Changes**: Use `cd backend && npm run db:migrate` after schema modifications

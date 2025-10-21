@@ -242,7 +242,39 @@ class ApiService {
     timeoutOverrideMs?: number
   ): Promise<ApiResponse<T>> {
     try {
-      const inServiceWorker = typeof document === 'undefined';
+      // Check if we're in background/service worker context (not popup/content/options)
+      // In Chrome MV3: service worker (no document)
+      // In Firefox MV2: background page (has document but is background context)
+      // Check multiple indicators:
+      // 1. No document (service worker)
+      // 2. URL contains 'background' (Firefox MV2 background page)
+      // 3. Check if chrome.extension.getBackgroundPage() === window (Firefox/Chrome background)
+      let inServiceWorker = typeof document === 'undefined';
+      if (!inServiceWorker && typeof window !== 'undefined') {
+        try {
+          // Check if current window is the background page
+          const bgPage = chrome.extension.getBackgroundPage?.();
+          inServiceWorker = bgPage === window;
+        } catch (e) {
+          // Fallback to URL check
+          const loc = (window as any).location;
+          inServiceWorker =
+            loc &&
+            (loc.pathname?.includes('background') ||
+              loc.href?.includes('background'));
+        }
+      }
+
+      console.log('[API] Context detection:', {
+        endpoint,
+        inServiceWorker,
+        hasDocument: typeof document !== 'undefined',
+        location:
+          typeof window !== 'undefined'
+            ? (window as any).location?.href
+            : 'N/A',
+      });
+
       const rawHeaders = await this.getAuthHeaders();
       const headers: Record<string, string> = {} as any;
       if ((rawHeaders as any) instanceof Headers) {

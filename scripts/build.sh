@@ -123,25 +123,25 @@ export NODE_ENV=$BUILD_MODE
 # Clean build directories if requested
 if [ "$CLEAN_BUILD" = true ]; then
     log_info "Cleaning build directories..."
-    
+
     # Clean backend build
     if [ -d "$BACKEND_BUILD_DIR" ]; then
         rm -rf "$BACKEND_BUILD_DIR"
         log_success "Cleaned backend build directory"
     fi
-    
+
     # Clean extension build
     if [ -d "$EXTENSION_BUILD_DIR" ]; then
         rm -rf "$EXTENSION_BUILD_DIR"
         log_success "Cleaned extension build directory"
     fi
-    
+
     # Clean artifacts
     if [ -d "$ARTIFACTS_DIR" ]; then
         rm -rf "$ARTIFACTS_DIR"
         log_success "Cleaned artifacts directory"
     fi
-    
+
     # Clean node_modules if needed
     if [ "$BUILD_MODE" = "production" ]; then
         log_info "Cleaning node_modules for fresh install..."
@@ -188,7 +188,7 @@ cd ..
 if [ "$SKIP_LINT" = false ]; then
     echo ""
     log_info "Running code quality checks..."
-    
+
     # Backend linting
     log_info "Linting backend code..."
     cd backend
@@ -198,7 +198,7 @@ if [ "$SKIP_LINT" = false ]; then
         log_error "Backend linting failed"
         exit 1
     fi
-    
+
     # Backend type checking
     log_info "Type checking backend code..."
     if npm run typecheck; then
@@ -207,7 +207,7 @@ if [ "$SKIP_LINT" = false ]; then
         log_error "Backend type checking failed"
         exit 1
     fi
-    
+
     # Extension linting
     log_info "Linting extension code..."
     cd ../extension
@@ -217,7 +217,7 @@ if [ "$SKIP_LINT" = false ]; then
         log_error "Extension linting failed"
         exit 1
     fi
-    
+
     # Extension type checking
     log_info "Type checking extension code..."
     if npm run typecheck; then
@@ -226,7 +226,7 @@ if [ "$SKIP_LINT" = false ]; then
         log_error "Extension type checking failed"
         exit 1
     fi
-    
+
     cd ..
 fi
 
@@ -234,7 +234,7 @@ fi
 if [ "$SKIP_TESTS" = false ]; then
     echo ""
     log_info "Running tests..."
-    
+
     # Backend tests
     log_info "Running backend tests..."
     cd backend
@@ -244,7 +244,7 @@ if [ "$SKIP_TESTS" = false ]; then
         log_error "Backend tests failed"
         exit 1
     fi
-    
+
     # Extension tests
     log_info "Running extension tests..."
     cd ../extension
@@ -254,9 +254,9 @@ if [ "$SKIP_TESTS" = false ]; then
         log_error "Extension tests failed"
         exit 1
     fi
-    
+
     cd ..
-    
+
     # Combine test coverage reports
     if check_command nyc; then
         log_info "Combining coverage reports..."
@@ -290,11 +290,11 @@ fi
 
 if [ -d "dist" ]; then
     log_success "Backend built successfully"
-    
+
     # Copy additional files
     cp package.json dist/
     cp package-lock.json dist/ 2>/dev/null || true
-    
+
     # Create production package.json
     node -e "
         const pkg = require('./package.json');
@@ -311,7 +311,7 @@ if [ -d "dist" ]; then
         };
         require('fs').writeFileSync('./dist/package.json', JSON.stringify(prodPkg, null, 2));
     "
-    
+
     log_success "Backend package.json optimized for production"
 else
     log_error "Backend build failed - dist directory not created"
@@ -341,30 +341,37 @@ fi
 
 if [ -d "dist" ]; then
     log_success "Extension built successfully"
-    
-    # Validate extension manifest
-    if [ -f "dist/manifest.json" ]; then
-        if node -e "JSON.parse(require('fs').readFileSync('dist/manifest.json', 'utf8'))" 2>/dev/null; then
-            log_success "Extension manifest is valid"
-        else
-            log_error "Extension manifest is invalid"
+
+    TARGETS=("chrome" "firefox")
+    REQUIRED_FILES=("background.js" "content.js" "popup.html" "options.html")
+
+    for target in "${TARGETS[@]}"; do
+        TARGET_DIR="dist/$target"
+        if [ ! -d "$TARGET_DIR" ]; then
+            log_error "Extension build failed - $TARGET_DIR directory not created"
             exit 1
         fi
-    else
-        log_error "Extension manifest not found"
-        exit 1
-    fi
-    
-    # Check required extension files
-    REQUIRED_FILES=("background.js" "content.js" "popup.html" "options.html")
-    for file in "${REQUIRED_FILES[@]}"; do
-        if [ -f "dist/$file" ]; then
-            log_success "Extension file found: $file"
+
+        if [ -f "$TARGET_DIR/manifest.json" ]; then
+            if node -e "JSON.parse(require('fs').readFileSync('$TARGET_DIR/manifest.json', 'utf8'))" 2>/dev/null; then
+                log_success "Extension manifest is valid for $target"
+            else
+                log_error "Extension manifest is invalid for $target"
+                exit 1
+            fi
         else
-            log_warning "Extension file missing: $file"
+            log_error "Extension manifest not found for $target"
+            exit 1
         fi
+
+        for file in "${REQUIRED_FILES[@]}"; do
+            if [ -f "$TARGET_DIR/$file" ]; then
+                log_success "Extension file found (${target}): $file"
+            else
+                log_warning "Extension file missing (${target}): $file"
+            fi
+        done
     done
-    
 else
     log_error "Extension build failed - dist directory not created"
     exit 1
@@ -379,26 +386,26 @@ log_info "Running post-build optimizations..."
 # Backend optimizations
 if [ "$BUILD_MODE" = "production" ]; then
     log_info "Optimizing backend build..."
-    
+
     # Remove source maps in production
     find "$BACKEND_BUILD_DIR" -name "*.map" -delete
-    
+
     # Remove development dependencies
     cd backend/dist
     npm install --production --silent
     cd ../..
-    
+
     log_success "Backend optimized for production"
 fi
 
 # Extension optimizations
 if [ "$BUILD_MODE" = "production" ] && check_command zip; then
     log_info "Creating extension package..."
-    
+
     cd extension/dist
     zip -r "../qa-command-center-extension.zip" . -x "*.map" "*.dev.*"
     cd ../..
-    
+
     log_success "Extension package created: extension/qa-command-center-extension.zip"
 fi
 
@@ -406,21 +413,21 @@ fi
 if [ "$CREATE_ARCHIVE" = true ]; then
     echo ""
     log_info "Creating deployment artifacts..."
-    
+
     mkdir -p "$ARTIFACTS_DIR"
-    
+
     # Create backend archive
     if check_command tar; then
         tar -czf "$ARTIFACTS_DIR/qa-command-center-backend.tar.gz" -C backend dist package.json
         log_success "Backend archive created: $ARTIFACTS_DIR/qa-command-center-backend.tar.gz"
     fi
-    
+
     # Copy extension package
     if [ -f "extension/qa-command-center-extension.zip" ]; then
         cp "extension/qa-command-center-extension.zip" "$ARTIFACTS_DIR/"
         log_success "Extension package copied to artifacts"
     fi
-    
+
     # Create Docker images if Dockerfile exists
     if [ -f "backend/Dockerfile" ] && check_command docker; then
         log_info "Building Docker image..."
@@ -428,10 +435,10 @@ if [ "$CREATE_ARCHIVE" = true ]; then
         docker save qa-command-center-backend:latest | gzip > "$ARTIFACTS_DIR/qa-command-center-backend-docker.tar.gz"
         log_success "Docker image saved: $ARTIFACTS_DIR/qa-command-center-backend-docker.tar.gz"
     fi
-    
+
     # Create deployment info
     DEPLOYMENT_INFO="{
-        \"version\": \"$(node -p "require('./package.json').version")\", 
+        \"version\": \"$(node -p "require('./package.json').version")\",
         \"buildDate\": \"$(date -u +"%Y-%m-%dT%H:%M:%SZ")\",
         \"buildMode\": \"$BUILD_MODE\",
         \"gitCommit\": \"$(git rev-parse --short HEAD 2>/dev/null || echo 'unknown')\",
@@ -442,7 +449,7 @@ if [ "$CREATE_ARCHIVE" = true ]; then
             \"qa-command-center-backend-docker.tar.gz\"
         ]
     }"
-    
+
     echo "$DEPLOYMENT_INFO" > "$ARTIFACTS_DIR/deployment-info.json"
     log_success "Deployment info created"
 fi
@@ -500,14 +507,14 @@ echo ""
 
 if [ ${#BUILD_ISSUES[@]} -eq 0 ]; then
     log_success "Build completed successfully!"
-    
+
     echo ""
     echo "Next steps for deployment:"
     echo "1. Backend: Deploy contents of $BACKEND_BUILD_DIR/"
     echo "2. Extension: Upload extension/qa-command-center-extension.zip to Chrome Web Store"
     echo "3. Database: Run migrations in production environment"
     echo "4. Services: Ensure PostgreSQL and Redis are configured"
-    
+
     if [ "$BUILD_MODE" = "production" ]; then
         echo ""
         echo "Production deployment checklist:"
@@ -517,7 +524,7 @@ if [ ${#BUILD_ISSUES[@]} -eq 0 ]; then
         echo "□ Configure backup procedures"
         echo "□ Test in staging environment"
     fi
-    
+
 else
     log_error "Build completed with issues:"
     for issue in "${BUILD_ISSUES[@]}"; do
@@ -535,19 +542,19 @@ if [ "$BUILD_MODE" = "development" ] && [ "$SKIP_TESTS" = false ]; then
     echo
     if [[ $REPLY =~ ^[Yy]$ ]]; then
         log_info "Running smoke tests..."
-        
+
         # Test backend
         cd backend/dist
         timeout 10s node server.js &
         SERVER_PID=$!
         sleep 3
-        
+
         if curl -f http://localhost:3000/api/health >/dev/null 2>&1; then
             log_success "Backend smoke test passed"
         else
             log_warning "Backend smoke test failed"
         fi
-        
+
         kill $SERVER_PID 2>/dev/null || true
         cd ../..
     fi

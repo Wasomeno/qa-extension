@@ -155,8 +155,8 @@ Run `npm run test:coverage` to ensure good test coverage across the codebase.
 
 ## Extension Development Notes
 
-- Load the extension in Chrome by enabling Developer mode at `chrome://extensions/` and loading the `extension/dist/` folder
-- The extension uses Manifest V3 with service workers
+- Load the extension in Chrome by enabling Developer mode at `chrome://extensions/` and loading the `extension/dist/chrome/` folder (Firefox: load temporary add-on from `extension/dist/firefox/manifest.json`)
+- The extension uses Manifest V3 with service workers for Chrome and a Manifest V2 background script fallback for Firefox
 - Hot reload is available in development mode via `npm run dev:hot`
 - Content scripts communicate with the background script via Chrome messaging API
 - UI components follow the established Radix UI + Tailwind pattern
@@ -166,7 +166,6 @@ Run `npm run test:coverage` to ensure good test coverage across the codebase.
 1. Start services: `docker-compose up -d` (PostgreSQL, Redis)
 2. Run migrations: `cd backend && npm run db:migrate`
 3. Start development: `npm run dev` (both backend and extension)
-4. Load extension in Chrome from `extension/dist/`
+4. Load extension in Chrome from `extension/dist/chrome/` (or Firefox from `extension/dist/firefox/`)
 5. Run tests: `npm test`
 6. Check types and lint: `npm run typecheck && npm run lint`
-
