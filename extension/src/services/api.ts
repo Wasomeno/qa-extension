@@ -1502,6 +1502,11 @@ class ApiService {
         return;
       }
 
+      if (!this.baseUrl) {
+        reject(new Error('Base URL is not configured'));
+        return;
+      }
+
       const wsUrl = this.baseUrl.replace(/^http/, 'ws') + '/ws';
       this.wsConnection = new WebSocket(wsUrl);
 
