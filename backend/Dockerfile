@@ -11,6 +11,10 @@ RUN npm ci
 # Copy source code
 COPY . .
 
+# Build argument for BASE_API_URL
+ARG BASE_API_URL
+ENV BASE_API_URL=${BASE_API_URL}
+
 # Build the application
 RUN npm run build
 

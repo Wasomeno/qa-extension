@@ -30,6 +30,8 @@ services:
     build:
       context: .
       dockerfile: backend/Dockerfile
+      args:
+        BASE_API_URL: https://playground-qa-extension.online
     container_name: qa-backend
     env_file:
       - ./.env

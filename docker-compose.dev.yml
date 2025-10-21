@@ -59,6 +59,8 @@ services:
       context: ./backend
       dockerfile: Dockerfile.dev
       target: development
+      args:
+        BASE_API_URL: https://playground-qa-extension.online
     container_name: qa-backend-dev
     env_file:
       - ./.env
