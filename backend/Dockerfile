@@ -1,34 +1,29 @@
-FROM node:18-alpine
-
+FROM node:18-alpine AS deps
 WORKDIR /app
-
-# Copy package files
+RUN apk add --no-cache python3 make g++ vips-dev libc6-compat
 COPY package*.json ./
-
-# Install dependencies (include dev deps for the build step)
+# allow postinstall scripts (sharp needs them)
 RUN npm ci
 
-# Copy source code
+FROM node:18-alpine AS build
+WORKDIR /app
+COPY --from=deps /app/node_modules ./node_modules
 COPY . .
-
-# Build argument for BASE_API_URL
 ARG BASE_API_URL
 ENV BASE_API_URL=${BASE_API_URL}
-
-# Build the application
 RUN npm run build
 
-# Remove dev dependencies for runtime image and clean npm cache
-RUN npm cache clean --force
-
-# Create non-root user
-RUN addgroup -g 1001 -S nodejs
-RUN adduser -S nodejs -u 1001
-
-# Change ownership of the app directory
-RUN chown -R nodejs:nodejs /app
+FROM node:18-alpine AS runtime
+ENV NODE_ENV=production
+WORKDIR /app
+# copy runtime bits
+COPY --from=build /app/dist ./dist
+COPY package*.json ./
+# install prod deps (runs sharp postinstall against musl)
+RUN apk add --no-cache vips-dev libc6-compat \
+  && npm ci --omit=dev \
+  && npm cache clean --force
+RUN addgroup -g 1001 -S nodejs && adduser -S nodejs -u 1001
 USER nodejs
-
 EXPOSE 3000
-
-CMD ["npm", "start"]
+CMD ["node","dist/server.js"]
