@@ -963,7 +963,8 @@ export class GitLabService {
   ): Promise<string> {
     try {
       const formData = new FormData();
-      formData.append('file', new Blob([file.buffer]), filename);
+      // Convert Buffer to Uint8Array for proper Blob construction
+      formData.append('file', new Blob([new Uint8Array(file)]), filename);
 
       const pid = this.normalizeProjectId(projectId);
       const response = await this.client.post(

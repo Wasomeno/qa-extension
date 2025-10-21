@@ -1200,9 +1200,14 @@ Page Title: ${request.browserInfo.title}`;
       }
 
       // Convert buffer to file-like object for OpenAI API
-      const audioFile = new File([request.audioBlob.buffer], 'audio.webm', {
-        type: 'audio/webm',
-      });
+      // Convert Buffer to Uint8Array for proper File construction
+      const audioFile = new File(
+        [new Uint8Array(request.audioBlob)],
+        'audio.webm',
+        {
+          type: 'audio/webm',
+        }
+      );
 
       const transcription = await this.client.audio.transcriptions.create({
         file: audioFile,
