@@ -1200,7 +1200,7 @@ Page Title: ${request.browserInfo.title}`;
       }
 
       // Convert buffer to file-like object for OpenAI API
-      const audioFile = new File([request.audioBlob], 'audio.webm', {
+      const audioFile = new File([request.audioBlob.buffer], 'audio.webm', {
         type: 'audio/webm',
       });
 

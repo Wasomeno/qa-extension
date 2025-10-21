@@ -963,7 +963,7 @@ export class GitLabService {
   ): Promise<string> {
     try {
       const formData = new FormData();
-      formData.append('file', new Blob([file]), filename);
+      formData.append('file', new Blob([file.buffer]), filename);
 
       const pid = this.normalizeProjectId(projectId);
       const response = await this.client.post(
