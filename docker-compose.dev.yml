@@ -69,6 +69,7 @@ services:
       JWT_SECRET: dev_jwt_secret_12345
       REFRESH_TOKEN_SECRET: dev_refresh_secret_12345
       PORT: 3000
+      BASE_API_URL: https://playground-qa-extension.online
       LOG_LEVEL: debug
       ENABLE_SWAGGER: "true"
       ENABLE_PLAYGROUND: "true"
