@@ -190,7 +190,7 @@ export interface VoiceTranscriptionRequest {
 }
 
 class ApiService {
-  private baseUrl: string = process.env.BASE_API_URL;
+  private baseUrl: string | undefined = process.env.BASE_API_URL;
   private wsConnection: WebSocket | null = null;
 
   constructor() {

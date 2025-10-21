@@ -67,7 +67,7 @@ export interface ExtensionSettings {
     createIssue: string;
   };
   defaultProject?: string;
-  apiEndpoint: string;
+  apiEndpoint: string | undefined;
 }
 
 export type Session = {
