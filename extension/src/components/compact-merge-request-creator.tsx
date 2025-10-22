@@ -595,20 +595,44 @@ export const CompactMergeRequestCreator: React.FC<
   // Inline picker contents
   function ProjectPickerContent() {
     const [query, setQuery] = React.useState('');
+    const [debouncedQuery, setDebouncedQuery] = React.useState('');
     const [highlight, setHighlight] = React.useState(0);
     const inputRef = React.useRef<HTMLInputElement>(null);
-    const list = React.useMemo(() => {
-      const q = query.trim().toLowerCase();
-      return (projects || []).filter(p =>
-        !q ? true : p.name.toLowerCase().includes(q)
-      );
+
+    // Debounce search query
+    React.useEffect(() => {
+      const timer = setTimeout(() => {
+        setDebouncedQuery(query);
+      }, 300);
+      return () => clearTimeout(timer);
     }, [query]);
+
+    // Server-side search
+    const projectsQuery = useQuery({
+      queryKey: ['projects-search', debouncedQuery],
+      queryFn: async () => {
+        const res = await apiService.searchProjects({
+          search: debouncedQuery || undefined,
+          limit: 100,
+        });
+        if (!res.success)
+          throw new Error(res.error || 'Failed to load projects');
+        return res.data || [];
+      },
+      staleTime: 60_000,
+    });
+
+    const list = projectsQuery.data || [];
 
     React.useEffect(() => {
       inputRef.current?.focus();
       setHighlight(0);
       setQuery('');
     }, []);
+
+    React.useEffect(() => {
+      setHighlight(0);
+    }, [list.length]);
 
     const selectAt = (idx: number) => {
       const p = list[idx];
@@ -632,6 +656,8 @@ export const CompactMergeRequestCreator: React.FC<
       }
     };
 
+    const isSearching = projectsQuery.isLoading || projectsQuery.isFetching;
+
     return (
       <div className="space-y-2">
         <input
@@ -644,7 +670,7 @@ export const CompactMergeRequestCreator: React.FC<
           disabled={isLoading}
         />
         <div className="max-h-56 overflow-auto">
-          {projects.length === 0 ? (
+          {isSearching && list.length === 0 ? (
             <div className="space-y-2">
               <SkeletonRow />
               <SkeletonRow />
@@ -684,20 +710,49 @@ export const CompactMergeRequestCreator: React.FC<
     field: 'sourceBranch' | 'targetBranch';
   }) {
     const [query, setQuery] = React.useState('');
+    const [debouncedQuery, setDebouncedQuery] = React.useState('');
     const [highlight, setHighlight] = React.useState(0);
     const inputRef = React.useRef<HTMLInputElement>(null);
-    const list = React.useMemo(() => {
-      const q = query.trim().toLowerCase();
-      return (branches || []).filter(b =>
-        !q ? true : b.name.toLowerCase().includes(q)
-      );
+
+    // Debounce search query
+    React.useEffect(() => {
+      const timer = setTimeout(() => {
+        setDebouncedQuery(query);
+      }, 300);
+      return () => clearTimeout(timer);
     }, [query]);
+
+    // Server-side search
+    const branchesQuery = useQuery({
+      queryKey: ['branches-search', watchedValues.projectId, debouncedQuery],
+      queryFn: async () => {
+        if (!watchedValues.projectId) return [];
+        const res = await apiService.getProjectBranches(
+          watchedValues.projectId,
+          {
+            search: debouncedQuery || undefined,
+            per_page: 100,
+          }
+        );
+        if (!res.success)
+          throw new Error(res.error || 'Failed to load branches');
+        return res.data?.items || [];
+      },
+      enabled: !!watchedValues.projectId,
+      staleTime: 60_000,
+    });
+
+    const list = branchesQuery.data || [];
 
     React.useEffect(() => {
       inputRef.current?.focus();
       setHighlight(0);
       setQuery('');
     }, []);
+
+    React.useEffect(() => {
+      setHighlight(0);
+    }, [list.length]);
 
     const selectAt = (idx: number) => {
       const b = list[idx];
@@ -723,6 +778,8 @@ export const CompactMergeRequestCreator: React.FC<
       }
     };
 
+    const isSearching = branchesQuery.isLoading || branchesQuery.isFetching;
+
     return (
       <div className="space-y-2">
         <input
@@ -735,7 +792,7 @@ export const CompactMergeRequestCreator: React.FC<
           disabled={isLoading || !watchedValues.projectId}
         />
         <div className="max-h-56 overflow-auto">
-          {branches.length === 0 ? (
+          {isSearching && list.length === 0 ? (
             <div className="space-y-2">
               <SkeletonRow />
               <SkeletonRow />
@@ -780,23 +837,48 @@ export const CompactMergeRequestCreator: React.FC<
 
   function UserPickerContent({ field }: { field: 'assignees' | 'reviewers' }) {
     const [query, setQuery] = React.useState('');
+    const [debouncedQuery, setDebouncedQuery] = React.useState('');
     const [highlight, setHighlight] = React.useState(0);
     const inputRef = React.useRef<HTMLInputElement>(null);
-    const computed = React.useMemo(() => {
-      const q = query.trim().toLowerCase();
-      return (users || []).filter(u =>
-        !q
-          ? true
-          : u.name?.toLowerCase().includes(q) ||
-            u.username?.toLowerCase().includes(q)
-      );
+
+    // Debounce search query
+    React.useEffect(() => {
+      const timer = setTimeout(() => {
+        setDebouncedQuery(query);
+      }, 300);
+      return () => clearTimeout(timer);
     }, [query]);
+
+    // Server-side search
+    const usersQuery = useQuery({
+      queryKey: ['users-search', watchedValues.projectId, debouncedQuery],
+      queryFn: async () => {
+        if (!watchedValues.projectId) return [];
+        const res = await apiService.searchUsersInProject(
+          watchedValues.projectId,
+          {
+            search: debouncedQuery || undefined,
+            limit: 100,
+          }
+        );
+        if (!res.success) throw new Error(res.error || 'Failed to load users');
+        return res.data || [];
+      },
+      enabled: !!watchedValues.projectId,
+      staleTime: 60_000,
+    });
+
+    const computed = usersQuery.data || [];
 
     React.useEffect(() => {
       inputRef.current?.focus();
       setHighlight(0);
       setQuery('');
     }, []);
+
+    React.useEffect(() => {
+      setHighlight(0);
+    }, [computed.length]);
 
     const toggleUser = (userId: number) => {
       const current =
@@ -837,7 +919,7 @@ export const CompactMergeRequestCreator: React.FC<
       }
     };
 
-    const loadingUsers = !!watchedValues.projectId && users.length === 0;
+    const isSearching = usersQuery.isLoading || usersQuery.isFetching;
     const selectedIds =
       field === 'assignees'
         ? watchedValues.assigneeIds || []
@@ -855,7 +937,7 @@ export const CompactMergeRequestCreator: React.FC<
           disabled={isLoading || !watchedValues.projectId}
         />
         <div className="max-h-56 overflow-auto">
-          {loadingUsers ? (
+          {isSearching && computed.length === 0 ? (
             <div className="space-y-2">
               <SkeletonRow />
               <SkeletonRow />
