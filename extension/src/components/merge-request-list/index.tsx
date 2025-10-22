@@ -20,15 +20,6 @@ const MRListInner: React.FC<MRListProps> = ({
   const filterHook = useMRFilters();
   const dataHook = useMRData(filterHook.filters, filterHook.filtersReady);
 
-  // Local state for UI
-  const [selectedMR, setSelectedMR] = useState<any | null>(null);
-
-  // Handlers
-  const handleMROpen = (mr: any) => {
-    if (onSelect) onSelect(mr);
-    else setSelectedMR(mr);
-  };
-
   const handleCreateClick = () => {
     if (onCreateClick) onCreateClick();
   };
@@ -48,6 +39,7 @@ const MRListInner: React.FC<MRListProps> = ({
         onSearchChange={filterHook.setSearch}
         onToggleProject={filterHook.toggleProject}
         onToggleState={filterHook.toggleState}
+        onClearProjects={filterHook.clearProjects}
         portalContainer={portalContainer}
         isLoading={dataHook.isLoading}
       />
@@ -64,7 +56,6 @@ const MRListInner: React.FC<MRListProps> = ({
         isLoadingMore={dataHook.isLoadingMore}
         onLoadMore={dataHook.loadMore}
         onSelect={onSelect}
-        onMROpen={handleMROpen}
         portalContainer={portalContainer}
       />
     </div>

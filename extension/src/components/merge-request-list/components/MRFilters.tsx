@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Search, X, FolderGit2 } from 'lucide-react';
+import { Search, X, FolderGit2, Check } from 'lucide-react';
 import { Input } from '@/src/components/ui/ui/input';
 import { Button } from '@/src/components/ui/ui/button';
 import {
@@ -18,6 +18,7 @@ interface MRFiltersProps {
   onSearchChange: (value: string) => void;
   onToggleProject: (projectId: string) => void;
   onToggleState: (state: 'opened' | 'closed' | 'merged' | 'all') => void;
+  onClearProjects: () => void;
   portalContainer?: Element | null;
   isLoading?: boolean;
 }
@@ -28,6 +29,7 @@ export const MRFilters: React.FC<MRFiltersProps> = ({
   onSearchChange,
   onToggleProject,
   onToggleState,
+  onClearProjects,
   portalContainer,
   isLoading,
 }) => {
@@ -52,10 +54,27 @@ export const MRFilters: React.FC<MRFiltersProps> = ({
     );
   }, [projects, projectSearch]);
 
-  const selectedProject = React.useMemo(() => {
-    if (filters.projectIds.length === 0) return null;
-    return projects?.find((p: any) => p.id === filters.projectIds[0]);
+  const selectedProjects = React.useMemo(() => {
+    if (filters.projectIds.length === 0) return [];
+    const lookup = projects
+      ? new Map(projects.map((p: any) => [p.id, p]))
+      : new Map();
+    return filters.projectIds.map(id => {
+      const project = lookup.get(id);
+      if (project) return project;
+      return { id, name: id };
+    });
   }, [projects, filters.projectIds]);
+
+  const projectButtonLabel = React.useMemo(() => {
+    if (selectedProjects.length === 0) return 'All Projects';
+    if (selectedProjects.length === 1) {
+      return selectedProjects[0].name || selectedProjects[0].id;
+    }
+    const remaining = selectedProjects.length - 1;
+    const firstName = selectedProjects[0].name || selectedProjects[0].id;
+    return `${firstName} +${remaining}`;
+  }, [selectedProjects]);
 
   const stateOptions: Array<{
     value: 'opened' | 'closed' | 'merged' | 'all';
@@ -102,7 +121,7 @@ export const MRFilters: React.FC<MRFiltersProps> = ({
               disabled={isLoading}
             >
               <FolderGit2 className="w-3 h-3" />
-              {selectedProject ? selectedProject.name : 'All Projects'}
+              {projectButtonLabel}
             </Button>
           </PopoverTrigger>
           <PopoverContent
@@ -128,15 +147,14 @@ export const MRFilters: React.FC<MRFiltersProps> = ({
                   <div className="space-y-0.5">
                     {/* "All Projects" option */}
                     <button
+                      type="button"
                       onClick={() => {
-                        if (filters.projectIds.length > 0) {
-                          onToggleProject(filters.projectIds[0]);
-                        }
+                        onClearProjects();
                         setProjectPickerOpen(false);
                         setProjectSearch('');
                       }}
                       className={cn(
-                        'w-full text-left px-2 py-1.5 rounded text-sm hover:bg-gray-100',
+                        'w-full flex items-center justify-between text-left px-2 py-1.5 rounded text-sm hover:bg-gray-100',
                         filters.projectIds.length === 0 &&
                           'bg-gray-100 font-medium'
                       )}
@@ -146,18 +164,22 @@ export const MRFilters: React.FC<MRFiltersProps> = ({
                     {filteredProjects.map((project: any) => (
                       <button
                         key={project.id}
+                        type="button"
                         onClick={() => {
                           onToggleProject(project.id);
-                          setProjectPickerOpen(false);
                           setProjectSearch('');
                         }}
                         className={cn(
-                          'w-full text-left px-2 py-1.5 rounded text-sm hover:bg-gray-100',
+                          'w-full flex items-center justify-between text-left px-2 py-1.5 rounded text-sm hover:bg-gray-100',
                           filters.projectIds.includes(project.id) &&
                             'bg-gray-100 font-medium'
                         )}
+                        disabled={isLoading}
                       >
-                        {project.name}
+                        <span>{project.name}</span>
+                        {filters.projectIds.includes(project.id) && (
+                          <Check className="w-3 h-3 text-gray-600" />
+                        )}
                       </button>
                     ))}
                   </div>
@@ -183,6 +205,24 @@ export const MRFilters: React.FC<MRFiltersProps> = ({
           ))}
         </div>
       </div>
+
+      {/* Selected project pills */}
+      {selectedProjects.length > 0 && (
+        <div className="flex flex-wrap gap-1 pt-1">
+          {selectedProjects.map(project => (
+            <button
+              key={project.id}
+              type="button"
+              onClick={() => onToggleProject(project.id)}
+              className="pointer-events-auto flex items-center gap-1 rounded-full bg-gray-100 px-2 py-0.5 text-[11px] text-gray-700 hover:bg-gray-200 disabled:opacity-60"
+              disabled={isLoading}
+            >
+              <span className="truncate max-w-[10rem]">{project.name}</span>
+              <X className="w-3 h-3 text-gray-400" />
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 };

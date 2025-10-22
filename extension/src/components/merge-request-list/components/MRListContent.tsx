@@ -16,7 +16,6 @@ interface MRListContentProps {
   isLoadingMore: boolean;
   onLoadMore: () => void;
   onSelect?: (mr: MergeRequestSummary) => void;
-  onMROpen: (mr: MergeRequestSummary) => void;
   portalContainer?: Element | null;
 }
 
@@ -31,13 +30,10 @@ export const MRListContent: React.FC<MRListContentProps> = ({
   isLoadingMore,
   onLoadMore,
   onSelect,
-  onMROpen,
 }) => {
   const handleMRClick = (mr: MergeRequestSummary) => {
     if (onSelect) {
       onSelect(mr);
-    } else {
-      onMROpen(mr);
     }
   };
 

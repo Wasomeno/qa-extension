@@ -11,7 +11,6 @@ import {
   asyncHandler,
   validateRequest,
   sendResponse,
-  ValidationError,
 } from '../middleware/errorHandler';
 import { logger } from '../utils/logger';
 import { redisService } from '../services/redis';
@@ -83,6 +82,324 @@ const buildSnippetResponse = (
     lines: snippetLines,
   };
 };
+
+const parseProjectIdParam = (value: unknown): string[] => {
+  const result: string[] = [];
+  const appendParts = (input: string) => {
+    input
+      .split(',')
+      .map(part => part.trim())
+      .filter(Boolean)
+      .forEach(part => result.push(part));
+  };
+
+  if (!value) {
+    return result;
+  }
+
+  if (Array.isArray(value)) {
+    value.forEach(item => {
+      if (typeof item === 'string') {
+        appendParts(item);
+      }
+    });
+  } else if (typeof value === 'string') {
+    appendParts(value);
+  }
+
+  return result;
+};
+
+const parseIntegerParam = (value: unknown, defaultValue: number): number => {
+  if (Array.isArray(value)) {
+    return parseIntegerParam(value[0], defaultValue);
+  }
+  if (typeof value === 'string') {
+    const parsed = parseInt(value, 10);
+    if (!Number.isNaN(parsed)) {
+      return parsed;
+    }
+  }
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value;
+  }
+  return defaultValue;
+};
+
+const parseUserIdParam = (value: unknown): number | undefined => {
+  if (Array.isArray(value)) {
+    return parseUserIdParam(value[0]);
+  }
+  if (typeof value === 'string' && /^\d+$/.test(value)) {
+    return parseInt(value, 10);
+  }
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value;
+  }
+  return undefined;
+};
+
+router.get(
+  '/gitlab/merge-requests',
+  authMiddleware.authenticate,
+  asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+    const {
+      projectIds: projectIdsParam,
+      project_ids: projectIdsLegacy,
+      state,
+      order_by,
+      sort,
+      milestone,
+      author_id,
+      assignee_id,
+      reviewer_id,
+      source_branch,
+      target_branch,
+      search,
+      per_page,
+      page,
+    } = req.query;
+
+    const projectIds = Array.from(
+      new Set([
+        ...parseProjectIdParam(projectIdsParam),
+        ...parseProjectIdParam(projectIdsLegacy),
+      ])
+    );
+
+    if (projectIds.length === 0) {
+      sendResponse(res, 400, false, 'At least one projectId must be provided');
+      return;
+    }
+
+    const userId = req.user!.id;
+
+    try {
+      const oauthConnection = await db
+        .getConnection()
+        .select('*')
+        .from('oauth_connections')
+        .where('user_id', userId)
+        .where('provider', 'gitlab')
+        .first();
+
+      if (!oauthConnection || !oauthConnection.access_token) {
+        sendResponse(res, 401, false, 'GitLab not connected', null, {
+          requiresGitLabAuth: true,
+        });
+        return;
+      }
+
+      const perPageNumber = Math.max(parseIntegerParam(per_page, 20), 1);
+      const pageNumber = Math.max(parseIntegerParam(page, 1), 1);
+
+      const fetchOptions: {
+        state?: 'opened' | 'closed' | 'locked' | 'merged' | 'all';
+        order_by?: 'created_at' | 'updated_at';
+        sort?: 'asc' | 'desc';
+        milestone?: string;
+        author_id?: number;
+        assignee_id?: number;
+        reviewer_id?: number;
+        source_branch?: string;
+        target_branch?: string;
+        search?: string;
+        per_page: number;
+        page: number;
+      } = {
+        per_page: perPageNumber,
+        page: pageNumber,
+      };
+
+      if (state && typeof state === 'string') {
+        fetchOptions.state = state as
+          | 'opened'
+          | 'closed'
+          | 'locked'
+          | 'merged'
+          | 'all';
+      }
+      if (order_by && typeof order_by === 'string') {
+        fetchOptions.order_by = order_by as 'created_at' | 'updated_at';
+      }
+      if (sort && typeof sort === 'string') {
+        fetchOptions.sort = sort as 'asc' | 'desc';
+      }
+      if (milestone && typeof milestone === 'string') {
+        fetchOptions.milestone = milestone;
+      }
+      if (source_branch && typeof source_branch === 'string') {
+        fetchOptions.source_branch = source_branch;
+      }
+      if (target_branch && typeof target_branch === 'string') {
+        fetchOptions.target_branch = target_branch;
+      }
+      if (search && typeof search === 'string') {
+        fetchOptions.search = search;
+      }
+
+      const authorId = parseUserIdParam(author_id);
+      if (authorId !== undefined) {
+        fetchOptions.author_id = authorId;
+      }
+      const assigneeId = parseUserIdParam(assignee_id);
+      if (assigneeId !== undefined) {
+        fetchOptions.assignee_id = assigneeId;
+      }
+      const reviewerId = parseUserIdParam(reviewer_id);
+      if (reviewerId !== undefined) {
+        fetchOptions.reviewer_id = reviewerId;
+      }
+
+      const gitlab = new GitLabService(oauthConnection.access_token);
+
+      const resolvedProjects: Array<{
+        requestedId: string;
+        resolvedId: string | number;
+        localProject?: any;
+      }> = [];
+      const unresolvedProjectIds: string[] = [];
+      const seenResolvedIds = new Set<string>();
+
+      for (const projectId of projectIds) {
+        let resolvedId: string | number = projectId;
+        let localProject: any;
+
+        if (!/^\d+$/.test(String(projectId))) {
+          try {
+            localProject = await db.projects().where('id', projectId).first();
+            if (localProject?.gitlab_project_id) {
+              resolvedId = localProject.gitlab_project_id;
+            }
+          } catch (projectLookupError) {
+            logger.warn('Failed to resolve project from database', {
+              projectId,
+              error:
+                projectLookupError instanceof Error
+                  ? projectLookupError.message
+                  : projectLookupError,
+            });
+          }
+        }
+
+        if (
+          resolvedId === undefined ||
+          resolvedId === null ||
+          resolvedId === ''
+        ) {
+          unresolvedProjectIds.push(projectId);
+          continue;
+        }
+
+        const resolvedIdKey = String(resolvedId);
+        if (seenResolvedIds.has(resolvedIdKey)) {
+          continue;
+        }
+        seenResolvedIds.add(resolvedIdKey);
+
+        resolvedProjects.push({
+          requestedId: projectId,
+          resolvedId,
+          localProject,
+        });
+      }
+
+      if (resolvedProjects.length === 0) {
+        sendResponse(
+          res,
+          404,
+          false,
+          'No valid GitLab projects found for requested IDs',
+          null,
+          {
+            unresolvedProjectIds,
+          }
+        );
+        return;
+      }
+
+      const projectResults = await Promise.all(
+        resolvedProjects.map(async project => {
+          try {
+            const items = await gitlab.getMergeRequests(
+              project.resolvedId,
+              fetchOptions
+            );
+            return { ...project, items };
+          } catch (error: any) {
+            logger.error('Failed to fetch merge requests for project', {
+              projectId: project.resolvedId,
+              error: error?.message || error,
+            });
+            return { ...project, items: [] as any[] };
+          }
+        })
+      );
+
+      const combinedItems = projectResults.flatMap(
+        result => result.items ?? []
+      );
+
+      const orderField =
+        fetchOptions.order_by === 'created_at' ? 'created_at' : 'updated_at';
+      const sortDirection = fetchOptions.sort === 'asc' ? 1 : -1;
+
+      combinedItems.sort((a, b) => {
+        const aDate = new Date(
+          a?.[orderField] ?? a?.updated_at ?? a?.created_at ?? 0
+        );
+        const bDate = new Date(
+          b?.[orderField] ?? b?.updated_at ?? b?.created_at ?? 0
+        );
+        const aTime = Number.isNaN(aDate.getTime()) ? 0 : aDate.getTime();
+        const bTime = Number.isNaN(bDate.getTime()) ? 0 : bDate.getTime();
+        return sortDirection === 1 ? aTime - bTime : bTime - aTime;
+      });
+
+      const total = projectResults.reduce(
+        (sum, result) => sum + (result.items?.length || 0),
+        0
+      );
+
+      const hasMore = projectResults.some(
+        result => (result.items?.length || 0) >= fetchOptions.per_page
+      );
+      const nextPage = hasMore ? pageNumber + 1 : null;
+
+      const meta = {
+        projects: projectResults.map(result => ({
+          requestedId: result.requestedId,
+          gitlabProjectId: result.resolvedId,
+          localProjectId: result.localProject?.id ?? null,
+          localProjectName: result.localProject?.name ?? null,
+          count: result.items?.length ?? 0,
+        })),
+        unresolvedProjectIds,
+      };
+
+      sendResponse(
+        res,
+        200,
+        true,
+        'Merge requests fetched successfully',
+        {
+          items: combinedItems,
+          total,
+          nextPage,
+        },
+        meta
+      );
+    } catch (error: any) {
+      logger.error('Failed to fetch merge requests for projects:', error);
+      sendResponse(
+        res,
+        error?.statusCode || 500,
+        false,
+        error?.message || 'Failed to fetch merge requests'
+      );
+    }
+  })
+);
 
 // Get branches for a project
 router.get(

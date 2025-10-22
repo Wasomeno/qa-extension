@@ -17,6 +17,7 @@ import type {
   MRNoteFixSuggestion,
   MRNoteFixPreview,
   MRNoteFixApplyResult,
+  ListMRsResponse,
 } from '@/types/merge-requests';
 
 export interface ApiResponse<T = any> {
@@ -1710,6 +1711,60 @@ class ApiService {
 
     const query = params.toString();
     const endpoint = `/api/merge-requests/${encodeURIComponent(String(projectId))}/gitlab/merge-requests${query ? `?${query}` : ''}`;
+    return this.request(endpoint);
+  }
+
+  /**
+   * Get merge requests across multiple projects
+   */
+  async getMergeRequestsForProjects(
+    projectIds: Array<string | number>,
+    options?: {
+      state?: 'opened' | 'closed' | 'locked' | 'merged' | 'all';
+      order_by?: 'created_at' | 'updated_at';
+      sort?: 'asc' | 'desc';
+      search?: string;
+      per_page?: number;
+      page?: number;
+      milestone?: string;
+      author_id?: number | 'me';
+      assignee_id?: number | 'me';
+      reviewer_id?: number | 'me';
+      source_branch?: string;
+      target_branch?: string;
+    }
+  ): Promise<ApiResponse<ListMRsResponse>> {
+    const params = new URLSearchParams();
+
+    projectIds.forEach(id => {
+      params.append('projectIds', String(id));
+    });
+
+    if (options?.state) params.append('state', options.state);
+    if (options?.order_by) params.append('order_by', options.order_by);
+    if (options?.sort) params.append('sort', options.sort);
+    if (options?.search) params.append('search', options.search);
+    if (options?.per_page) params.append('per_page', String(options.per_page));
+    if (options?.page) params.append('page', String(options.page));
+    if (options?.milestone) params.append('milestone', options.milestone);
+    if (options?.source_branch) {
+      params.append('source_branch', options.source_branch);
+    }
+    if (options?.target_branch) {
+      params.append('target_branch', options.target_branch);
+    }
+    if (typeof options?.author_id === 'number') {
+      params.append('author_id', String(options.author_id));
+    }
+    if (typeof options?.assignee_id === 'number') {
+      params.append('assignee_id', String(options.assignee_id));
+    }
+    if (typeof options?.reviewer_id === 'number') {
+      params.append('reviewer_id', String(options.reviewer_id));
+    }
+
+    const query = params.toString();
+    const endpoint = `/api/merge-requests/gitlab/merge-requests${query ? `?${query}` : ''}`;
     return this.request(endpoint);
   }
 

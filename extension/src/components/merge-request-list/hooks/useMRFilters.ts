@@ -73,8 +73,15 @@ export const useMRFilters = () => {
     });
   }, []);
 
-  const toggleState = useCallback((state: 'opened' | 'closed' | 'merged' | 'all') => {
-    setFilters(prev => ({ ...prev, state }));
+  const toggleState = useCallback(
+    (state: 'opened' | 'closed' | 'merged' | 'all') => {
+      setFilters(prev => ({ ...prev, state }));
+    },
+    []
+  );
+
+  const clearProjects = useCallback(() => {
+    setFilters(prev => ({ ...prev, projectIds: [] }));
   }, []);
 
   return {
@@ -84,5 +91,6 @@ export const useMRFilters = () => {
     toggleProject,
     toggleState,
     filtersReady,
+    clearProjects,
   };
 };

@@ -4,14 +4,13 @@ import type { MRFilters } from '../types';
 
 export const useMRData = (filters: MRFilters, ready: boolean) => {
   const params = useMemo(() => {
-    // Default to first project if multiple selected, or no filter if none selected
-    const projectId = filters.projectIds.length > 0 ? filters.projectIds[0] : undefined;
+    const projectIds = filters.projectIds.length > 0 ? filters.projectIds : [];
 
     return {
       search: filters.search,
-      projectId,
+      projectIds,
       state: filters.state,
-      assignee_id: 'me' as const,
+      author_id: 'me' as const,
       per_page: 20,
       sort: 'newest' as const,
     };
