@@ -568,12 +568,6 @@ export class GitLabService {
 
       // Filter by project_ids if specified
       let filteredIssues = issues;
-      if (options.project_ids && options.project_ids.length > 0) {
-        const projectIdSet = new Set(options.project_ids.map(id => Number(id)));
-        filteredIssues = issues.filter(issue =>
-          projectIdSet.has(issue.project_id)
-        );
-      }
 
       // Handle OR logic for labels if needed
       if (options.labels && options.labels_match_mode === 'or') {
@@ -593,43 +587,6 @@ export class GitLabService {
     } catch (error) {
       logger.error('Failed to fetch GitLab issues via global API:', error);
       throw new Error('Failed to fetch issues from GitLab');
-    }
-  }
-
-  // List all accessible project IDs for the authenticated user
-  private async listAllAccessibleProjectIds(): Promise<number[]> {
-    const perPage = 100;
-    let page = 1;
-    const ids: number[] = [];
-    try {
-      // membership=true returns projects the user is a member of
-      // simple=true reduces payload
-      while (true) {
-        const resp = await this.client.get('/projects', {
-          params: {
-            membership: true,
-            simple: true,
-            per_page: perPage,
-            page,
-            order_by: 'last_activity_at',
-            sort: 'desc',
-          },
-        });
-        const projects = resp.data as Array<{ id: number }>;
-        for (const p of projects) {
-          if (p && typeof p.id === 'number') ids.push(p.id);
-        }
-        const next =
-          resp.headers && resp.headers['x-next-page']
-            ? parseInt(resp.headers['x-next-page'] as any, 10)
-            : null;
-        if (!next) break;
-        page = next;
-      }
-      return ids;
-    } catch (error) {
-      logger.error('Failed to list accessible GitLab projects:', error);
-      throw new Error('Failed to list accessible GitLab projects');
     }
   }
 

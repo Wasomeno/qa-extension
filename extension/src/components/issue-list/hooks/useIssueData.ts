@@ -2,11 +2,17 @@ import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import api from '@/services/api';
 import type { IssueFilterState, IssueData, GitLabLabel } from '../types';
+import { CLIENT_RENEG_LIMIT } from 'node:tls';
 
-export const useIssueData = (filters: IssueFilterState, filtersReady: boolean) => {
+export const useIssueData = (
+  filters: IssueFilterState,
+  filtersReady: boolean
+) => {
   const [currentPage, setCurrentPage] = useState(1);
   const [allItems, setAllItems] = useState<any[]>([]);
-  const [allProjectLabels, setAllProjectLabels] = useState<Record<string, GitLabLabel[]>>({});
+  const [allProjectLabels, setAllProjectLabels] = useState<
+    Record<string, GitLabLabel[]>
+  >({});
 
   const projectFilterValue =
     filters.selectedProjectIds.length > 0
@@ -19,8 +25,11 @@ export const useIssueData = (filters: IssueFilterState, filtersReady: boolean) =
     {
       search: filters.search,
       projectId: projectFilterValue,
-      assigneeId: filters.selectedAssigneeIds.length === 1 && filters.selectedAssigneeIds[0] !== 'unassigned'
-        ? filters.selectedAssigneeIds[0] : '',
+      assigneeId:
+        filters.selectedAssigneeIds.length === 1 &&
+        filters.selectedAssigneeIds[0] !== 'unassigned'
+          ? filters.selectedAssigneeIds[0]
+          : '',
       labels: filters.selectedLabels.slice().sort().join(','),
       status: getStatusFilter(filters.selectedStatuses),
       sort: filters.sort,
@@ -44,8 +53,26 @@ export const useIssueData = (filters: IssueFilterState, filtersReady: boolean) =
       const res = await api.listGitLabIssuesGlobal({
         search: filters.search || undefined,
         projectId: projectFilterValue || undefined,
-        assigneeId: filters.selectedAssigneeIds.length === 1 && filters.selectedAssigneeIds[0] !== 'unassigned'
-          ? filters.selectedAssigneeIds[0] : undefined,
+        assigneeId:
+          filters.selectedAssigneeIds.length === 1 &&
+          filters.selectedAssigneeIds[0] !== 'unassigned'
+            ? filters.selectedAssigneeIds[0]
+            : undefined,
+        labels: filters.selectedLabels,
+        status: statusFilter as any,
+        limit: 5,
+        sort: filters.sort,
+        cursor: currentPage > 1 ? `page:${currentPage}` : null,
+      });
+
+      console.log('PARAMS', {
+        search: filters.search || undefined,
+        projectId: projectFilterValue || undefined,
+        assigneeId:
+          filters.selectedAssigneeIds.length === 1 &&
+          filters.selectedAssigneeIds[0] !== 'unassigned'
+            ? filters.selectedAssigneeIds[0]
+            : undefined,
         labels: filters.selectedLabels,
         status: statusFilter as any,
         limit: 5,
@@ -108,7 +135,9 @@ export const useIssueData = (filters: IssueFilterState, filtersReady: boolean) =
     if (filters.selectedAssigneeIds.length > 0) {
       const assignees = Array.isArray((item as any).assignees)
         ? (item as any).assignees
-        : item.assignee ? [item.assignee] : [];
+        : item.assignee
+          ? [item.assignee]
+          : [];
 
       const hasUnassigned = filters.selectedAssigneeIds.includes('unassigned');
       const assignedIds = assignees.map((a: any) => String(a.id));
@@ -150,7 +179,10 @@ export const useIssueData = (filters: IssueFilterState, filtersReady: boolean) =
 
 function getStatusFilter(selectedStatuses: string[]): string | undefined {
   if (selectedStatuses.length === 0) return undefined;
-  if (selectedStatuses.includes('open') && selectedStatuses.includes('closed')) {
+  if (
+    selectedStatuses.includes('open') &&
+    selectedStatuses.includes('closed')
+  ) {
     return undefined; // Show both
   }
   return selectedStatuses.includes('closed') ? 'closed' : undefined;

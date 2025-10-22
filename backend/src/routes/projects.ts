@@ -339,8 +339,12 @@ router.patch(
         update.labels = finalLabels;
 
         // Check if status labels are used and set state_event accordingly
-        const hasOpenLabel = finalLabels.some(label => label.toLowerCase() === 'open');
-        const hasClosedLabel = finalLabels.some(label => label.toLowerCase() === 'closed');
+        const hasOpenLabel = finalLabels.some(
+          label => label.toLowerCase() === 'open'
+        );
+        const hasClosedLabel = finalLabels.some(
+          label => label.toLowerCase() === 'closed'
+        );
 
         if (hasClosedLabel && !hasOpenLabel) {
           update.state_event = 'close';
@@ -643,7 +647,8 @@ router.post(
       return;
     }
 
-    const body: string | undefined = (req.body && (req.body as any).body) || undefined;
+    const body: string | undefined =
+      (req.body && (req.body as any).body) || undefined;
     if (!body || typeof body !== 'string' || body.trim().length === 0) {
       sendResponse(res, 400, false, 'Body is required');
       return;
@@ -712,14 +717,13 @@ router.post(
       logger.error('Create GitLab issue note error:', error);
       const msg = error?.message || 'Failed to create note in GitLab';
       const lower = String(msg).toLowerCase();
-      const code =
-        lower.includes('authentication')
-          ? 401
-          : lower.includes('forbidden')
-            ? 403
-            : lower.includes('not found')
-              ? 404
-              : 500;
+      const code = lower.includes('authentication')
+        ? 401
+        : lower.includes('forbidden')
+          ? 403
+          : lower.includes('not found')
+            ? 404
+            : 500;
       try {
         sendResponse(res, code, false, msg);
       } catch (_) {
@@ -1037,8 +1041,8 @@ router.get(
       const rawProjectIds = Array.isArray(projectId)
         ? projectId
         : typeof projectId === 'string'
-        ? projectId.split(',').map((id: string) => id.trim())
-        : [];
+          ? projectId.split(',').map((id: string) => id.trim())
+          : [];
 
       const directProjectIds: number[] = [];
       const localProjectIds: string[] = [];
@@ -1063,14 +1067,19 @@ router.get(
 
         localProjects.forEach(project => {
           const gitlabId = project?.gitlab_project_id;
-          const parsed = gitlabId !== null && gitlabId !== undefined ? Number(gitlabId) : NaN;
+          const parsed =
+            gitlabId !== null && gitlabId !== undefined
+              ? Number(gitlabId)
+              : NaN;
           if (!Number.isNaN(parsed)) {
             directProjectIds.push(parsed);
           }
         });
       }
 
-      const projectIdFilters = Array.from(new Set(directProjectIds)).sort((a, b) => a - b);
+      const projectIdFilters = Array.from(new Set(directProjectIds)).sort(
+        (a, b) => a - b
+      );
 
       // Determine author scope
       let author_id: number | undefined;
@@ -1141,7 +1150,7 @@ router.get(
             }
           })
         ),
-        gitlab.batchFetchProjectLabels(uniqueProjectIds)
+        gitlab.batchFetchProjectLabels(uniqueProjectIds),
       ]);
 
       // Process project metadata results
