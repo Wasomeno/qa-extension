@@ -1226,6 +1226,7 @@ router.get(
   authMiddleware.authenticate,
   asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
     const { id: projectId } = req.params;
+    const { search, per_page, page } = req.query;
     const userId = req.user!.id;
 
     try {
@@ -1245,8 +1246,12 @@ router.get(
       // Initialize GitLab service with access token
       const gitlabService = new GitLabService(oauthConnection.access_token);
 
-      // Fetch project members from GitLab
-      const gitlabMembers = await gitlabService.getProjectMembers(projectId);
+      // Fetch project members from GitLab with search support
+      const gitlabMembers = await gitlabService.getProjectMembers(projectId, {
+        search: search as string | undefined,
+        per_page: per_page ? parseInt(per_page as string, 10) : undefined,
+        page: page ? parseInt(page as string, 10) : undefined,
+      });
 
       // Transform to match expected format
       const users = gitlabMembers.map(member => ({

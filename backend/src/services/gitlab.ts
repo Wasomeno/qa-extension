@@ -838,10 +838,21 @@ export class GitLabService {
   }
 
   public async getProjectMembers(
-    projectId: string | number
+    projectId: string | number,
+    options: {
+      search?: string;
+      per_page?: number;
+      page?: number;
+    } = {}
   ): Promise<GitLabUser[]> {
     try {
-      const cacheKey = `gitlab_members:${projectId}`;
+      const params = {
+        per_page: options.per_page || 100,
+        page: options.page || 1,
+        ...(options.search && { query: options.search }),
+      };
+
+      const cacheKey = `gitlab_members:${projectId}:${JSON.stringify(params)}`;
 
       // Check cache first (if Redis is available)
       try {
@@ -857,13 +868,14 @@ export class GitLabService {
       }
 
       const response = await this.client.get(
-        `/projects/${projectId}/members/all`
+        `/projects/${projectId}/members/all`,
+        { params }
       );
       const members = response.data;
 
-      // Cache for 15 minutes (if Redis is available)
+      // Cache for 5 minutes (shorter cache for search results)
       try {
-        await this.safeRedisSet(cacheKey, members, 900);
+        await this.safeRedisSet(cacheKey, members, 300);
       } catch (error) {
         logger.debug(
           'Cache storage failed, continuing without cache:',
