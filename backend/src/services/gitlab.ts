@@ -133,7 +133,6 @@ export interface CreateMergeRequestData {
   assignee_ids?: number[];
   reviewer_ids?: number[];
   milestone_id?: number;
-  labels?: string;
   remove_source_branch?: boolean;
   squash?: boolean;
   allow_collaboration?: boolean;
@@ -1407,7 +1406,6 @@ export class GitLabService {
       order_by?: 'created_at' | 'updated_at';
       sort?: 'asc' | 'desc';
       milestone?: string;
-      labels?: string;
       author_id?: number;
       assignee_id?: number;
       reviewer_id?: number;

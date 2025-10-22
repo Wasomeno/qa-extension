@@ -19,7 +19,6 @@ interface MergeRequestFormData {
   description: string;
   assigneeIds: number[];
   reviewerIds: number[];
-  labelIds: string[];
   removeSourceBranch: boolean;
   squash: boolean;
   slackChannelId?: string;
@@ -40,7 +39,6 @@ type CreateMergeRequestPayload = {
   description?: string;
   assignee_ids?: number[];
   reviewer_ids?: number[];
-  labels?: string;
   remove_source_branch?: boolean;
   squash?: boolean;
   slack_channel_id?: string;
@@ -74,7 +72,6 @@ export function useMergeRequestCreator(options: UseMergeRequestCreatorOptions) {
       description: initialData.description || '',
       assigneeIds: initialData.assigneeIds || [],
       reviewerIds: initialData.reviewerIds || [],
-      labelIds: initialData.labelIds || [],
       removeSourceBranch: initialData.removeSourceBranch ?? true,
       squash: initialData.squash ?? false,
       slackChannelId: initialData.slackChannelId || '',
@@ -143,9 +140,7 @@ export function useMergeRequestCreator(options: UseMergeRequestCreatorOptions) {
 
     // Skip if form already has values (from initialData)
     const hasExistingValues =
-      watchedValues.labelIds?.length ||
-      watchedValues.assigneeIds?.length ||
-      watchedValues.reviewerIds?.length;
+      watchedValues.assigneeIds?.length || watchedValues.reviewerIds?.length;
 
     if (hasExistingValues) return;
 
@@ -153,9 +148,6 @@ export function useMergeRequestCreator(options: UseMergeRequestCreatorOptions) {
     if (!preset) return;
 
     // Apply preset values
-    if (preset.labelIds?.length) {
-      setValue('labelIds', preset.labelIds, { shouldValidate: false });
-    }
     if (preset.assigneeIds?.length) {
       setValue('assigneeIds', preset.assigneeIds, { shouldValidate: false });
     }
@@ -209,7 +201,6 @@ export function useMergeRequestCreator(options: UseMergeRequestCreatorOptions) {
         description: data.description || '',
         assignee_ids: data.assigneeIds || [],
         reviewer_ids: data.reviewerIds || [],
-        labels: data.labelIds?.join(',') || '',
         remove_source_branch: data.removeSourceBranch,
         squash: data.squash,
       };
@@ -222,8 +213,6 @@ export function useMergeRequestCreator(options: UseMergeRequestCreatorOptions) {
         payload.slack_user_ids = data.slackUserIds;
       }
 
-      console.log('Creating merge request with payload:', payload);
-
       const result = await apiService.createMergeRequest(
         data.projectId,
         payload
@@ -232,8 +221,6 @@ export function useMergeRequestCreator(options: UseMergeRequestCreatorOptions) {
       if (!result.success) {
         throw new Error(result.error || 'Failed to create merge request');
       }
-
-      console.log('Merge request created successfully:', result.data);
 
       const responseData = (result.data || {}) as {
         mergeRequest?: any;
@@ -264,7 +251,6 @@ export function useMergeRequestCreator(options: UseMergeRequestCreatorOptions) {
       if (data.projectId) {
         saveLastUsedPreset(data.projectId, {
           projectId: data.projectId,
-          labelIds: data.labelIds,
           assigneeIds: data.assigneeIds,
           reviewerIds: data.reviewerIds,
           removeSourceBranch: data.removeSourceBranch,

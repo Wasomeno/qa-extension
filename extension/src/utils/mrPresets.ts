@@ -5,7 +5,6 @@
 
 export interface MRPreset {
   projectId?: string;
-  labelIds?: string[];
   assigneeIds?: number[];
   reviewerIds?: number[];
   removeSourceBranch?: boolean;
@@ -34,7 +33,9 @@ export function getLastUsedPreset(projectId?: string): MRPreset | null {
       if (allPresets.length === 0) return null;
 
       const mostRecent = allPresets.reduce((latest, current) => {
-        return (current.timestamp || 0) > (latest.timestamp || 0) ? current : latest;
+        return (current.timestamp || 0) > (latest.timestamp || 0)
+          ? current
+          : latest;
       });
 
       return mostRecent;

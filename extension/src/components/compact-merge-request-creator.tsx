@@ -54,7 +54,6 @@ import {
 import { Label } from '@/src/components/ui/ui/label';
 import { useQuery } from '@tanstack/react-query';
 import { IoPersonOutline } from 'react-icons/io5';
-import { IoPricetagsOutline } from 'react-icons/io5';
 import { PiSlackLogoLight } from 'react-icons/pi';
 import { apiService } from '@/services/api';
 import MarkdownIt from 'markdown-it';
@@ -130,7 +129,6 @@ export const CompactMergeRequestCreator: React.FC<
   const [openProject, setOpenProject] = React.useState(false);
   const [openSourceBranch, setOpenSourceBranch] = React.useState(false);
   const [openTargetBranch, setOpenTargetBranch] = React.useState(false);
-  const [openLabels, setOpenLabels] = React.useState(false);
   const [openAssignees, setOpenAssignees] = React.useState(false);
   const [openReviewers, setOpenReviewers] = React.useState(false);
   const [openSlack, setOpenSlack] = React.useState(false);
@@ -139,7 +137,6 @@ export const CompactMergeRequestCreator: React.FC<
     openProject ||
     openSourceBranch ||
     openTargetBranch ||
-    openLabels ||
     openAssignees ||
     openReviewers ||
     openSlack;
@@ -148,7 +145,6 @@ export const CompactMergeRequestCreator: React.FC<
     project: false,
     sourceBranch: false,
     targetBranch: false,
-    labels: false,
     assignees: false,
     reviewers: false,
     slack: false,
@@ -158,7 +154,6 @@ export const CompactMergeRequestCreator: React.FC<
     setOpenProject(false);
     setOpenSourceBranch(false);
     setOpenTargetBranch(false);
-    setOpenLabels(false);
     setOpenAssignees(false);
     setOpenReviewers(false);
     setOpenSlack(false);
@@ -171,7 +166,6 @@ export const CompactMergeRequestCreator: React.FC<
       | 'project'
       | 'sourceBranch'
       | 'targetBranch'
-      | 'labels'
       | 'assignees'
       | 'reviewers'
       | 'slack',
@@ -189,7 +183,6 @@ export const CompactMergeRequestCreator: React.FC<
         | 'project'
         | 'sourceBranch'
         | 'targetBranch'
-        | 'labels'
         | 'assignees'
         | 'reviewers'
         | 'slack',
@@ -333,27 +326,6 @@ export const CompactMergeRequestCreator: React.FC<
       el.setSelectionRange(caret, caret);
     }, 0);
   };
-
-  // Fetch labels for selected project
-  const labelQueries = useQuery({
-    queryKey: ['gitlab-labels', watchedValues.projectId],
-    enabled: !!watchedValues.projectId,
-    staleTime: 300_000,
-    queryFn: async () => {
-      if (!watchedValues.projectId) return;
-      const res = await apiService.getGitLabProjectLabels(
-        watchedValues.projectId
-      );
-      if (!res.success) throw new Error(res.error || 'Failed to load labels');
-      return res.data?.items || [];
-    },
-  });
-
-  const labelOptions = labelQueries.data?.map(label => ({
-    value: label.name,
-    label: label.name,
-    color: label.color,
-  }));
 
   // Slack data (optional)
   const slackChannelsQuery = useQuery({
@@ -806,120 +778,6 @@ export const CompactMergeRequestCreator: React.FC<
     );
   }
 
-  function LabelsPickerContent() {
-    const [query, setQuery] = React.useState('');
-    const [highlight, setHighlight] = React.useState(0);
-    const inputRef = React.useRef<HTMLInputElement>(null);
-    const list = React.useMemo(() => {
-      const q = query.trim().toLowerCase();
-      return (labelOptions || []).filter(l =>
-        !q ? true : l.label.toLowerCase().includes(q)
-      );
-    }, [query]);
-
-    React.useEffect(() => {
-      inputRef.current?.focus();
-      setHighlight(0);
-      setQuery('');
-    }, []);
-
-    const toggleLabel = (label: string) => {
-      const current = watchedValues.labelIds || [];
-      const updated = current.includes(label)
-        ? current.filter(l => l !== label)
-        : [...current, label];
-      setValue('labelIds', updated, {
-        shouldDirty: true,
-        shouldValidate: true,
-      });
-    };
-
-    const onKeyDown = (e: React.KeyboardEvent) => {
-      if (e.key === 'ArrowDown') {
-        e.preventDefault();
-        setHighlight(h => Math.min(h + 1, Math.max(0, list.length - 1)));
-      } else if (e.key === 'ArrowUp') {
-        e.preventDefault();
-        setHighlight(h => Math.max(h - 1, 0));
-      } else if (e.key === 'Enter') {
-        e.preventDefault();
-        const l = list[highlight];
-        if (l) toggleLabel(l.value);
-      } else if (e.key === 'Escape') {
-        setOpenLabels(false);
-      }
-    };
-
-    const loading = labelQueries.isLoading || labelQueries.isFetching;
-
-    return (
-      <div className="space-y-2">
-        <input
-          ref={inputRef}
-          className="text-sm w-full glass-input px-2 py-1.5 h-8"
-          placeholder="Search labels"
-          value={query}
-          onChange={e => setQuery(e.target.value)}
-          onKeyDown={onKeyDown}
-          disabled={isLoading || !watchedValues.projectId}
-        />
-        <div className="max-h-56 overflow-auto">
-          {loading ? (
-            <div className="space-y-2">
-              <SkeletonRow />
-              <SkeletonRow />
-            </div>
-          ) : (labelOptions || []).length === 0 ? (
-            <div className="text-xs text-neutral-500 px-1 py-2">
-              No options found
-            </div>
-          ) : list.length === 0 ? (
-            <div className="text-xs text-neutral-500 px-1 py-2">
-              No options found
-            </div>
-          ) : (
-            <ul role="listbox" aria-label="Labels" className="text-sm">
-              {list.map((l, idx) => {
-                const selected = (watchedValues.labelIds || []).includes(
-                  l.value
-                );
-                return (
-                  <li
-                    key={l.value}
-                    role="option"
-                    aria-selected={idx === highlight}
-                  >
-                    <button
-                      type="button"
-                      className={cn(
-                        'w-full text-left px-2 py-1.5 rounded-md hover:bg-neutral-100 flex items-center gap-2',
-                        idx === highlight ? 'bg-neutral-100' : ''
-                      )}
-                      onMouseEnter={() => setHighlight(idx)}
-                      onClick={() => toggleLabel(l.value)}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={selected}
-                        readOnly
-                        className="pointer-events-none"
-                      />
-                      <span
-                        className="inline-block w-2.5 h-2.5 rounded-full border border-gray-300"
-                        style={{ backgroundColor: l.color }}
-                      />
-                      {l.label}
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-        </div>
-      </div>
-    );
-  }
-
   function UserPickerContent({ field }: { field: 'assignees' | 'reviewers' }) {
     const [query, setQuery] = React.useState('');
     const [highlight, setHighlight] = React.useState(0);
@@ -1356,54 +1214,6 @@ export const CompactMergeRequestCreator: React.FC<
                 align="start"
               >
                 <BranchPickerContent field="targetBranch" />
-              </PopoverContent>
-            </Popover>
-
-            {/* Labels pill */}
-            <Popover
-              open={openLabels}
-              onOpenChange={createOnOpenChange('labels', setOpenLabels)}
-            >
-              <PopoverTrigger asChild>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="h-7 px-2 glass-input"
-                  disabled={isLoading || !watchedValues.projectId}
-                  title="Select labels"
-                  onPointerDown={event =>
-                    handleTriggerPointerDown(
-                      event,
-                      openLabels,
-                      'labels',
-                      setOpenLabels
-                    )
-                  }
-                >
-                  <IoPricetagsOutline />
-                  <div className="flex items-center gap-2 text-sm text-neutral-600">
-                    <span>Labels</span>
-                    <span className="text-neutral-900 truncate max-w-[100px]">
-                      {(watchedValues.labelIds || []).length > 0
-                        ? `${(watchedValues.labelIds || []).length} selected`
-                        : 'None'}
-                    </span>
-                  </div>
-                  <ChevronRight
-                    className={cn(
-                      'h-3.5 w-3.5 text-neutral-400 transition-transform duration-200',
-                      openLabels && 'rotate-90'
-                    )}
-                  />
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent
-                className="p-2 w-64"
-                container={portalContainer || undefined}
-                align="start"
-              >
-                <LabelsPickerContent />
               </PopoverContent>
             </Popover>
 

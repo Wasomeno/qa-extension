@@ -161,7 +161,6 @@ router.post(
       assignee_ids: Joi.array().items(Joi.number().integer()).optional(),
       reviewer_ids: Joi.array().items(Joi.number().integer()).optional(),
       milestone_id: Joi.number().integer().optional(),
-      labels: Joi.string().optional(),
       remove_source_branch: Joi.boolean().optional(),
       squash: Joi.boolean().optional(),
       allow_collaboration: Joi.boolean().optional(),
@@ -225,7 +224,11 @@ router.post(
         ...gitlabPayload
       } = mrData;
 
-      const mergeRequest = await gitlab.createMergeRequest(pid, gitlabPayload);
+      // Pass empty labels string to GitLab API
+      const mergeRequest = await gitlab.createMergeRequest(pid, {
+        ...gitlabPayload,
+        labels: '',
+      });
 
       if (!projectName) {
         try {
@@ -343,7 +346,6 @@ router.get(
       order_by,
       sort,
       milestone,
-      labels,
       author_id,
       assignee_id,
       reviewer_id,
@@ -392,7 +394,6 @@ router.get(
         order_by: order_by as any,
         sort: sort as any,
         milestone: milestone as string | undefined,
-        labels: labels as string | undefined,
         author_id: author_id ? parseInt(author_id as string, 10) : undefined,
         assignee_id: assignee_id
           ? parseInt(assignee_id as string, 10)

@@ -82,7 +82,6 @@ export interface MergeRequestData {
   description?: string;
   assigneeIds?: number[];
   reviewerIds?: number[];
-  labelIds?: string[];
   removeSourceBranch?: boolean;
   squash?: boolean;
   // Optional Slack notification fields
