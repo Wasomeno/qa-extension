@@ -10,7 +10,7 @@ export const useMRData = (filters: MRFilters, ready: boolean) => {
       search: filters.search,
       projectIds,
       state: filters.state,
-      author_id: 'me' as const,
+      assignee_id: 'me' as const,
       per_page: 20,
       sort: 'newest' as const,
     };

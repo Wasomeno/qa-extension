@@ -1418,9 +1418,9 @@ export class GitLabService {
       order_by?: 'created_at' | 'updated_at';
       sort?: 'asc' | 'desc';
       milestone?: string;
-      author_id?: number;
-      assignee_id?: number;
-      reviewer_id?: number;
+      author_id?: number | 'me';
+      assignee_id?: number | 'me';
+      reviewer_id?: number | 'me';
       source_branch?: string;
       target_branch?: string;
       search?: string;

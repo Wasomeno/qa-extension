@@ -61,6 +61,159 @@ export const useInfiniteMergeRequests = (params: UseInfiniteMRsParams) => {
     setIsLoadingMore(false);
   }, [queryKey]);
 
+  const fetchPage = useCallback(
+    async (pageToFetch: number) => {
+      if (!params.projectIds || params.projectIds.length === 0) {
+        return { items: [], total: 0, nextPage: null };
+      }
+
+      const order_by: 'created_at' | 'updated_at' =
+        params.sort === 'oldest' ? 'created_at' : 'updated_at';
+      const sort: 'asc' | 'desc' = params.sort === 'oldest' ? 'asc' : 'desc';
+      const stateFilter: 'opened' | 'closed' | 'locked' | 'merged' | 'all' =
+        params.state ?? 'opened';
+      const perPage = params.per_page || 20;
+
+      const resolveUserParam = (
+        value: UseInfiniteMRsParams['author_id']
+      ): number | 'me' | undefined => {
+        if (value === 'me') return 'me';
+        if (typeof value === 'number') return value;
+        return undefined;
+      };
+
+      const baseOptions = {
+        state: stateFilter,
+        search: params.search,
+        order_by,
+        sort,
+        per_page: perPage,
+        page: pageToFetch,
+        author_id: resolveUserParam(params.author_id),
+        assignee_id: resolveUserParam(params.assignee_id),
+        reviewer_id: resolveUserParam(params.reviewer_id),
+      };
+
+      try {
+        const aggregated = await apiService.getMergeRequestsForProjects(
+          params.projectIds,
+          baseOptions
+        );
+
+        if (aggregated.success && aggregated.data) {
+          const fetchedItems = Array.isArray(aggregated.data.items)
+            ? (aggregated.data.items as MergeRequestSummary[])
+            : [];
+
+          const sortedItems = [...fetchedItems].sort((a, b) => {
+            const dateA = new Date(
+              order_by === 'created_at' ? a.created_at : a.updated_at
+            );
+            const dateB = new Date(
+              order_by === 'created_at' ? b.created_at : b.updated_at
+            );
+            return sort === 'asc'
+              ? dateA.getTime() - dateB.getTime()
+              : dateB.getTime() - dateA.getTime();
+          });
+
+          const nextPage =
+            typeof aggregated.data.nextPage === 'number'
+              ? aggregated.data.nextPage
+              : fetchedItems.length >= perPage
+                ? pageToFetch + 1
+                : null;
+
+          return {
+            items: sortedItems,
+            total: aggregated.data.total ?? fetchedItems.length,
+            nextPage,
+          };
+        } else if (!aggregated.success) {
+          const reason = aggregated.error || aggregated.message || 'unknown';
+          console.warn(
+            'Aggregated MR fetch unavailable, using per-project fallback:',
+            reason
+          );
+        }
+      } catch (error) {
+        console.warn(
+          'Aggregated MR fetch failed, falling back to per-project requests:',
+          error
+        );
+      }
+
+      try {
+        const results = await Promise.all(
+          params.projectIds.map(projectId =>
+            apiService.getMergeRequests(projectId, { ...baseOptions })
+          )
+        );
+
+        let combined: MergeRequestSummary[] = [];
+        let total = 0;
+        let anySuccess = false;
+        let anyHasMore = false;
+
+        results.forEach(res => {
+          if (res.success && res.data) {
+            anySuccess = true;
+            const items = Array.isArray(res.data.items)
+              ? (res.data.items as MergeRequestSummary[])
+              : [];
+            combined.push(...items);
+            total += res.data.total || items.length;
+            if (items.length >= perPage) {
+              anyHasMore = true;
+            }
+          } else if (res.error) {
+            console.error(
+              'Fallback MR fetch failed for one project:',
+              res.error
+            );
+          }
+        });
+
+        if (!anySuccess) {
+          return { items: [], total: 0, nextPage: null };
+        }
+
+        combined.sort((a, b) => {
+          const dateA = new Date(
+            order_by === 'created_at' ? a.created_at : a.updated_at
+          );
+          const dateB = new Date(
+            order_by === 'created_at' ? b.created_at : b.updated_at
+          );
+          return sort === 'asc'
+            ? dateA.getTime() - dateB.getTime()
+            : dateB.getTime() - dateA.getTime();
+        });
+
+        const nextPage = anyHasMore ? pageToFetch + 1 : null;
+
+        return {
+          items: combined,
+          total: total || combined.length,
+          nextPage,
+        };
+      } catch (fallbackError) {
+        console.error('Fallback MR fetch encountered an error:', fallbackError);
+        return { items: [], total: 0, nextPage: null };
+      }
+    },
+    [
+      params.projectIds,
+      params.state,
+      params.search,
+      params.sort,
+      params.per_page,
+      params.author_id,
+      params.assignee_id,
+      params.reviewer_id,
+    ]
+  );
+
   const query = useQuery({
     queryKey,
     queryFn: async () => {
@@ -73,73 +226,13 @@ export const useInfiniteMergeRequests = (params: UseInfiniteMRsParams) => {
           return { items: [], total: 0, nextPage: null };
         }
 
-        const order_by = params.sort === 'oldest' ? 'created_at' : 'updated_at';
-        const sort = params.sort === 'oldest' ? 'asc' : 'desc';
+        const pageResult = await fetchPage(1);
 
-        const perPage = params.per_page || 20;
-
-        const response = await apiService.getMergeRequestsForProjects(
-          params.projectIds,
-          {
-            state: params.state || 'opened',
-            search: params.search,
-            order_by,
-            sort,
-            per_page: perPage,
-            page: 1,
-            author_id:
-              typeof params.author_id === 'number'
-                ? params.author_id
-                : undefined,
-            assignee_id:
-              typeof params.assignee_id === 'number'
-                ? params.assignee_id
-                : undefined,
-            reviewer_id:
-              typeof params.reviewer_id === 'number'
-                ? params.reviewer_id
-                : undefined,
-          }
-        );
-
-        if (!response.success || !response.data) {
-          setAllItems([]);
-          setHasMore(false);
-          return { items: [], total: 0, nextPage: null };
-        }
-
-        const fetchedItems = Array.isArray(response.data.items)
-          ? (response.data.items as MergeRequestSummary[])
-          : [];
-
-        const sortedItems = [...fetchedItems].sort((a, b) => {
-          const dateA = new Date(
-            order_by === 'created_at' ? a.created_at : a.updated_at
-          );
-          const dateB = new Date(
-            order_by === 'created_at' ? b.created_at : b.updated_at
-          );
-          return sort === 'asc'
-            ? dateA.getTime() - dateB.getTime()
-            : dateB.getTime() - dateA.getTime();
-        });
-
-        const nextPage =
-          typeof response.data.nextPage === 'number'
-            ? response.data.nextPage
-            : fetchedItems.length >= perPage
-              ? 2
-              : null;
-
-        setAllItems(sortedItems);
+        setAllItems(pageResult.items);
         setCurrentPage(1);
-        setHasMore(!!nextPage);
+        setHasMore(!!pageResult.nextPage);
 
-        return {
-          items: sortedItems,
-          total: response.data.total ?? fetchedItems.length,
-          nextPage,
-        };
+        return pageResult;
       } catch (e) {
         console.error('MRs fetch error', e);
         return { items: [], total: 0, nextPage: null };
@@ -165,69 +258,34 @@ export const useInfiniteMergeRequests = (params: UseInfiniteMRsParams) => {
     setIsLoadingMore(true);
     try {
       const nextPage = currentPage + 1;
-      const order_by = params.sort === 'oldest' ? 'created_at' : 'updated_at';
-      const sort = params.sort === 'oldest' ? 'asc' : 'desc';
-      const perPage = params.per_page || 20;
+      const pageResult = await fetchPage(nextPage);
 
-      const response = await apiService.getMergeRequestsForProjects(
-        params.projectIds,
-        {
-          state: params.state || 'opened',
-          search: params.search,
-          order_by,
-          sort,
-          per_page: perPage,
-          page: nextPage,
-          author_id:
-            typeof params.author_id === 'number' ? params.author_id : undefined,
-          assignee_id:
-            typeof params.assignee_id === 'number'
-              ? params.assignee_id
-              : undefined,
-          reviewer_id:
-            typeof params.reviewer_id === 'number'
-              ? params.reviewer_id
-              : undefined,
-        }
-      );
+      if (pageResult.items.length === 0) {
+        setHasMore(false);
+      } else {
+        const order_by: 'created_at' | 'updated_at' =
+          params.sort === 'oldest' ? 'created_at' : 'updated_at';
+        const sort: 'asc' | 'desc' = params.sort === 'oldest' ? 'asc' : 'desc';
 
-      if (response.success && response.data) {
-        const newItems = Array.isArray(response.data.items)
-          ? (response.data.items as MergeRequestSummary[])
-          : [];
-
-        if (newItems.length === 0) {
-          setHasMore(false);
-        } else {
-          setAllItems(prev => {
-            const all = [...prev, ...newItems];
-            all.sort((a, b) => {
-              const dateA = new Date(
-                order_by === 'created_at' ? a.created_at : a.updated_at
-              );
-              const dateB = new Date(
-                order_by === 'created_at' ? b.created_at : b.updated_at
-              );
-              return sort === 'asc'
-                ? dateA.getTime() - dateB.getTime()
-                : dateB.getTime() - dateA.getTime();
-            });
-            return all;
+        setAllItems(prev => {
+          const all = [...prev, ...pageResult.items];
+          all.sort((a, b) => {
+            const dateA = new Date(
+              order_by === 'created_at' ? a.created_at : a.updated_at
+            );
+            const dateB = new Date(
+              order_by === 'created_at' ? b.created_at : b.updated_at
+            );
+            return sort === 'asc'
+              ? dateA.getTime() - dateB.getTime()
+              : dateB.getTime() - dateA.getTime();
           });
 
-          setCurrentPage(nextPage);
+          return all;
+        });
 
-          const nextPageFromResponse =
-            typeof response.data.nextPage === 'number'
-              ? response.data.nextPage
-              : newItems.length >= perPage
-                ? nextPage + 1
-                : null;
-
-          setHasMore(nextPageFromResponse !== null);
-        }
-      } else {
-        setHasMore(false);
+        setCurrentPage(nextPage);
+        setHasMore(pageResult.nextPage !== null);
       }
     } catch (e) {
       console.error('Load more MRs error', e);
@@ -247,6 +305,7 @@ export const useInfiniteMergeRequests = (params: UseInfiniteMRsParams) => {
     params.author_id,
     params.assignee_id,
     params.reviewer_id,
+    fetchPage,
   ]);
 
   // Use query data items if available and allItems is empty (handles cache on remount)

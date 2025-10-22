@@ -1694,6 +1694,12 @@ class ApiService {
       search?: string;
       per_page?: number;
       page?: number;
+      milestone?: string;
+      author_id?: number | 'me';
+      assignee_id?: number | 'me';
+      reviewer_id?: number | 'me';
+      source_branch?: string;
+      target_branch?: string;
     }
   ): Promise<
     ApiResponse<{
@@ -1708,6 +1714,22 @@ class ApiService {
     if (options?.search) params.append('search', options.search);
     if (options?.per_page) params.append('per_page', String(options.per_page));
     if (options?.page) params.append('page', String(options.page));
+    if (options?.milestone) params.append('milestone', options.milestone);
+    if (options?.author_id !== undefined) {
+      params.append('author_id', String(options.author_id));
+    }
+    if (options?.assignee_id !== undefined) {
+      params.append('assignee_id', String(options.assignee_id));
+    }
+    if (options?.reviewer_id !== undefined) {
+      params.append('reviewer_id', String(options.reviewer_id));
+    }
+    if (options?.source_branch) {
+      params.append('source_branch', options.source_branch);
+    }
+    if (options?.target_branch) {
+      params.append('target_branch', options.target_branch);
+    }
 
     const query = params.toString();
     const endpoint = `/api/merge-requests/${encodeURIComponent(String(projectId))}/gitlab/merge-requests${query ? `?${query}` : ''}`;

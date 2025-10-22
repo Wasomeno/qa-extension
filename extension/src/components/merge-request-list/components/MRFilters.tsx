@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Search, X, FolderGit2, Check } from 'lucide-react';
 import { Input } from '@/src/components/ui/ui/input';
 import { Button } from '@/src/components/ui/ui/button';
@@ -35,24 +35,31 @@ export const MRFilters: React.FC<MRFiltersProps> = ({
 }) => {
   const [projectPickerOpen, setProjectPickerOpen] = useState(false);
   const [projectSearch, setProjectSearch] = useState('');
+  const [debouncedProjectSearch, setDebouncedProjectSearch] = useState('');
 
-  // Fetch projects
-  const { data: projects } = useQuery({
-    queryKey: ['projects'],
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedProjectSearch(projectSearch.trim());
+    }, 250);
+    return () => clearTimeout(handler);
+  }, [projectSearch]);
+
+  // Fetch projects using backend search
+  const {
+    data: projects = [],
+    isFetching: isFetchingProjects,
+    isLoading: isLoadingProjects,
+  } = useQuery({
+    queryKey: ['projects', debouncedProjectSearch],
     queryFn: async () => {
-      const res = await apiService.getProjects();
+      const res = await apiService.searchProjects({
+        search: debouncedProjectSearch || undefined,
+        limit: 50,
+      });
       return res.success ? res.data || [] : [];
     },
-    staleTime: 5 * 60 * 1000,
+    staleTime: 60 * 1000,
   });
-
-  const filteredProjects = React.useMemo(() => {
-    if (!projects) return [];
-    const q = projectSearch.toLowerCase().trim();
-    return projects.filter((p: any) =>
-      q ? p.name.toLowerCase().includes(q) : true
-    );
-  }, [projects, projectSearch]);
 
   const selectedProjects = React.useMemo(() => {
     if (filters.projectIds.length === 0) return [];
@@ -62,7 +69,7 @@ export const MRFilters: React.FC<MRFiltersProps> = ({
     return filters.projectIds.map(id => {
       const project = lookup.get(id);
       if (project) return project;
-      return { id, name: id };
+      return { id, name: String(id) };
     });
   }, [projects, filters.projectIds]);
 
@@ -139,7 +146,11 @@ export const MRFilters: React.FC<MRFiltersProps> = ({
                 autoFocus
               />
               <div className="max-h-56 overflow-auto">
-                {filteredProjects.length === 0 ? (
+                {isFetchingProjects ? (
+                  <div className="text-xs text-gray-500 px-2 py-1">
+                    Searching projects...
+                  </div>
+                ) : projects.length === 0 ? (
                   <div className="text-xs text-gray-500 px-2 py-1">
                     No projects found
                   </div>
@@ -161,7 +172,7 @@ export const MRFilters: React.FC<MRFiltersProps> = ({
                     >
                       All Projects
                     </button>
-                    {filteredProjects.map((project: any) => (
+                    {projects.map((project: any) => (
                       <button
                         key={project.id}
                         type="button"

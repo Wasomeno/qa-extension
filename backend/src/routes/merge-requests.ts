@@ -126,9 +126,12 @@ const parseIntegerParam = (value: unknown, defaultValue: number): number => {
   return defaultValue;
 };
 
-const parseUserIdParam = (value: unknown): number | undefined => {
+const parseUserIdParam = (value: unknown): number | 'me' | undefined => {
   if (Array.isArray(value)) {
     return parseUserIdParam(value[0]);
+  }
+  if (value === 'me') {
+    return 'me';
   }
   if (typeof value === 'string' && /^\d+$/.test(value)) {
     return parseInt(value, 10);
@@ -198,9 +201,9 @@ router.get(
         order_by?: 'created_at' | 'updated_at';
         sort?: 'asc' | 'desc';
         milestone?: string;
-        author_id?: number;
-        assignee_id?: number;
-        reviewer_id?: number;
+        author_id?: number | 'me';
+        assignee_id?: number | 'me';
+        reviewer_id?: number | 'me';
         source_branch?: string;
         target_branch?: string;
         search?: string;
