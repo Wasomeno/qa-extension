@@ -142,6 +142,7 @@ export interface ListMRsParams {
   assignee_id?: number | 'me';
   reviewer_id?: number | 'me';
   author_id?: number | 'me';
+  scope?: 'all' | 'created_by_me' | 'assigned_to_me';
   labels?: string[];
   per_page?: number;
   page?: number;

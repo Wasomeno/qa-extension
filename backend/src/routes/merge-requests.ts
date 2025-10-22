@@ -126,12 +126,9 @@ const parseIntegerParam = (value: unknown, defaultValue: number): number => {
   return defaultValue;
 };
 
-const parseUserIdParam = (value: unknown): number | 'me' | undefined => {
+const parseUserIdParam = (value: unknown): number | undefined => {
   if (Array.isArray(value)) {
     return parseUserIdParam(value[0]);
-  }
-  if (value === 'me') {
-    return 'me';
   }
   if (typeof value === 'string' && /^\d+$/.test(value)) {
     return parseInt(value, 10);
@@ -161,6 +158,7 @@ router.get(
       search,
       per_page,
       page,
+      scope,
     } = req.query;
 
     const projectIds = Array.from(
@@ -201,9 +199,10 @@ router.get(
         order_by?: 'created_at' | 'updated_at';
         sort?: 'asc' | 'desc';
         milestone?: string;
-        author_id?: number | 'me';
-        assignee_id?: number | 'me';
-        reviewer_id?: number | 'me';
+        author_id?: number;
+        assignee_id?: number;
+        reviewer_id?: number;
+        scope?: 'all' | 'created_by_me' | 'assigned_to_me';
         source_branch?: string;
         target_branch?: string;
         search?: string;
@@ -231,6 +230,19 @@ router.get(
       if (milestone && typeof milestone === 'string') {
         fetchOptions.milestone = milestone;
       }
+      if (scope && typeof scope === 'string') {
+        const normalizedScope = scope.toLowerCase();
+        if (
+          normalizedScope === 'assigned_to_me' ||
+          normalizedScope === 'created_by_me' ||
+          normalizedScope === 'all'
+        ) {
+          fetchOptions.scope = normalizedScope as
+            | 'assigned_to_me'
+            | 'created_by_me'
+            | 'all';
+        }
+      }
       if (source_branch && typeof source_branch === 'string') {
         fetchOptions.source_branch = source_branch;
       }
@@ -255,6 +267,23 @@ router.get(
       }
 
       const gitlab = new GitLabService(oauthConnection.access_token);
+
+      const asScope = (value: unknown) => {
+        if (typeof value !== 'string') return undefined;
+        const normalized = value.toLowerCase();
+        if (
+          normalized === 'assigned_to_me' ||
+          normalized === 'created_by_me' ||
+          normalized === 'all'
+        ) {
+          return normalized as 'assigned_to_me' | 'created_by_me' | 'all';
+        }
+        return undefined;
+      };
+
+      if (!fetchOptions.scope) {
+        fetchOptions.scope = asScope(scope);
+      }
 
       const resolvedProjects: Array<{
         requestedId: string;
@@ -674,6 +703,7 @@ router.get(
       search,
       per_page,
       page,
+      scope,
     } = req.query;
     const userId = req.user!.id;
 
@@ -709,6 +739,15 @@ router.get(
         } catch {}
       }
 
+      const scopeFilter =
+        typeof scope === 'string' ? scope.toLowerCase() : undefined;
+      const allowedScope =
+        scopeFilter === 'assigned_to_me' ||
+        scopeFilter === 'created_by_me' ||
+        scopeFilter === 'all'
+          ? (scopeFilter as 'assigned_to_me' | 'created_by_me' | 'all')
+          : undefined;
+
       const mergeRequests = await gitlab.getMergeRequests(pid, {
         state: state as any,
         order_by: order_by as any,
@@ -726,6 +765,7 @@ router.get(
         search: search as string | undefined,
         per_page: per_page ? parseInt(per_page as string, 10) : undefined,
         page: page ? parseInt(page as string, 10) : undefined,
+        scope: allowedScope,
       });
 
       sendResponse(res, 200, true, 'Merge requests fetched successfully', {

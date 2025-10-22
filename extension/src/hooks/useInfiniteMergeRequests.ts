@@ -7,10 +7,10 @@ import type {
 } from '@/types/merge-requests';
 
 export interface UseInfiniteMRsParams extends Omit<ListMRsParams, 'page'> {
-  assignee_id?: number | 'me';
-  author_id?: number | 'me';
   projectIds?: string[];
 }
+
+let aggregateEndpointSupported: boolean | null = null;
 
 export const useInfiniteMergeRequests = (params: UseInfiniteMRsParams) => {
   const [allItems, setAllItems] = useState<MergeRequestSummary[]>([]);
@@ -33,9 +33,7 @@ export const useInfiniteMergeRequests = (params: UseInfiniteMRsParams) => {
         search: params.search || '',
         projectIds: projectIdsStr,
         state: params.state || 'opened',
-        assignee_id: params.assignee_id || '',
-        reviewer_id: params.reviewer_id || '',
-        author_id: params.author_id || '',
+        scope: params.scope || '',
         labels: labelsStr,
         per_page: params.per_page || 20,
         sort: params.sort || 'newest',
@@ -45,9 +43,7 @@ export const useInfiniteMergeRequests = (params: UseInfiniteMRsParams) => {
     params.search,
     params.projectIds,
     params.state,
-    params.assignee_id,
-    params.reviewer_id,
-    params.author_id,
+    params.scope,
     JSON.stringify(params.labels),
     params.per_page,
     params.sort,
@@ -74,73 +70,83 @@ export const useInfiniteMergeRequests = (params: UseInfiniteMRsParams) => {
         params.state ?? 'opened';
       const perPage = params.per_page || 20;
 
-      const resolveUserParam = (
-        value: UseInfiniteMRsParams['author_id']
-      ): number | 'me' | undefined => {
-        if (value === 'me') return 'me';
-        if (typeof value === 'number') return value;
-        return undefined;
-      };
-
       const baseOptions = {
         state: stateFilter,
+        scope: params.scope,
         search: params.search,
         order_by,
         sort,
         per_page: perPage,
         page: pageToFetch,
-        author_id: resolveUserParam(params.author_id),
-        assignee_id: resolveUserParam(params.assignee_id),
-        reviewer_id: resolveUserParam(params.reviewer_id),
       };
 
-      try {
-        const aggregated = await apiService.getMergeRequestsForProjects(
-          params.projectIds,
-          baseOptions
-        );
+      const shouldTryAggregate =
+        aggregateEndpointSupported !== false &&
+        params.projectIds &&
+        params.projectIds.length > 0;
 
-        if (aggregated.success && aggregated.data) {
-          const fetchedItems = Array.isArray(aggregated.data.items)
-            ? (aggregated.data.items as MergeRequestSummary[])
-            : [];
+      if (shouldTryAggregate) {
+        try {
+          const aggregated = await apiService.getMergeRequestsForProjects(
+            params.projectIds,
+            baseOptions
+          );
 
-          const sortedItems = [...fetchedItems].sort((a, b) => {
-            const dateA = new Date(
-              order_by === 'created_at' ? a.created_at : a.updated_at
-            );
-            const dateB = new Date(
-              order_by === 'created_at' ? b.created_at : b.updated_at
-            );
-            return sort === 'asc'
-              ? dateA.getTime() - dateB.getTime()
-              : dateB.getTime() - dateA.getTime();
-          });
+          if (aggregated.success && aggregated.data) {
+            aggregateEndpointSupported = true;
 
-          const nextPage =
-            typeof aggregated.data.nextPage === 'number'
-              ? aggregated.data.nextPage
-              : fetchedItems.length >= perPage
-                ? pageToFetch + 1
-                : null;
+            const fetchedItems = Array.isArray(aggregated.data.items)
+              ? (aggregated.data.items as MergeRequestSummary[])
+              : [];
 
-          return {
-            items: sortedItems,
-            total: aggregated.data.total ?? fetchedItems.length,
-            nextPage,
-          };
-        } else if (!aggregated.success) {
-          const reason = aggregated.error || aggregated.message || 'unknown';
+            const sortedItems = [...fetchedItems].sort((a, b) => {
+              const dateA = new Date(
+                order_by === 'created_at' ? a.created_at : a.updated_at
+              );
+              const dateB = new Date(
+                order_by === 'created_at' ? b.created_at : b.updated_at
+              );
+              return sort === 'asc'
+                ? dateA.getTime() - dateB.getTime()
+                : dateB.getTime() - dateA.getTime();
+            });
+
+            const nextPage =
+              typeof aggregated.data.nextPage === 'number'
+                ? aggregated.data.nextPage
+                : fetchedItems.length >= perPage
+                  ? pageToFetch + 1
+                  : null;
+
+            return {
+              items: sortedItems,
+              total: aggregated.data.total ?? fetchedItems.length,
+              nextPage,
+            };
+          }
+
+          if (!aggregated.success) {
+            const reason = aggregated.error || aggregated.message || '';
+            const routeMissing =
+              typeof reason === 'string' &&
+              reason.toLowerCase().includes('route not found');
+            if (routeMissing) {
+              aggregateEndpointSupported = false;
+            }
+            if (reason) {
+              console.warn(
+                'Aggregated MR fetch unavailable, using per-project fallback:',
+                reason
+              );
+            }
+          }
+        } catch (error) {
+          aggregateEndpointSupported = false;
           console.warn(
-            'Aggregated MR fetch unavailable, using per-project fallback:',
-            reason
+            'Aggregated MR fetch failed, falling back to per-project requests:',
+            error
           );
         }
-      } catch (error) {
-        console.warn(
-          'Aggregated MR fetch failed, falling back to per-project requests:',
-          error
-        );
       }
 
       try {
@@ -208,9 +214,6 @@ export const useInfiniteMergeRequests = (params: UseInfiniteMRsParams) => {
       params.search,
       params.sort,
       params.per_page,
-      params.author_id,
-      params.assignee_id,
-      params.reviewer_id,
     ]
   );
 
@@ -302,9 +305,6 @@ export const useInfiniteMergeRequests = (params: UseInfiniteMRsParams) => {
     params.search,
     params.sort,
     params.per_page,
-    params.author_id,
-    params.assignee_id,
-    params.reviewer_id,
     fetchPage,
   ]);
 

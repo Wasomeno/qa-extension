@@ -1700,6 +1700,7 @@ class ApiService {
       reviewer_id?: number | 'me';
       source_branch?: string;
       target_branch?: string;
+      scope?: 'all' | 'created_by_me' | 'assigned_to_me';
     }
   ): Promise<
     ApiResponse<{
@@ -1715,6 +1716,8 @@ class ApiService {
     if (options?.per_page) params.append('per_page', String(options.per_page));
     if (options?.page) params.append('page', String(options.page));
     if (options?.milestone) params.append('milestone', options.milestone);
+    if (options?.scope) params.append('scope', options.scope);
+    if (options?.scope) params.append('scope', options.scope);
     if (options?.author_id !== undefined) {
       params.append('author_id', String(options.author_id));
     }
@@ -1769,6 +1772,7 @@ class ApiService {
     if (options?.per_page) params.append('per_page', String(options.per_page));
     if (options?.page) params.append('page', String(options.page));
     if (options?.milestone) params.append('milestone', options.milestone);
+    if (options?.scope) params.append('scope', options.scope);
     if (options?.source_branch) {
       params.append('source_branch', options.source_branch);
     }
