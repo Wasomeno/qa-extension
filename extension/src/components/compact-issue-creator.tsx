@@ -80,6 +80,7 @@ interface CompactIssueCreatorProps {
   onSaveDraft?: (draft: IssueData) => void;
   onBack?: () => void;
   portalContainer?: Element | null;
+  resetTrigger?: number; // Increment this to trigger form reset
 }
 
 export const CompactIssueCreator: React.FC<CompactIssueCreatorProps> = ({
@@ -89,6 +90,7 @@ export const CompactIssueCreator: React.FC<CompactIssueCreatorProps> = ({
   onCancel,
   onSaveDraft,
   portalContainer,
+  resetTrigger,
 }) => {
   const keyboardIsolation = useKeyboardIsolation();
   const containerRef = React.useRef<HTMLDivElement>(null);
@@ -333,6 +335,7 @@ export const CompactIssueCreator: React.FC<CompactIssueCreatorProps> = ({
     register,
     handleSubmit,
     setValue,
+    reset,
     errors,
     watchedValues,
     isLoading,
@@ -347,6 +350,23 @@ export const CompactIssueCreator: React.FC<CompactIssueCreatorProps> = ({
     onCancel,
     onSaveDraft,
   });
+
+  // Reset form after successful creation
+  React.useEffect(() => {
+    if (success) {
+      const timer = setTimeout(() => {
+        reset();
+      }, 1500); // Wait 1.5s to show success message before resetting
+      return () => clearTimeout(timer);
+    }
+  }, [success, reset]);
+
+  // Reset form when resetTrigger changes (navigating away from this feature)
+  React.useEffect(() => {
+    if (resetTrigger !== undefined && resetTrigger > 0) {
+      reset();
+    }
+  }, [resetTrigger, reset]);
 
   const labelQueries = useQuery({
     queryKey: ['gitlab-labels', watchedValues.projectId],

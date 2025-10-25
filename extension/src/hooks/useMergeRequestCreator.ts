@@ -3,7 +3,11 @@ import { useForm } from 'react-hook-form';
 import { useQuery } from '@tanstack/react-query';
 import { apiService } from '@/services/api';
 import { MergeRequestData } from '@/types/messages';
-import { getLastUsedPreset, saveLastUsedPreset } from '@/utils/mrPresets';
+import {
+  getLastUsedPreset,
+  saveLastUsedPreset,
+  type MRPreset,
+} from '@/utils/mrPresets';
 
 interface UseMergeRequestCreatorOptions {
   initialData?: Partial<MergeRequestData>;
@@ -55,6 +59,9 @@ export function useMergeRequestCreator(options: UseMergeRequestCreatorOptions) {
   const [lastCreatedMr, setLastCreatedMr] = useState<any | null>(null);
   const [slackNotification, setSlackNotification] =
     useState<SlackNotificationState | null>(null);
+  const [lastProjectId, setLastProjectId] = useState<string | undefined>(
+    initialData.projectId
+  );
 
   // Form setup
   const {
@@ -62,6 +69,7 @@ export function useMergeRequestCreator(options: UseMergeRequestCreatorOptions) {
     handleSubmit: rhfHandleSubmit,
     setValue,
     watch,
+    reset,
     formState: { errors },
   } = useForm<MergeRequestFormData>({
     defaultValues: {
@@ -124,6 +132,19 @@ export function useMergeRequestCreator(options: UseMergeRequestCreatorOptions) {
 
   const users = usersData || [];
 
+  useEffect(() => {
+    const currentProjectId = watchedValues.projectId || '';
+    if (lastProjectId !== undefined && lastProjectId !== currentProjectId) {
+      setValue('sourceBranch', '', { shouldValidate: false });
+      setValue('targetBranch', '', { shouldValidate: false });
+      setValue('assigneeIds', [], { shouldValidate: false });
+      setValue('reviewerIds', [], { shouldValidate: false });
+      setValue('slackChannelId', '', { shouldValidate: false });
+      setValue('slackUserIds', [], { shouldValidate: false });
+    }
+    setLastProjectId(currentProjectId);
+  }, [watchedValues.projectId, lastProjectId, setValue]);
+
   // Auto-select default branch as target if available
   useEffect(() => {
     if (branches.length > 0 && !watchedValues.targetBranch) {
@@ -138,22 +159,28 @@ export function useMergeRequestCreator(options: UseMergeRequestCreatorOptions) {
   useEffect(() => {
     if (!watchedValues.projectId) return;
 
-    // Skip if form already has values (from initialData)
-    const hasExistingValues =
-      watchedValues.assigneeIds?.length || watchedValues.reviewerIds?.length;
-
-    if (hasExistingValues) return;
-
     const preset = getLastUsedPreset(watchedValues.projectId);
     if (!preset) return;
 
-    // Apply preset values
-    if (preset.assigneeIds?.length) {
+    let applied = false;
+
+    if (preset.assigneeIds?.length && !watchedValues.assigneeIds?.length) {
       setValue('assigneeIds', preset.assigneeIds, { shouldValidate: false });
+      applied = true;
     }
-    if (preset.reviewerIds?.length) {
+    if (preset.reviewerIds?.length && !watchedValues.reviewerIds?.length) {
       setValue('reviewerIds', preset.reviewerIds, { shouldValidate: false });
+      applied = true;
     }
+    if (preset.targetBranch && !watchedValues.targetBranch) {
+      setValue('targetBranch', preset.targetBranch, { shouldValidate: false });
+      applied = true;
+    }
+    if (preset.sourceBranch && !watchedValues.sourceBranch) {
+      setValue('sourceBranch', preset.sourceBranch, { shouldValidate: false });
+      applied = true;
+    }
+
     if (preset.removeSourceBranch !== undefined) {
       setValue('removeSourceBranch', preset.removeSourceBranch, {
         shouldValidate: false,
@@ -166,15 +193,18 @@ export function useMergeRequestCreator(options: UseMergeRequestCreatorOptions) {
       setValue('slackChannelId', preset.slackChannelId, {
         shouldValidate: false,
       });
+      applied = true;
     }
     if (preset.slackUserIds?.length) {
       setValue('slackUserIds', preset.slackUserIds, { shouldValidate: false });
+      applied = true;
     }
 
-    setUsedPreset(true);
-
-    // Clear the indicator after 3 seconds
-    setTimeout(() => setUsedPreset(false), 3000);
+    if (applied) {
+      setUsedPreset(true);
+      setTimeout(() => setUsedPreset(false), 3000);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [watchedValues.projectId, setValue]);
 
   // Submit handler with duplicate prevention
@@ -249,15 +279,38 @@ export function useMergeRequestCreator(options: UseMergeRequestCreatorOptions) {
 
       // Save preset for future use
       if (data.projectId) {
-        saveLastUsedPreset(data.projectId, {
+        const projectName =
+          projects.find(p => p.id === data.projectId)?.name ||
+          (mergeRequest?.project?.name as string | undefined) ||
+          data.projectId;
+
+        const presetData: MRPreset = {
           projectId: data.projectId,
-          assigneeIds: data.assigneeIds,
-          reviewerIds: data.reviewerIds,
+          projectName,
           removeSourceBranch: data.removeSourceBranch,
           squash: data.squash,
-          slackChannelId: data.slackChannelId,
-          slackUserIds: data.slackUserIds,
-        });
+        };
+
+        if (data.sourceBranch) {
+          presetData.sourceBranch = data.sourceBranch;
+        }
+        if (data.targetBranch) {
+          presetData.targetBranch = data.targetBranch;
+        }
+        if (Array.isArray(data.assigneeIds)) {
+          presetData.assigneeIds = data.assigneeIds;
+        }
+        if (Array.isArray(data.reviewerIds)) {
+          presetData.reviewerIds = data.reviewerIds;
+        }
+        if (data.slackChannelId) {
+          presetData.slackChannelId = data.slackChannelId;
+        }
+        if (Array.isArray(data.slackUserIds)) {
+          presetData.slackUserIds = data.slackUserIds;
+        }
+
+        saveLastUsedPreset(data.projectId, presetData);
       }
 
       // Call onSubmit callback if provided
@@ -289,6 +342,7 @@ export function useMergeRequestCreator(options: UseMergeRequestCreatorOptions) {
     register,
     handleSubmit,
     setValue,
+    reset,
     watch,
     watchedValues,
     errors,

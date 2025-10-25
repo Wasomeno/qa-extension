@@ -56,6 +56,11 @@ export interface PendingAction<T = any> {
   lastTriedAt?: number;
 }
 
+export interface FloatingTriggerSettings {
+  autoHideOnBlur: boolean;
+  manualHideDurationMs: number;
+}
+
 export interface ExtensionSettings {
   notificationSettings: {
     desktop: boolean;
@@ -68,6 +73,7 @@ export interface ExtensionSettings {
   };
   defaultProject?: string;
   apiEndpoint: string | undefined;
+  floatingTrigger: FloatingTriggerSettings;
 }
 
 export type Session = {
@@ -101,7 +107,7 @@ export interface StorageData {
   issueFilters?: Record<string, IssueFilterSelection>;
 }
 
-const DEFAULT_SETTINGS: ExtensionSettings = {
+export const DEFAULT_SETTINGS: ExtensionSettings = {
   notificationSettings: {
     desktop: true,
     sound: true,
@@ -112,6 +118,10 @@ const DEFAULT_SETTINGS: ExtensionSettings = {
     createIssue: 'Ctrl+Shift+I',
   },
   apiEndpoint: process.env.BASE_API_URL,
+  floatingTrigger: {
+    autoHideOnBlur: true,
+    manualHideDurationMs: 10_000,
+  },
 };
 
 function isPromiseLike<T>(value: any): value is PromiseLike<T> {
@@ -570,8 +580,24 @@ class StorageService {
    * Get extension settings
    */
   async getSettings(): Promise<ExtensionSettings> {
-    const settings = await this.get('settings');
-    return settings || DEFAULT_SETTINGS;
+    const raw = ((await this.get('settings')) ||
+      {}) as Partial<ExtensionSettings>;
+    return {
+      ...DEFAULT_SETTINGS,
+      ...raw,
+      notificationSettings: {
+        ...DEFAULT_SETTINGS.notificationSettings,
+        ...(raw.notificationSettings || {}),
+      },
+      shortcuts: {
+        ...DEFAULT_SETTINGS.shortcuts,
+        ...(raw.shortcuts || {}),
+      },
+      floatingTrigger: {
+        ...DEFAULT_SETTINGS.floatingTrigger,
+        ...(raw.floatingTrigger || {}),
+      },
+    };
   }
 
   /**
@@ -579,7 +605,22 @@ class StorageService {
    */
   async updateSettings(updates: Partial<ExtensionSettings>): Promise<void> {
     const current = await this.getSettings();
-    const updated = { ...current, ...updates };
+    const updated: ExtensionSettings = {
+      ...current,
+      ...updates,
+      notificationSettings: {
+        ...current.notificationSettings,
+        ...(updates.notificationSettings || {}),
+      },
+      shortcuts: {
+        ...current.shortcuts,
+        ...(updates.shortcuts || {}),
+      },
+      floatingTrigger: {
+        ...current.floatingTrigger,
+        ...(updates.floatingTrigger || {}),
+      },
+    };
     return this.set('settings', updated);
   }
 

@@ -12,6 +12,13 @@ module.exports = {
     },
     extend: {
       colors: {
+        // Theme Management System
+        // Primary theme color (Ivory) - easily changeable
+        'theme-primary': '#FFFFF0',
+        'theme-border': 'rgba(11, 18, 32, 0.12)',
+        'theme-text': '#0b1220',
+        'theme-text-muted': 'rgba(11, 18, 32, 0.65)',
+        'theme-shadow': 'rgba(0, 0, 0, 0.08)',
         border: 'hsl(var(--border))',
         input: 'hsl(var(--input))',
         ring: 'hsl(var(--ring))',

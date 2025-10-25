@@ -5,6 +5,9 @@
 
 export interface MRPreset {
   projectId?: string;
+  projectName?: string;
+  sourceBranch?: string;
+  targetBranch?: string;
   assigneeIds?: number[];
   reviewerIds?: number[];
   removeSourceBranch?: boolean;

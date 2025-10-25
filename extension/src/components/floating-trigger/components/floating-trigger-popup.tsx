@@ -263,10 +263,29 @@ const FloatingTriggerPopup: React.FC<FloatingTriggerPopupProps> = ({
   const keyboardIsolation = useKeyboardIsolation();
   const portalRef = useRef<HTMLDivElement>(null);
   const [pinnedCount, setPinnedCount] = React.useState<number>(0);
+  const [resetTrigger, setResetTrigger] = React.useState(0);
   // Recording state removed
   const { isAuthenticated } = useAuth();
   const [authBusy, setAuthBusy] = React.useState(false);
   const [authError, setAuthError] = React.useState<string | null>(null);
+
+  // Track feature changes and trigger reset when navigating away from form features
+  const prevFeatureRef = React.useRef<string | null>(selectedFeature);
+  React.useEffect(() => {
+    const prev = prevFeatureRef.current;
+    const current = selectedFeature;
+
+    // If we're navigating away from a form feature, trigger reset
+    if (
+      prev &&
+      prev !== current &&
+      (prev === 'issue' || prev === 'merge-request')
+    ) {
+      setResetTrigger(t => t + 1);
+    }
+
+    prevFeatureRef.current = current;
+  }, [selectedFeature]);
 
   React.useEffect(() => {
     let unsub: (() => void) | null = null;
@@ -468,7 +487,10 @@ const FloatingTriggerPopup: React.FC<FloatingTriggerPopupProps> = ({
                   </div>
                 )}
               >
-                <CompactIssueCreator portalContainer={portalRef.current} />
+                <CompactIssueCreator
+                  portalContainer={portalRef.current}
+                  resetTrigger={resetTrigger}
+                />
               </ErrorBoundary>
             </div>
           </div>
@@ -493,6 +515,7 @@ const FloatingTriggerPopup: React.FC<FloatingTriggerPopupProps> = ({
               >
                 <CompactMergeRequestCreator
                   portalContainer={portalRef.current}
+                  resetTrigger={resetTrigger}
                 />
               </ErrorBoundary>
             </div>

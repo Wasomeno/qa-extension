@@ -18,6 +18,9 @@ interface FloatingTriggerButtonProps {
   selectedFeature?: string | null;
   children?: React.ReactNode;
   containerRef?: (el: HTMLDivElement | null) => void;
+  hidden?: boolean;
+  opacity?: number;
+  onHoverChange?: (isHovered: boolean) => void;
 }
 
 const FloatingTriggerButton: React.FC<FloatingTriggerButtonProps> = ({
@@ -27,6 +30,9 @@ const FloatingTriggerButton: React.FC<FloatingTriggerButtonProps> = ({
   selectedFeature,
   children,
   containerRef,
+  hidden = false,
+  opacity = 1,
+  onHoverChange,
 }) => {
   const keyboardIsolation = useKeyboardIsolation();
 
@@ -50,6 +56,7 @@ const FloatingTriggerButton: React.FC<FloatingTriggerButtonProps> = ({
 
   // Lightweight backdrop luminance detection to choose text tone only
   React.useEffect(() => {
+    if (hidden) return;
     const getSizeForState = (state: ViewState) => {
       if (state === 'closed') return { w: 45, h: 45 };
       if (state === 'features') return { w: 340, h: 320 };
@@ -150,7 +157,7 @@ const FloatingTriggerButton: React.FC<FloatingTriggerButtonProps> = ({
       ownerWin.removeEventListener('resize', onResize);
       ownerWin.clearTimeout(t);
     };
-  }, [position.x, position.y, viewState]);
+  }, [position.x, position.y, viewState, hidden]);
 
   // Track when we're transitioning to closed state
   React.useEffect(() => {
@@ -221,13 +228,16 @@ const FloatingTriggerButton: React.FC<FloatingTriggerButtonProps> = ({
       initial={false}
       onAnimationStart={() => setIsAnimating(true)}
       onAnimationComplete={() => setIsAnimating(false)}
+      onMouseEnter={() => onHoverChange?.(true)}
+      onMouseLeave={() => onHoverChange?.(false)}
       className={`floating-trigger ${open ? 'ft-glass' : ''} qa-theme-light ${onDarkBackdrop ? 'qa-text-dark' : 'qa-text-light'} ${viewState === 'closed' && !isHovered ? '' : ''}`}
       style={{
+        display: hidden ? 'none' : undefined,
         position: 'fixed',
         left: position.x,
         top: position.y,
         zIndex: 999999,
-        pointerEvents: 'auto',
+        pointerEvents: hidden ? 'none' : 'auto',
         backdropFilter: viewState === 'closed' ? 'blur(12px)' : 'blur(16px)',
         background:
           viewState === 'closed' && !isHovered
@@ -265,7 +275,7 @@ const FloatingTriggerButton: React.FC<FloatingTriggerButtonProps> = ({
                 : 580,
         borderRadius: viewState === 'closed' ? (isHovered ? 100 : 100) : 16,
         scale: 1,
-        opacity: 1,
+        opacity: opacity,
       }}
       transition={{
         type: 'spring',
@@ -276,7 +286,22 @@ const FloatingTriggerButton: React.FC<FloatingTriggerButtonProps> = ({
       }}
       {...keyboardIsolation}
     >
-      {viewState === 'closed' ? (
+      {/* Always render children to preserve state, but control visibility */}
+      <motion.div
+        key="content"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: viewState === 'closed' ? 0 : 1 }}
+        className="w-full h-full relative"
+        style={{
+          display: viewState === 'closed' ? 'none' : 'block',
+          pointerEvents: viewState === 'closed' ? 'none' : 'auto',
+        }}
+      >
+        {children}
+      </motion.div>
+
+      {/* Button overlay shown when closed */}
+      {viewState === 'closed' && (
         <TooltipProvider>
           <Tooltip open={showTooltip}>
             <TooltipTrigger asChild>
@@ -284,7 +309,7 @@ const FloatingTriggerButton: React.FC<FloatingTriggerButtonProps> = ({
                 key="button"
                 initial={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
-                className="w-full h-full flex items-center justify-center cursor-pointer"
+                className="absolute inset-0 flex items-center justify-center cursor-pointer"
                 onMouseDown={handleMouseDown}
                 onMouseEnter={() => setIsHovered(true)}
                 onMouseLeave={() => setIsHovered(false)}
@@ -335,15 +360,6 @@ const FloatingTriggerButton: React.FC<FloatingTriggerButtonProps> = ({
             </TooltipPortal>
           </Tooltip>
         </TooltipProvider>
-      ) : (
-        <motion.div
-          key="content"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          className="w-full h-full relative"
-        >
-          {children}
-        </motion.div>
       )}
     </motion.div>
   );

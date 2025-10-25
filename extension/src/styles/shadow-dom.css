@@ -414,45 +414,39 @@
     @apply bg-gray-900/80 backdrop-blur-sm border border-gray-700/20;
   }
 
-  /* Advanced Glassmorphism Utilities */
+  /* Updated utilities using solid theme color */
   .glass-panel {
-    background: rgba(255, 255, 255, 0.12);
-    backdrop-filter: blur(16px);
-    -webkit-backdrop-filter: blur(16px);
-    border: 1px solid rgba(255, 255, 255, 0.18);
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+    background: #fffff0;
+    border: 1px solid rgba(11, 18, 32, 0.12);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.08);
     border-radius: 16px;
   }
 
   .glass-button {
-    background: rgba(255, 255, 255, 0.1);
-    backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px);
-    border: 1px solid rgba(255, 255, 255, 0.15);
+    background: #fffff0;
+    border: 1px solid rgba(11, 18, 32, 0.12);
     box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
     border-radius: 8px;
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   }
 
   .glass-button:hover {
-    background: rgba(255, 255, 255, 0.2);
-    border-color: rgba(255, 255, 255, 0.25);
+    background: #fffff0;
+    border-color: rgba(11, 18, 32, 0.2);
     box-shadow: 0 6px 24px rgba(0, 0, 0, 0.12);
     transform: translateY(-1px);
   }
 
   .glass-input {
-    background: rgba(255, 255, 255, 0.08);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
-    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: #fffff0;
+    border: 1px solid rgba(11, 18, 32, 0.12);
     box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.06);
     border-radius: 8px;
     transition: all 0.3s ease;
   }
 
   .glass-input:focus {
-    background: rgba(255, 255, 255, 0.12);
+    background: #fffff0;
     border-color: rgba(59, 130, 246, 0.4);
     box-shadow:
       0 0 0 3px rgba(59, 130, 246, 0.1),
@@ -460,104 +454,23 @@
   }
 
   .glass-modal {
-    background: rgba(255, 255, 255, 0.18);
-    backdrop-filter: blur(24px);
-    -webkit-backdrop-filter: blur(24px);
-    border: 1px solid rgba(255, 255, 255, 0.25);
+    background: #fffff0;
+    border: 1px solid rgba(11, 18, 32, 0.12);
   }
 
   .glass-nav {
-    background: rgba(255, 255, 255, 0.08);
-    backdrop-filter: blur(14px);
-    -webkit-backdrop-filter: blur(14px);
-    border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+    background: #fffff0;
+    border-bottom: 1px solid rgba(11, 18, 32, 0.12);
     box-shadow: 0 2px 16px rgba(0, 0, 0, 0.08);
   }
 
   .glass-overlay {
     background: rgba(0, 0, 0, 0.4);
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
-  }
-
-  /* Frosted Glass Variants */
-  .glass-frosted {
-    background: rgba(255, 255, 255, 0.25);
-    backdrop-filter: blur(30px);
-    -webkit-backdrop-filter: blur(30px);
-    border: 1px solid rgba(255, 255, 255, 0.3);
-    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.1);
-  }
-
-  .glass-subtle {
-    background: rgba(255, 255, 255, 0.06);
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.05);
-  }
-
-  /* Dark mode glass variants */
-  .dark .glass-panel {
-    background: rgba(15, 23, 42, 0.15);
-    border-color: rgba(148, 163, 184, 0.15);
-  }
-
-  .dark .glass-card {
-    background: rgba(15, 23, 42, 0.2);
-    border-color: rgba(148, 163, 184, 0.2);
-  }
-
-  .dark .glass-button {
-    background: rgba(15, 23, 42, 0.12);
-    border-color: rgba(148, 163, 184, 0.15);
-  }
-
-  .dark .glass-button:hover {
-    background: rgba(15, 23, 42, 0.25);
-    border-color: rgba(148, 163, 184, 0.25);
-  }
-
-  .dark .glass-input {
-    background: rgba(15, 23, 42, 0.1);
-    border-color: rgba(148, 163, 184, 0.12);
-  }
-
-  .dark .glass-modal {
-    background: rgba(15, 23, 42, 0.25);
-    border-color: rgba(148, 163, 184, 0.25);
-  }
-
-  .dark .glass-nav {
-    background: rgba(15, 23, 42, 0.1);
-    border-color: rgba(148, 163, 184, 0.12);
-  }
-
-  /* Animated Glass Effects */
-  .glass-shimmer {
-    position: relative;
-    overflow: hidden;
-  }
-
-  .glass-shimmer::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: -100%;
-    width: 100%;
-    height: 100%;
-    background: linear-gradient(
-      90deg,
-      transparent,
-      rgba(255, 255, 255, 0.2),
-      transparent
-    );
-    animation: shimmer 2s infinite;
   }
 
   /* TipTap content minimal styling to ensure lists render inside Shadow DOM */
   .tiptap {
-    color: var(--qa-fg);
+    color: #0b1220;
   }
   .tiptap p {
     margin: 0 0 0.5rem;
@@ -580,14 +493,14 @@
     margin: 0;
   }
   .tiptap blockquote {
-    border-left: 2px solid var(--qa-border);
+    border-left: 2px solid rgba(11, 18, 32, 0.12);
     padding-left: 0.75rem;
     margin: 0.5rem 0;
-    color: var(--qa-fg-muted);
+    color: rgba(11, 18, 32, 0.65);
   }
   .tiptap pre {
     background: rgba(0, 0, 0, 0.04);
-    border: 1px solid var(--qa-border);
+    border: 1px solid rgba(11, 18, 32, 0.12);
     padding: 0.5rem 0.75rem;
     border-radius: 6px;
     overflow: auto;
@@ -611,79 +524,36 @@
     font-weight: 600;
     margin: 0.5rem 0 0.25rem;
   }
-  @keyframes shimmer {
-    0% {
-      left: -100%;
-    }
-    100% {
-      left: 100%;
-    }
+  .tiptap details {
+    display: block;
+    width: 100%;
+    max-width: 100%;
+    border: 1px solid rgba(11, 18, 32, 0.12);
+    border-radius: 6px;
+    background: rgba(0, 0, 0, 0.02);
+    padding: 0.5rem 0.75rem;
+    margin: 0.75rem 0;
+    overflow: hidden;
   }
-
-  /* Glass Glow Effects */
-  .glass-glow-blue {
-    box-shadow:
-      0 8px 32px rgba(59, 130, 246, 0.15),
-      inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  .tiptap details > summary {
+    cursor: pointer;
+    font-weight: 600;
+    margin: -0.5rem -0.75rem 0.5rem;
+    padding: 0.5rem 0.75rem;
+    list-style: none;
   }
-
-  .glass-glow-purple {
-    box-shadow:
-      0 8px 32px rgba(147, 51, 234, 0.15),
-      inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  .tiptap details[open] > summary {
+    border-bottom: 1px solid rgba(11, 18, 32, 0.12);
+    margin-bottom: 0.5rem;
   }
-
-  .glass-glow-green {
-    box-shadow:
-      0 8px 32px rgba(34, 197, 94, 0.15),
-      inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  .tiptap details > summary::-webkit-details-marker {
+    display: none;
   }
-
-  .glass-glow-red {
-    box-shadow:
-      0 8px 32px rgba(239, 68, 68, 0.15),
-      inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  .tiptap details * {
+    max-width: 100%;
   }
-
-  /* Special Glass Effects for Floating Trigger */
-  .qa-floating-trigger .qa-trigger-main,
-  .qa-trigger-main.glass-button,
-  button.qa-trigger-main {
-    background: rgba(255, 255, 255, 0.15) !important;
-    backdrop-filter: blur(20px) !important;
-    -webkit-backdrop-filter: blur(20px) !important;
-    border: 2px solid rgba(255, 255, 255, 0.3) !important;
-    box-shadow:
-      0 8px 32px rgba(0, 0, 0, 0.1),
-      inset 0 2px 0 rgba(255, 255, 255, 0.3),
-      0 0 20px rgba(255, 255, 255, 0.2) !important;
-  }
-
-  .qa-floating-trigger .qa-trigger-main:hover,
-  .qa-trigger-main.glass-button:hover,
-  button.qa-trigger-main:hover {
-    background: rgba(255, 255, 255, 0.25) !important;
-    border-color: rgba(255, 255, 255, 0.4) !important;
-    box-shadow:
-      0 12px 40px rgba(0, 0, 0, 0.15),
-      inset 0 2px 0 rgba(255, 255, 255, 0.4),
-      0 0 30px rgba(255, 255, 255, 0.3) !important;
-    transform: translateY(-2px) scale(1.05) !important;
-  }
-
-  /* (Scoped) Keep special styling only for explicit trigger elements */
-  .qa-floating-trigger .qa-trigger-main,
-  button.qa-trigger-main,
-  .qa-trigger-main {
-    background: rgba(255, 255, 255, 0.15);
-    background-color: rgba(255, 255, 255, 0.15);
-    backdrop-filter: blur(20px);
-    -webkit-backdrop-filter: blur(20px);
-    border: 2px solid rgba(255, 255, 255, 0.3);
-    box-shadow:
-      0 8px 32px rgba(0, 0, 0, 0.1),
-      inset 0 2px 0 rgba(255, 255, 255, 0.3),
-      0 0 20px rgba(255, 255, 255, 0.2);
+  .tiptap details pre {
+    margin: 0.5rem 0 0;
   }
 
   /* Chrome extension specific */
@@ -699,111 +569,22 @@
   }
 }
 
-/* Adaptive theme tokens for shadow root */
+/* Theme tokens for shadow root - Light theme only */
 .qa-floating-trigger {
-  /* Default to light-style UI */
   --qa-fg: #0b1220;
   --qa-fg-muted: rgba(11, 18, 32, 0.65);
   --qa-border: rgba(11, 18, 32, 0.12);
-  --qa-glass: rgba(255, 255, 255, 0.15);
-  --qa-glass-hover: rgba(255, 255, 255, 0.25);
-  --qa-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
-  /* Override shadcn tokens to neutral (not blue) inside the extension container */
-  --primary: 0 0% 12%; /* neutral-900 */
+  --qa-bg: #fffff0;
+  --qa-shadow: 0 8px 32px rgba(0, 0, 0, 0.08);
+  /* Override shadcn tokens to neutral inside the extension container */
+  --primary: 0 0% 12%;
   --primary-foreground: 0 0% 98%;
   --ring: 0 0% 12%;
-  color: var(--qa-fg);
-}
-
-/* Explicit light theme (same as default) */
-.qa-floating-trigger.qa-theme-light,
-.qa-floating-trigger .qa-theme-light {
-  --qa-fg: #0b1220;
-  --qa-fg-muted: rgba(11, 18, 32, 0.65);
-  --qa-border: rgba(11, 18, 32, 0.12);
-  --qa-glass: rgba(255, 255, 255, 0.15);
-  --qa-glass-hover: rgba(255, 255, 255, 0.25);
-  --qa-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
-}
-
-/* Optional dark theme override if needed */
-.qa-floating-trigger.qa-theme-dark,
-.qa-floating-trigger .qa-theme-dark {
-  --qa-fg: #ffffff;
-  --qa-fg-muted: rgba(255, 255, 255, 0.72);
-  --qa-border: rgba(255, 255, 255, 0.25);
-  --qa-glass: rgba(15, 23, 42, 0.22);
-  --qa-glass-hover: rgba(15, 23, 42, 0.32);
-  --qa-shadow: 0 8px 32px rgba(0, 0, 0, 0.18);
-}
-
-/* Text-only contrast helpers (do not change glass/background) */
-.qa-floating-trigger.qa-text-light,
-.qa-floating-trigger .qa-text-light {
-  --qa-fg: #0b1220;
-  --qa-fg-muted: rgba(11, 18, 32, 0.65);
-}
-
-.qa-floating-trigger.qa-text-dark,
-.qa-floating-trigger .qa-text-dark {
-  --qa-fg: #ffffff;
-  --qa-fg-muted: rgba(255, 255, 255, 0.72);
+  color: #0b1220;
 }
 
 .qa-floating-trigger input::placeholder,
 .qa-floating-trigger textarea::placeholder {
-  color: var(--qa-fg-muted) !important;
+  color: rgba(11, 18, 32, 0.65);
   opacity: 1;
-}
-
-/* Use tokens across glass utilities */
-.glass-panel {
-  background: var(--qa-glass);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border: 1px solid var(--qa-border);
-  box-shadow: var(--qa-shadow);
-  border-radius: 16px;
-}
-
-.glass-card {
-  background: var(--qa-glass);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border: 1px solid var(--qa-border);
-  border-radius: 12px;
-}
-
-.glass-button {
-  background: var(--qa-glass);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-  border: 1px solid var(--qa-border);
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
-  border-radius: 8px;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.glass-button:hover {
-  background: var(--qa-glass-hover);
-  border-color: var(--qa-border);
-}
-
-.glass-input {
-  background: color-mix(in srgb, var(--qa-glass), transparent 20%);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid var(--qa-border);
-  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.06);
-  border-radius: 8px;
-  transition: all 0.3s ease;
-  color: var(--qa-fg);
-}
-
-.glass-input:focus {
-  background: var(--qa-glass);
-  border-color: color-mix(in srgb, var(--qa-border), #3b82f6 40%);
-  box-shadow:
-    0 0 0 3px rgba(59, 130, 246, 0.1),
-    inset 0 2px 4px rgba(0, 0, 0, 0.06);
 }

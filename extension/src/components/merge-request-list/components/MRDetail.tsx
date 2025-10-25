@@ -508,6 +508,16 @@ export const MRDetail: React.FC<MRDetailProps> = ({
     [applyStates, mr.project_id, mr.iid, queryClient, updateApplyState]
   );
 
+  // Extract GitLab base URL from the MR web_url
+  const gitlabBaseUrl = useMemo(() => {
+    try {
+      const url = new URL(mr.web_url);
+      return `${url.protocol}//${url.host}`;
+    } catch {
+      return '';
+    }
+  }, [mr.web_url]);
+
   // Markdown renderer with custom styling (matching IssueDetail)
   const md = useMemo(() => {
     const inst = new MarkdownIt({
@@ -601,14 +611,84 @@ export const MRDetail: React.FC<MRDetailProps> = ({
       return self.renderToken(tokens, idx, options);
     };
 
+    // Custom image renderer for attachments
+    inst.renderer.rules.image = (tokens, idx) => {
+      const token = tokens[idx];
+      let src = token.attrGet('src') || '';
+      const alt = token.content || '';
+      const title = token.attrGet('title') || '';
+
+      console.log('Image renderer - original src:', src);
+      console.log('Image renderer - alt:', alt);
+
+      // Check if it's a relative URL (GitLab attachment)
+      const isRelative = src.startsWith('/');
+
+      // Prepend GitLab base URL for relative paths
+      if (isRelative && gitlabBaseUrl) {
+        src = `${gitlabBaseUrl}${src}`;
+        console.log('Image renderer - resolved src:', src);
+      }
+
+      // Check if it's a video file
+      const videoExtensions = ['.mp4', '.webm', '.ogg', '.mov'];
+      const isVideo = videoExtensions.some(ext =>
+        src.toLowerCase().includes(ext)
+      );
+
+      if (isVideo) {
+        return `<div class="my-3">
+          <video
+            controls
+            class="max-w-full h-auto rounded-md border border-neutral-200 shadow-sm"
+            style="max-height: 400px;"
+          >
+            <source src="${src}" type="video/mp4">
+            Your browser does not support the video tag.
+          </video>
+          ${alt ? `<div class="text-xs text-neutral-500 mt-1">${alt}</div>` : ''}
+        </div>`;
+      }
+
+      return `<div class="my-3">
+        <img
+          src="${src}"
+          alt="${alt}"
+          ${title ? `title="${title}"` : ''}
+          class="max-w-full h-auto rounded-md border border-neutral-200 shadow-sm cursor-pointer hover:shadow-md transition-shadow"
+          loading="lazy"
+          style="max-height: 400px; object-fit: contain;"
+          onclick="window.open('${src}', '_blank')"
+        />
+        ${alt ? `<div class="text-xs text-neutral-500 mt-1">${alt}</div>` : ''}
+      </div>`;
+    };
+
     return inst;
-  }, []);
+  }, [gitlabBaseUrl]);
 
   const renderedDescription = useMemo(() => {
     if (!mrDetail?.description) return '';
+    console.log('MR Description (raw):', mrDetail.description);
+    console.log('First 500 chars:', mrDetail.description.substring(0, 500));
     try {
-      return md.render(mrDetail.description);
-    } catch {
+      const rendered = md.render(mrDetail.description);
+      console.log('MR Description (rendered HTML):', rendered);
+
+      // Extract image URLs from rendered HTML
+      const imgRegex = /<img[^>]+src="([^"]+)"/g;
+      const videoRegex = /<source[^>]+src="([^"]+)"/g;
+      let match;
+      while ((match = imgRegex.exec(rendered)) !== null) {
+        console.log('Found image URL in HTML:', match[1]);
+      }
+      while ((match = videoRegex.exec(rendered)) !== null) {
+        console.log('Found video URL in HTML:', match[1]);
+      }
+
+      return rendered;
+    } catch (error) {
+      console.error('Error rendering description:', error);
       return mrDetail.description;
     }
   }, [mrDetail?.description, md]);
@@ -792,11 +872,11 @@ export const MRDetail: React.FC<MRDetailProps> = ({
                   return (
                     <div
                       key={note.id}
-                      className="rounded-lg border border-neutral-200 bg-white p-3"
+                      className="rounded-lg border border-neutral-200 bg-white p-3 max-w-[450px]"
                     >
                       <div className="flex items-start justify-between gap-2">
                         <div className="flex items-center gap-2">
-                          <div className="text-xs font-medium text-gray-700">
+                          <div className="text-xs font-medium text-gray-700 text-balance">
                             {note.author?.name ||
                               note.author?.username ||
                               'Unknown user'}
@@ -810,12 +890,12 @@ export const MRDetail: React.FC<MRDetailProps> = ({
                             </Badge>
                           )}
                         </div>
-                        <div className="text-[10px] text-neutral-400">
+                        <div className="text-[10px] text-neutral-400 text-balance">
                           {new Date(note.created_at).toLocaleString()}
                         </div>
                       </div>
                       <div
-                        className="tiptap mt-2 leading-5 space-y-2 text-[12px]"
+                        className="tiptap mt-2 leading-5 space-y-2 text-[12px] text-balance"
                         dangerouslySetInnerHTML={{
                           __html: md.render(note.body || ''),
                         }}

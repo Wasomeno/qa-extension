@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import FloatingTriggerButton from './components/floating-trigger-button';
 import FloatingTriggerPopup, {
   type ViewState,
 } from './components/floating-trigger-popup';
+import { storageService, type ExtensionSettings } from '@/services/storage';
 
 interface FloatingTriggerProps {
   onClose?: () => void;
@@ -37,6 +38,20 @@ const FloatingTriggerInner: React.FC<FloatingTriggerProps> = ({ onClose }) => {
   const [clickedElement, setClickedElement] = useState<HTMLElement | null>(
     null
   );
+  const [settings, setSettings] = useState<ExtensionSettings | null>(null);
+  const [hiddenReason, setHiddenReason] = useState<'auto' | 'manual' | null>(
+    null
+  );
+  const [opacity, setOpacity] = useState<number>(1);
+  const [isHovered, setIsHovered] = useState<boolean>(false);
+  const lastExpandedStateRef = useRef<{
+    viewState: ViewState;
+    selectedFeature: string | null;
+    selectedIssue: any | null;
+    selectedMR: any | null;
+  } | null>(null);
+  const manualHideTimeoutRef = useRef<number | null>(null);
+  const autoHideTimestampRef = useRef<number | null>(null);
 
   useEffect(() => {
     // Handle window resize
@@ -49,6 +64,39 @@ const FloatingTriggerInner: React.FC<FloatingTriggerProps> = ({ onClose }) => {
 
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadSettings = async () => {
+      try {
+        const loaded = await storageService.getSettings();
+        if (!cancelled) {
+          setSettings(loaded);
+        }
+      } catch (error) {
+        console.error('FloatingTrigger: failed to load settings', error);
+      }
+    };
+
+    loadSettings();
+
+    let unsubscribe: (() => void) | undefined;
+    try {
+      unsubscribe = storageService.onChanged('settings', () => {
+        loadSettings();
+      });
+    } catch (error) {
+      console.warn('FloatingTrigger: failed to subscribe to settings', error);
+    }
+
+    return () => {
+      cancelled = true;
+      if (unsubscribe) {
+        unsubscribe();
+      }
+    };
   }, []);
 
   // Ensure popup stays within viewport bounds when view size changes
@@ -74,6 +122,103 @@ const FloatingTriggerInner: React.FC<FloatingTriggerProps> = ({ onClose }) => {
       return prev;
     });
   }, [viewState, selectedFeature]);
+
+  useEffect(() => {
+    if (viewState !== 'closed') {
+      lastExpandedStateRef.current = {
+        viewState,
+        selectedFeature,
+        selectedIssue,
+        selectedMR,
+      };
+    }
+  }, [viewState, selectedFeature, selectedIssue, selectedMR]);
+
+  const restoreLastExpandedState = useCallback(() => {
+    const last = lastExpandedStateRef.current;
+    if (last && last.viewState !== 'closed') {
+      setSelectedFeature(last.selectedFeature);
+      setSelectedIssue(last.selectedIssue);
+      setSelectedMR(last.selectedMR);
+      setViewState(last.viewState);
+    } else if (viewState !== 'closed') {
+      // No stored expanded state; keep current closed state
+      setViewState('closed');
+    }
+    if (!last) {
+      setSelectedFeature(null);
+      setSelectedIssue(null);
+      setSelectedMR(null);
+    }
+  }, [viewState]);
+
+  // Listen for opacity change event from content script
+  useEffect(() => {
+    const handleOpacityChange = (event: Event) => {
+      const detail = (event as CustomEvent<{ opacity: number }>).detail;
+      if (detail && typeof detail.opacity === 'number') {
+        console.log(
+          `QA Extension (React): Setting popup opacity to ${detail.opacity}`
+        );
+        setOpacity(detail.opacity);
+      }
+    };
+
+    window.addEventListener(
+      'qa-floating-trigger-opacity',
+      handleOpacityChange as EventListener
+    );
+
+    return () => {
+      window.removeEventListener(
+        'qa-floating-trigger-opacity',
+        handleOpacityChange as EventListener
+      );
+    };
+  }, []);
+
+  // Restore opacity when hovered
+  useEffect(() => {
+    if (isHovered && opacity < 1) {
+      setOpacity(1);
+    }
+  }, [isHovered, opacity]);
+
+  useEffect(() => {
+    const handleVisibilityEvent = (event: Event) => {
+      const detail = (
+        event as CustomEvent<{
+          visible: boolean;
+          reason?: 'auto' | 'manual';
+        }>
+      ).detail;
+      if (!detail) return;
+
+      const reason = detail.reason ?? 'auto';
+      if (!detail.visible) {
+        setHiddenReason(reason);
+        setViewState('closed');
+      } else {
+        if (!hiddenReason) return;
+        if (reason === 'auto' && hiddenReason !== 'auto') {
+          // Respect manual hides until explicitly restored
+          return;
+        }
+        setHiddenReason(null);
+        restoreLastExpandedState();
+      }
+    };
+
+    window.addEventListener(
+      'qa-floating-trigger-visibility',
+      handleVisibilityEvent as EventListener
+    );
+    return () =>
+      window.removeEventListener(
+        'qa-floating-trigger-visibility',
+        handleVisibilityEvent as EventListener
+      );
+  }, [hiddenReason, restoreLastExpandedState]);
 
   const handleMouseDown = (e: React.MouseEvent) => {
     // Allow dragging from anywhere on the popup, but track what was clicked
@@ -175,7 +320,22 @@ const FloatingTriggerInner: React.FC<FloatingTriggerProps> = ({ onClose }) => {
   ]);
 
   const toggleView = () => {
-    setViewState(viewState === 'closed' ? 'features' : 'closed');
+    if (viewState === 'closed') {
+      // Restore the last expanded state if it exists
+      const last = lastExpandedStateRef.current;
+      if (last && last.viewState !== 'closed') {
+        setSelectedFeature(last.selectedFeature);
+        setSelectedIssue(last.selectedIssue);
+        setSelectedMR(last.selectedMR);
+        setViewState(last.viewState);
+      } else {
+        // No previous state, open to features list
+        setViewState('features');
+      }
+    } else {
+      // Close the popup
+      setViewState('closed');
+    }
   };
 
   const handleFeatureSelect = (feature: string) => {
@@ -242,6 +402,9 @@ const FloatingTriggerInner: React.FC<FloatingTriggerProps> = ({ onClose }) => {
       viewState={viewState}
       position={position}
       selectedFeature={selectedFeature}
+      hidden={!!hiddenReason}
+      opacity={opacity}
+      onHoverChange={setIsHovered}
       containerRef={el => {
         try {
           setOwnerDoc(el?.ownerDocument || null);

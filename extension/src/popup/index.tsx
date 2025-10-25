@@ -282,6 +282,68 @@ const PopupApp: React.FC = () => {
     }
   };
 
+  const setFloatingTriggerVisibility = async (
+    tabId: number,
+    visible: boolean,
+    reason: 'auto' | 'manual' = 'auto'
+  ): Promise<boolean> => {
+    return await new Promise(resolve => {
+      try {
+        chrome.tabs.sendMessage(
+          tabId,
+          {
+            type: MessageType.SET_FLOATING_TRIGGER_VISIBILITY,
+            data: { visible, reason },
+          },
+          response => {
+            const err = chrome.runtime.lastError;
+            if (err) {
+              resolve(false);
+              return;
+            }
+            if (response && response.success === false) {
+              resolve(false);
+              return;
+            }
+            resolve(true);
+          }
+        );
+      } catch (error) {
+        console.warn(
+          'Popup: Failed to toggle floating trigger visibility',
+          error
+        );
+        resolve(false);
+      }
+    });
+  };
+
+  const withFloatingTriggerHidden = async <T,>(
+    tab: chrome.tabs.Tab | undefined,
+    action: () => Promise<T>
+  ): Promise<T> => {
+    let hid = false;
+    if (tab?.id) {
+      try {
+        hid = await setFloatingTriggerVisibility(tab.id, false, 'auto');
+      } catch (error) {
+        console.warn('Popup: Failed to hide floating trigger', error);
+      }
+    }
+
+    try {
+      return await action();
+    } finally {
+      if (tab?.id && hid) {
+        try {
+          await setFloatingTriggerVisibility(tab.id, true, 'auto');
+        } catch (error) {
+          console.warn('Popup: Failed to restore floating trigger', error);
+        }
+      }
+    }
+  };
+
   // Removed recent screenshots loader
 
   const handleLogout = async (): Promise<void> => {
@@ -327,7 +389,7 @@ const PopupApp: React.FC = () => {
         currentWindow: true,
       });
 
-      if (!tab.id) {
+      if (!tab?.id) {
         setState(prev => ({
           ...prev,
           error: 'No active tab found',
@@ -335,7 +397,6 @@ const PopupApp: React.FC = () => {
         return;
       }
 
-      // Check if we can access the tab (not a chrome:// or extension page)
       if (
         tab.url?.startsWith('chrome://') ||
         tab.url?.startsWith('chrome-extension://') ||
@@ -349,7 +410,6 @@ const PopupApp: React.FC = () => {
         return;
       }
 
-      // Check if content script is already available
       const isTabEligible = (t?: chrome.tabs.Tab) => {
         if (!t || !t.url) return false;
         const url = t.url;
@@ -392,13 +452,11 @@ const PopupApp: React.FC = () => {
         });
         contentScriptAvailable = !!response;
       } catch (error) {
-        // Content script not available, need to inject
         console.log('Content script not available, injecting...');
       }
 
       if (!contentScriptAvailable) {
         try {
-          // Try to inject content script if it's not already there
           if (chrome.scripting && chrome.scripting.executeScript) {
             await chrome.scripting.executeScript({
               target: { tabId: tab.id },
@@ -432,7 +490,6 @@ const PopupApp: React.FC = () => {
               }
             });
           }
-          // Wait a bit for content script to initialize
           await new Promise(resolve => setTimeout(resolve, 100));
         } catch (injectionError) {
           console.log('Content script injection failed:', injectionError);
@@ -444,34 +501,38 @@ const PopupApp: React.FC = () => {
         }
       }
 
-      try {
-        const response = await new Promise<any>(resolve => {
-          chrome.tabs.sendMessage(
-            tab.id!,
-            { type: MessageType.CAPTURE_ELEMENT, data: {} },
-            reply => {
-              const _ = chrome.runtime.lastError;
-              resolve(reply);
-            }
-          );
-        });
+      await withFloatingTriggerHidden(tab, async () => {
+        try {
+          const response = await new Promise<any>(resolve => {
+            chrome.tabs.sendMessage(
+              tab.id!,
+              { type: MessageType.CAPTURE_ELEMENT, data: {} },
+              reply => {
+                const _ = chrome.runtime.lastError;
+                resolve(reply);
+              }
+            );
+          });
 
-        if (response && response.success) {
-          setState(prev => ({
-            ...prev,
-            success: 'Screenshot captured and saved as draft!',
-          }));
-        } else {
-          setState(prev => ({
-            ...prev,
-            error: response?.error || 'Failed to capture screenshot',
-          }));
+          if (response && response.success) {
+            setState(prev => ({
+              ...prev,
+              success: 'Screenshot captured and saved as draft!',
+            }));
+          } else {
+            setState(prev => ({
+              ...prev,
+              error: response?.error || 'Failed to capture screenshot',
+            }));
+          }
+        } catch (messageError) {
+          console.error(
+            'Message sending failed, trying fallback:',
+            messageError
+          );
+          await handleSimpleScreenshotCapture(tab);
         }
-      } catch (messageError) {
-        console.error('Message sending failed, trying fallback:', messageError);
-        // Fallback: try simple screenshot capture first
-        await handleSimpleScreenshotCapture(tab);
-      }
+      });
     } catch (error) {
       console.error('Quick capture error:', error);
       setState(prev => ({
@@ -484,111 +545,106 @@ const PopupApp: React.FC = () => {
   const handleSimpleScreenshotCapture = async (
     tab: chrome.tabs.Tab
   ): Promise<void> => {
-    try {
-      console.log('Attempting simple screenshot capture...');
+    await withFloatingTriggerHidden(tab, async () => {
+      try {
+        console.log('Attempting simple screenshot capture...');
 
-      // Try to capture screenshot directly
-      const response = await new Promise<any>(resolve => {
-        chrome.runtime.sendMessage(
-          { type: MessageType.CAPTURE_SCREENSHOT },
-          reply => {
-            const _ = chrome.runtime.lastError;
-            resolve(reply);
-          }
-        );
-      });
+        const response = await new Promise<any>(resolve => {
+          chrome.runtime.sendMessage(
+            { type: MessageType.CAPTURE_SCREENSHOT },
+            reply => {
+              const _ = chrome.runtime.lastError;
+              resolve(reply);
+            }
+          );
+        });
 
-      if (response && response.success) {
-        console.log('Simple screenshot captured, saving manually...');
+        if (response && response.success) {
+          console.log('Simple screenshot captured, saving manually...');
 
-        // Create a simple draft manually
-
-        setState(prev => ({
-          ...prev,
-          success: 'Screenshot captured and saved as draft!',
-        }));
-      } else {
-        // If simple capture fails, try direct capture
+          setState(prev => ({
+            ...prev,
+            success: 'Screenshot captured and saved as draft!',
+          }));
+        } else {
+          console.log(
+            'Simple capture returned no success, trying direct capture...'
+          );
+          await handleDirectCapture(tab);
+        }
+      } catch (error) {
+        console.error('Simple screenshot capture failed:', error);
         console.log(
-          'Simple capture returned no success, trying direct capture...'
+          'Simple capture failed with exception, trying direct capture...'
         );
         await handleDirectCapture(tab);
       }
-    } catch (error) {
-      console.error('Simple screenshot capture failed:', error);
-      // If simple capture fails, try direct capture
-      console.log(
-        'Simple capture failed with exception, trying direct capture...'
-      );
-      await handleDirectCapture(tab);
-    }
+    });
   };
 
   const handleDirectCapture = async (tab: chrome.tabs.Tab): Promise<void> => {
-    try {
-      console.log('Attempting direct capture without background script...');
+    await withFloatingTriggerHidden(tab, async () => {
+      try {
+        console.log('Attempting direct capture without background script...');
 
-      // Try to capture screenshot directly using chrome.tabs API
-      // This should work from popup context with activeTab permission
-      const screenshot = await chrome.tabs.captureVisibleTab();
-      console.log('Direct screenshot captured successfully');
+        await chrome.tabs.captureVisibleTab();
+        console.log('Direct screenshot captured successfully');
 
-      // Save directly using storage service
-
-      setState(prev => ({
-        ...prev,
-        success: 'Screenshot captured and saved as draft!',
-      }));
-    } catch (error) {
-      console.error('Direct capture failed:', error);
-      setState(prev => ({
-        ...prev,
-        error: `Screenshot capture failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
-      }));
-    }
-  };
-
-  const handleFallbackCapture = async (tab: chrome.tabs.Tab): Promise<void> => {
-    try {
-      console.log('Attempting fallback capture for tab:', tab.id, tab.url);
-
-      // Send message to background script to handle capture directly
-      const response = await new Promise<any>(resolve => {
-        chrome.runtime.sendMessage(
-          {
-            type: MessageType.FALLBACK_QUICK_CAPTURE,
-            data: { tabId: tab.id, url: tab.url, title: tab.title },
-          },
-          reply => {
-            const _ = chrome.runtime.lastError;
-            resolve(reply);
-          }
-        );
-      });
-
-      console.log('Fallback capture response:', response);
-
-      if (response && response.success) {
         setState(prev => ({
           ...prev,
           success: 'Screenshot captured and saved as draft!',
         }));
-      } else {
-        const errorMsg =
-          response?.error ||
-          'Failed to capture screenshot using fallback method';
-        console.error('Fallback capture failed with error:', errorMsg);
+      } catch (error) {
+        console.error('Direct capture failed:', error);
         setState(prev => ({
           ...prev,
-          error: errorMsg,
+          error: `Screenshot capture failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
         }));
       }
-    } catch (error) {
-      console.error('Fallback capture exception:', error);
-      console.log('Trying direct capture as last resort...');
-      // Try direct capture as last resort
-      await handleDirectCapture(tab);
-    }
+    });
+  };
+
+  const handleFallbackCapture = async (tab: chrome.tabs.Tab): Promise<void> => {
+    await withFloatingTriggerHidden(tab, async () => {
+      try {
+        console.log('Attempting fallback capture for tab:', tab.id, tab.url);
+
+        const response = await new Promise<any>(resolve => {
+          chrome.runtime.sendMessage(
+            {
+              type: MessageType.FALLBACK_QUICK_CAPTURE,
+              data: { tabId: tab.id, url: tab.url, title: tab.title },
+            },
+            reply => {
+              const _ = chrome.runtime.lastError;
+              resolve(reply);
+            }
+          );
+        });
+
+        console.log('Fallback capture response:', response);
+
+        if (response && response.success) {
+          setState(prev => ({
+            ...prev,
+            success: 'Screenshot captured and saved as draft!',
+          }));
+        } else {
+          const errorMsg =
+            response?.error ||
+            'Failed to capture screenshot using fallback method';
+          console.error('Fallback capture failed with error:', errorMsg);
+          setState(prev => ({
+            ...prev,
+            error: errorMsg,
+          }));
+        }
+      } catch (error) {
+        console.error('Fallback capture exception:', error);
+        console.log('Trying direct capture as last resort...');
+        await handleDirectCapture(tab);
+      }
+    });
   };
 
   const openOptionsPage = (): void => {

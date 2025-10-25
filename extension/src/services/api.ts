@@ -1757,6 +1757,7 @@ class ApiService {
       reviewer_id?: number | 'me';
       source_branch?: string;
       target_branch?: string;
+      scope?: 'all' | 'created_by_me' | 'assigned_to_me';
     }
   ): Promise<ApiResponse<ListMRsResponse>> {
     const params = new URLSearchParams();

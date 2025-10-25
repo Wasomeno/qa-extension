@@ -981,22 +981,52 @@ class BackgroundService {
         currentWindow: true,
       });
       if (tabs[0] && tabs[0].id) {
-        // Send message to content script to handle capture
-        const response = await this.sendMessageToTab(tabs[0].id, {
-          type: MessageType.CAPTURE_ELEMENT,
-          data: {},
-        });
+        const tabId = tabs[0].id;
+        let hidden = false;
+        try {
+          try {
+            await this.sendMessageToTab(tabId, {
+              type: MessageType.SET_FLOATING_TRIGGER_VISIBILITY,
+              data: { visible: false, reason: 'auto' },
+            });
+            hidden = true;
+          } catch (error) {
+            console.warn(
+              'Quick capture: unable to hide floating trigger',
+              error
+            );
+          }
 
-        if (response && response.success) {
-          this.showNotification(
-            'Quick capture completed',
-            'Screenshot and context captured successfully.'
-          );
-        } else {
-          this.showNotification(
-            'Quick capture failed',
-            response?.error || 'Unable to capture screenshot'
-          );
+          const response = await this.sendMessageToTab(tabId, {
+            type: MessageType.CAPTURE_ELEMENT,
+            data: {},
+          });
+
+          if (response && response.success) {
+            this.showNotification(
+              'Quick capture completed',
+              'Screenshot and context captured successfully.'
+            );
+          } else {
+            this.showNotification(
+              'Quick capture failed',
+              response?.error || 'Unable to capture screenshot'
+            );
+          }
+        } finally {
+          if (hidden) {
+            try {
+              await this.sendMessageToTab(tabId, {
+                type: MessageType.SET_FLOATING_TRIGGER_VISIBILITY,
+                data: { visible: true, reason: 'auto' },
+              });
+            } catch (error) {
+              console.warn(
+                'Quick capture: unable to restore floating trigger',
+                error
+              );
+            }
+          }
         }
       }
     } catch (error) {

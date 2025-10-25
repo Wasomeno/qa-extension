@@ -14,10 +14,45 @@ class SimpleTrigger {
   private shadowDOMInstance: any = null;
   private iframeHost: any = null;
   private keepalivePort: chrome.runtime.Port | null = null;
+  private hiddenReason: 'auto' | 'manual' | null = null;
+  private screenshotHideTimeout: number | null = null;
+  private readonly SCREENSHOT_RESTORE_DELAY = 7000;
+  private screenshotShortcutHandler = (event: KeyboardEvent) => {
+    // On Mac, detect Shift+Command combination to make popup nearly invisible
+    const platform =
+      typeof navigator !== 'undefined'
+        ? (navigator.platform || navigator.userAgent || '').toLowerCase()
+        : '';
+    const isMac = /mac|darwin/.test(platform);
+
+    if (
+      isMac &&
+      event.metaKey &&
+      event.shiftKey &&
+      !event.ctrlKey &&
+      !event.altKey
+    ) {
+      // Only trigger if it's a modifier key itself (not another key with modifiers)
+      const isModifierOnly = event.key === 'Meta' || event.key === 'Shift';
+      if (isModifierOnly) {
+        console.log(
+          'QA Extension: Cmd+Shift detected, making popup nearly invisible'
+        );
+        void this.setFloatingTriggerOpacity(0.1);
+        return;
+      }
+    }
+
+    if (this.isNativeScreenshotShortcut(event)) {
+      this.handleNativeScreenshot();
+    }
+  };
+  private screenshotListenersAttached = false;
 
   constructor() {
     this.setupMessageListener();
     this.setupKeyboardShortcuts();
+    this.registerScreenshotShortcutListener();
     this.ensureKeepalive();
 
     // Auto-activate on allowed domains
@@ -50,7 +85,8 @@ class SimpleTrigger {
   private shouldShowFloatingTrigger(): boolean {
     // Show on all non-internal pages; actual injection guard exists in injectFloatingTrigger
     const href = window.location.href;
-    if (href.startsWith('chrome://') || href.startsWith('chrome-extension://')) return false;
+    if (href.startsWith('chrome://') || href.startsWith('chrome-extension://'))
+      return false;
     return true;
   }
 
@@ -59,9 +95,183 @@ class SimpleTrigger {
       // Ctrl+Shift+Q to toggle floating trigger
       if (e.ctrlKey && e.shiftKey && e.key === 'Q') {
         e.preventDefault();
-        this.activate();
+        void this.handleToggleShortcut();
+      }
+
+      // Cmd+Shift+H to hide for screenshot (Mac)
+      // Ctrl+Shift+H to hide for screenshot (Windows/Linux)
+      if (
+        e.shiftKey &&
+        (e.metaKey || e.ctrlKey) &&
+        (e.key === 'H' || e.key === 'h')
+      ) {
+        e.preventDefault();
+        console.log('QA Extension: Manual screenshot hide triggered');
+        void this.handleNativeScreenshot();
       }
     });
+  }
+
+  private registerScreenshotShortcutListener(): void {
+    if (this.screenshotListenersAttached) return;
+    try {
+      // Use capture phase (true) to catch events before they might be stopped
+      window.addEventListener('keydown', this.screenshotShortcutHandler, {
+        capture: true,
+        passive: true,
+      });
+      document.addEventListener('keydown', this.screenshotShortcutHandler, {
+        capture: true,
+        passive: true,
+      });
+      this.screenshotListenersAttached = true;
+      console.log('QA Extension: Screenshot shortcut listener registered');
+    } catch (error) {
+      console.warn('QA Extension: Failed to attach screenshot listener', error);
+    }
+  }
+
+  private async handleToggleShortcut(): Promise<void> {
+    try {
+      // If manually hidden, show it again
+      if (this.hiddenReason === 'manual') {
+        await this.setFloatingTriggerVisibility(true, 'manual');
+        return;
+      }
+
+      if (this.floatingTriggerContainer) {
+        // Toggle off manually
+        await this.setFloatingTriggerVisibility(false, 'manual');
+      } else {
+        await this.activate();
+      }
+    } catch (error) {
+      console.warn('QA Extension: Toggle shortcut failed', error);
+    }
+  }
+
+  private isNativeScreenshotShortcut(event: KeyboardEvent): boolean {
+    try {
+      const key = event.key || '';
+      const lower = key.toLowerCase();
+      const platform =
+        typeof navigator !== 'undefined'
+          ? (navigator.platform || navigator.userAgent || '').toLowerCase()
+          : '';
+      const isMac = /mac|darwin/.test(platform);
+
+      if (isMac) {
+        // Mac screenshot shortcuts: Cmd+Shift+3/4/5
+        // Check both key and code for better compatibility
+
+        if (event.metaKey && event.shiftKey) {
+          return true;
+        }
+        return false;
+      }
+
+      // Windows/Linux screenshot shortcuts
+      if (key === 'PrintScreen') return true;
+      if (event.metaKey && event.shiftKey && lower === 's') return true;
+      if (event.ctrlKey && event.shiftKey && lower === 's') return true;
+      return false;
+    } catch {
+      return false;
+    }
+  }
+
+  private async setFloatingTriggerOpacity(opacity: number): Promise<void> {
+    try {
+      const hostWindow = this.getHostWindow();
+      hostWindow.dispatchEvent(
+        new CustomEvent('qa-floating-trigger-opacity', {
+          detail: { opacity },
+        })
+      );
+      console.log(`QA Extension: Set popup opacity to ${opacity}`);
+    } catch (error) {
+      console.warn('QA Extension: Failed to set popup opacity', error);
+    }
+  }
+
+  private handleNativeScreenshot(): void {
+    console.log(
+      'QA Extension: Handling native screenshot - hiding floating trigger'
+    );
+    if (this.hiddenReason === 'manual') {
+      console.log('QA Extension: Skipping auto-hide due to manual hide state');
+      return;
+    }
+    void this.setFloatingTriggerVisibility(false, 'auto')
+      .then(success => {
+        if (success) {
+          console.log(
+            'QA Extension: Successfully hid floating trigger, scheduling restore'
+          );
+          this.scheduleScreenshotRestore();
+        } else {
+          console.log('QA Extension: Failed to hide floating trigger');
+        }
+      })
+      .catch(error => {
+        console.warn(
+          'QA Extension: Failed to hide floating trigger for screenshot',
+          error
+        );
+      });
+  }
+
+  private scheduleScreenshotRestore(): void {
+    this.clearScreenshotHideTimeout();
+    try {
+      this.screenshotHideTimeout = window.setTimeout(async () => {
+        this.screenshotHideTimeout = null;
+        if (this.hiddenReason === 'auto') {
+          try {
+            await this.setFloatingTriggerVisibility(true, 'auto');
+          } catch (error) {
+            console.warn(
+              'QA Extension: Failed to restore floating trigger after screenshot',
+              error
+            );
+          }
+        }
+      }, this.SCREENSHOT_RESTORE_DELAY);
+    } catch (error) {
+      console.warn(
+        'QA Extension: Failed to schedule floating trigger restore',
+        error
+      );
+    }
+  }
+
+  private clearScreenshotHideTimeout(): void {
+    if (this.screenshotHideTimeout !== null) {
+      try {
+        window.clearTimeout(this.screenshotHideTimeout);
+      } catch {}
+      this.screenshotHideTimeout = null;
+    }
+  }
+
+  private removeScreenshotShortcutListener(): void {
+    if (!this.screenshotListenersAttached) return;
+    try {
+      window.removeEventListener(
+        'keydown',
+        this.screenshotShortcutHandler,
+        true
+      );
+      document.removeEventListener(
+        'keydown',
+        this.screenshotShortcutHandler,
+        true
+      );
+    } catch (error) {
+      console.warn('QA Extension: Failed to detach screenshot listener', error);
+    } finally {
+      this.screenshotListenersAttached = false;
+    }
   }
 
   private setupMessageListener(): void {
@@ -73,6 +283,31 @@ class SimpleTrigger {
             data: { enabled: !!this.floatingTriggerContainer },
           });
         });
+        return true;
+      }
+
+      if (message.type === MessageType.SET_FLOATING_TRIGGER_VISIBILITY) {
+        const { visible, reason } = message.data || {};
+        const targetVisible = visible !== false;
+        const reasonValue = reason === 'manual' ? 'manual' : 'auto';
+
+        this.setFloatingTriggerVisibility(targetVisible, reasonValue)
+          .then(result => {
+            sendResponse({ success: result, data: { visible: targetVisible } });
+          })
+          .catch(error => {
+            console.error(
+              'QA Extension: Failed to toggle floating trigger visibility',
+              error
+            );
+            sendResponse({
+              success: false,
+              error:
+                error instanceof Error
+                  ? error.message
+                  : 'Toggle visibility failed',
+            });
+          });
         return true;
       }
 
@@ -126,11 +361,80 @@ class SimpleTrigger {
     }
   }
 
+  private getHostWindow(): Window {
+    try {
+      if (this.iframeHost?.iframe?.contentWindow) {
+        return this.iframeHost.iframe.contentWindow;
+      }
+      if (this.floatingTriggerContainer?.ownerDocument?.defaultView) {
+        return this.floatingTriggerContainer.ownerDocument.defaultView;
+      }
+    } catch (error) {
+      console.warn('QA Extension: Failed to resolve host window', error);
+    }
+    return window;
+  }
+
+  private async setFloatingTriggerVisibility(
+    visible: boolean,
+    reason: 'auto' | 'manual'
+  ): Promise<boolean> {
+    if (!visible && reason === 'auto' && this.hiddenReason === 'manual') {
+      return false;
+    }
+
+    if (visible && !this.floatingTriggerContainer) {
+      await this.activate();
+    }
+
+    if (!this.floatingTriggerContainer) {
+      return false;
+    }
+
+    try {
+      const hostWindow = this.getHostWindow();
+      hostWindow.dispatchEvent(
+        new CustomEvent('qa-floating-trigger-visibility', {
+          detail: { visible, reason },
+        })
+      );
+
+      if (!visible) {
+        if (reason === 'manual') {
+          this.clearScreenshotHideTimeout();
+        }
+        this.hiddenReason = reason;
+      } else if (
+        reason === 'manual' ||
+        (reason === 'auto' && this.hiddenReason === 'auto')
+      ) {
+        this.hiddenReason = null;
+        if (reason === 'manual') {
+          this.clearScreenshotHideTimeout();
+        }
+      }
+
+      return true;
+    } catch (error) {
+      console.warn(
+        'QA Extension: Error dispatching floating trigger visibility event',
+        error
+      );
+      return false;
+    }
+  }
+
   private async activate(): Promise<void> {
     if (!this.isActive) {
       this.isActive = true;
-      await this.injectFloatingTrigger();
+      try {
+        await this.injectFloatingTrigger();
+      } catch (error) {
+        this.isActive = false;
+        throw error;
+      }
     }
+    this.hiddenReason = null;
   }
 
   private async injectFloatingTrigger(): Promise<void> {
@@ -156,7 +460,9 @@ class SimpleTrigger {
       const useIframe = (() => {
         try {
           return localStorage.getItem('QA_USE_IFRAME_HOST') === '1';
-        } catch { return false; }
+        } catch {
+          return false;
+        }
       })();
 
       // NOTE: Avoid injecting global portal styles into the page to
@@ -167,7 +473,10 @@ class SimpleTrigger {
       if (useIframe) {
         console.log('QA Extension: Using iframe host for floating trigger');
         // Create isolated iframe host
-        this.iframeHost = createIframeHost({ id: 'qa-floating-trigger-iframe', css });
+        this.iframeHost = createIframeHost({
+          id: 'qa-floating-trigger-iframe',
+          css,
+        });
         // In iframe, allow interactivity at root container
         this.iframeHost.container.style.pointerEvents = 'none';
         // Create a child mount node that can receive pointer events
@@ -176,7 +485,9 @@ class SimpleTrigger {
         this.iframeHost.container.appendChild(mount);
 
         // Mark wrapper for styles
-        try { mount.classList.add('qa-floating-trigger'); } catch {}
+        try {
+          mount.classList.add('qa-floating-trigger');
+        } catch {}
 
         this.floatingTriggerContainer = mount as any;
         this.floatingTriggerRoot = createRoot(mount);
@@ -225,14 +536,20 @@ class SimpleTrigger {
     }
 
     if (this.iframeHost) {
-      try { this.iframeHost.destroy(); } catch {}
+      try {
+        this.iframeHost.destroy();
+      } catch {}
       this.iframeHost = null;
     }
 
     this.floatingTriggerContainer = null;
+    this.isActive = false;
+    this.hiddenReason = null;
   }
 
   destroy(): void {
+    this.removeScreenshotShortcutListener();
+    this.clearScreenshotHideTimeout();
     this.removeFloatingTrigger();
     shadowDOMManager.destroyAll();
   }

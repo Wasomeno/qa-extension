@@ -6,11 +6,10 @@ import type {
   MergeRequestSummary,
 } from '@/types/merge-requests';
 
-export interface UseInfiniteMRsParams extends Omit<ListMRsParams, 'page'> {
+export interface UseInfiniteMRsParams
+  extends Omit<ListMRsParams, 'page' | 'projectId'> {
   projectIds?: string[];
 }
-
-let aggregateEndpointSupported: boolean | null = null;
 
 export const useInfiniteMergeRequests = (params: UseInfiniteMRsParams) => {
   const [allItems, setAllItems] = useState<MergeRequestSummary[]>([]);
@@ -80,75 +79,6 @@ export const useInfiniteMergeRequests = (params: UseInfiniteMRsParams) => {
         page: pageToFetch,
       };
 
-      const shouldTryAggregate =
-        aggregateEndpointSupported !== false &&
-        params.projectIds &&
-        params.projectIds.length > 0;
-
-      if (shouldTryAggregate) {
-        try {
-          const aggregated = await apiService.getMergeRequestsForProjects(
-            params.projectIds,
-            baseOptions
-          );
-
-          if (aggregated.success && aggregated.data) {
-            aggregateEndpointSupported = true;
-
-            const fetchedItems = Array.isArray(aggregated.data.items)
-              ? (aggregated.data.items as MergeRequestSummary[])
-              : [];
-
-            const sortedItems = [...fetchedItems].sort((a, b) => {
-              const dateA = new Date(
-                order_by === 'created_at' ? a.created_at : a.updated_at
-              );
-              const dateB = new Date(
-                order_by === 'created_at' ? b.created_at : b.updated_at
-              );
-              return sort === 'asc'
-                ? dateA.getTime() - dateB.getTime()
-                : dateB.getTime() - dateA.getTime();
-            });
-
-            const nextPage =
-              typeof aggregated.data.nextPage === 'number'
-                ? aggregated.data.nextPage
-                : fetchedItems.length >= perPage
-                  ? pageToFetch + 1
-                  : null;
-
-            return {
-              items: sortedItems,
-              total: aggregated.data.total ?? fetchedItems.length,
-              nextPage,
-            };
-          }
-
-          if (!aggregated.success) {
-            const reason = aggregated.error || aggregated.message || '';
-            const routeMissing =
-              typeof reason === 'string' &&
-              reason.toLowerCase().includes('route not found');
-            if (routeMissing) {
-              aggregateEndpointSupported = false;
-            }
-            if (reason) {
-              console.warn(
-                'Aggregated MR fetch unavailable, using per-project fallback:',
-                reason
-              );
-            }
-          }
-        } catch (error) {
-          aggregateEndpointSupported = false;
-          console.warn(
-            'Aggregated MR fetch failed, falling back to per-project requests:',
-            error
-          );
-        }
-      }
-
       try {
         const results = await Promise.all(
           params.projectIds.map(projectId =>
@@ -211,6 +141,7 @@ export const useInfiniteMergeRequests = (params: UseInfiniteMRsParams) => {
     [
       params.projectIds,
       params.state,
+      params.scope,
       params.search,
       params.sort,
       params.per_page,
@@ -302,6 +233,7 @@ export const useInfiniteMergeRequests = (params: UseInfiniteMRsParams) => {
     currentPage,
     params.projectIds,
     params.state,
+    params.scope,
     params.search,
     params.sort,
     params.per_page,

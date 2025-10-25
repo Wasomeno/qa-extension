@@ -45,6 +45,7 @@ export const useIssueCreator = ({
     handleSubmit,
     watch,
     setValue,
+    reset,
     formState: { errors },
   } = useForm<IssueData>({
     defaultValues: {
@@ -300,6 +301,7 @@ export const useIssueCreator = ({
     handleSubmit: handleSubmit(onSubmitForm),
     watch,
     setValue,
+    reset,
     errors,
     watchedValues,
 

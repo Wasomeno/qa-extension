@@ -58,6 +58,7 @@ import { PiSlackLogoLight } from 'react-icons/pi';
 import { apiService } from '@/services/api';
 import MarkdownIt from 'markdown-it';
 import taskLists from 'markdown-it-task-lists';
+import { getLastUsedPreset } from '@/utils/mrPresets';
 
 const PLACEHOLDER_FEATURES = new Set(['Feature A', 'Feature B', 'Feature C']);
 
@@ -104,11 +105,18 @@ interface CompactMergeRequestCreatorProps {
   onSubmit?: (mr: MergeRequestData) => void;
   onCancel?: () => void;
   portalContainer?: Element | null;
+  resetTrigger?: number; // Increment this to trigger form reset
 }
 
 export const CompactMergeRequestCreator: React.FC<
   CompactMergeRequestCreatorProps
-> = ({ initialData = {}, onSubmit, onCancel, portalContainer }) => {
+> = ({
+  initialData = {},
+  onSubmit,
+  onCancel,
+  portalContainer,
+  resetTrigger,
+}) => {
   const keyboardIsolation = useKeyboardIsolation();
   const containerRef = React.useRef<HTMLDivElement>(null);
   const descriptionTextareaRef = React.useRef<HTMLTextAreaElement | null>(null);
@@ -201,6 +209,7 @@ export const CompactMergeRequestCreator: React.FC<
     register,
     handleSubmit,
     setValue,
+    reset,
     errors,
     watchedValues,
     isLoading,
@@ -218,7 +227,48 @@ export const CompactMergeRequestCreator: React.FC<
     onCancel,
   });
 
+  // Reset form after successful creation
+  React.useEffect(() => {
+    if (success) {
+      const timer = setTimeout(() => {
+        reset();
+      }, 1500); // Wait 1.5s to show success message before resetting
+      return () => clearTimeout(timer);
+    }
+  }, [success, reset]);
+
+  // Reset form when resetTrigger changes (navigating away from this feature)
+  React.useEffect(() => {
+    if (resetTrigger !== undefined && resetTrigger > 0) {
+      reset();
+    }
+  }, [resetTrigger, reset]);
+
   const descriptionField = register('description');
+  const [selectedProjectName, setSelectedProjectName] =
+    React.useState<string>('');
+
+  React.useEffect(() => {
+    if (!watchedValues.projectId) {
+      setSelectedProjectName('');
+      return;
+    }
+    const match = projects.find(p => p.id === watchedValues.projectId);
+    if (match) {
+      setSelectedProjectName(match.name);
+      return;
+    }
+    try {
+      const preset = getLastUsedPreset(watchedValues.projectId);
+      if (preset?.projectName) {
+        setSelectedProjectName(preset.projectName);
+        return;
+      }
+    } catch (error) {
+      console.warn('Failed to load MR preset for project name:', error);
+    }
+    setSelectedProjectName(watchedValues.projectId);
+  }, [projects, watchedValues.projectId]);
 
   // Markdown helpers for toolbar
   const getSel = () => {
@@ -364,9 +414,10 @@ export const CompactMergeRequestCreator: React.FC<
       return null;
     }
 
-    const projectName = projects.find(
-      p => p.id === watchedValues.projectId
-    )?.name;
+    const projectName =
+      selectedProjectName ||
+      projects.find(p => p.id === watchedValues.projectId)?.name ||
+      watchedValues.projectId;
 
     const channelName = getSlackChannelName(watchedValues.slackChannelId);
 
@@ -415,6 +466,7 @@ export const CompactMergeRequestCreator: React.FC<
     watchedValues.projectId,
     watchedValues.reviewerIds,
     projects,
+    selectedProjectName,
     slackUsersQuery.data,
     users,
     getSlackChannelName,
@@ -638,6 +690,10 @@ export const CompactMergeRequestCreator: React.FC<
       const p = list[idx];
       if (!p) return;
       setValue('projectId', p.id, { shouldDirty: true, shouldValidate: true });
+      setSelectedProjectName(p.name ?? '');
+      setQuery('');
+      setDebouncedQuery('');
+      setHighlight(0);
       setOpenProject(false);
     };
 
@@ -1179,7 +1235,10 @@ export const CompactMergeRequestCreator: React.FC<
                       );
                       return (
                         <span className="text-neutral-900 truncate max-w-[140px]">
-                          {p ? p.name : 'Select'}
+                          {selectedProjectName ||
+                            p?.name ||
+                            watchedValues.projectId ||
+                            'Select'}
                         </span>
                       );
                     })()}
