@@ -519,10 +519,7 @@ export class GitLabService {
       state?: 'opened' | 'closed' | 'all';
       labels?: string;
       milestone?: string;
-      assignee_id?: number;
-      author_id?: number;
       search?: string;
-      scope?: 'created_by_me' | 'assigned_to_me' | 'all';
       per_page?: number;
       page?: number;
       project_ids?: Array<number | string>;
@@ -532,7 +529,7 @@ export class GitLabService {
     try {
       const params: Record<string, any> = {
         state: options.state || 'opened',
-        scope: options.scope || 'all', // Default to 'all' to get all accessible issues
+        scope: 'all', // Default to 'all' to get all accessible issues
         per_page: options.per_page || 20,
         page: options.page || 1,
         order_by: 'updated_at',
@@ -550,8 +547,6 @@ export class GitLabService {
       // Add optional filters
       if (options.labels) params.labels = options.labels;
       if (options.milestone) params.milestone = options.milestone;
-      if (options.assignee_id) params.assignee_id = options.assignee_id;
-      if (options.author_id) params.author_id = options.author_id;
       if (options.search) params.search = options.search;
 
       // Add labels matching mode (OR by default as per your preference)
@@ -607,22 +602,6 @@ export class GitLabService {
 
         const projectIssuesResults = await Promise.all(projectIssuesPromises);
         allIssues = projectIssuesResults.flat();
-
-        // Remove duplicates based on issue ID (in case an issue appears in multiple results)
-        const uniqueIssuesMap = new Map<number, GitLabIssue>();
-        allIssues.forEach(issue => {
-          if (!uniqueIssuesMap.has(issue.id)) {
-            uniqueIssuesMap.set(issue.id, issue);
-          }
-        });
-        allIssues = Array.from(uniqueIssuesMap.values());
-
-        // Sort by updated_at descending to match the global API behavior
-        allIssues.sort((a, b) => {
-          const dateA = new Date(a.updated_at).getTime();
-          const dateB = new Date(b.updated_at).getTime();
-          return dateB - dateA;
-        });
       } else {
         // No specific projects - use GitLab's global issues API
         const response = await this.client.get('/issues', { params });

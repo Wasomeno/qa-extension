@@ -1057,29 +1057,10 @@ router.get(
         }
       });
 
-      if (localProjectIds.length > 0) {
-        const localProjects = await db
-          .projects()
-          .whereIn('id', localProjectIds)
-          .select('id', 'gitlab_project_id');
-
-        localProjects.forEach(project => {
-          const gitlabId = project?.gitlab_project_id;
-          const parsed =
-            gitlabId !== null && gitlabId !== undefined
-              ? Number(gitlabId)
-              : NaN;
-          if (!Number.isNaN(parsed)) {
-            directProjectIds.push(parsed);
-          }
-        });
-      }
-
       const projectIdFilters = Array.from(new Set(directProjectIds)).sort(
         (a, b) => a - b
       );
 
-      // Determine author scope
       let author_id: number | undefined;
 
       const perPage = parseInt(limit as string, 10) || 5;
