@@ -58,10 +58,6 @@ export const useInfiniteMergeRequests = (params: UseInfiniteMRsParams) => {
 
   const fetchPage = useCallback(
     async (pageToFetch: number) => {
-      if (!params.projectIds || params.projectIds.length === 0) {
-        return { items: [], total: 0, nextPage: null };
-      }
-
       const order_by: 'created_at' | 'updated_at' =
         params.sort === 'oldest' ? 'created_at' : 'updated_at';
       const sort: 'asc' | 'desc' = params.sort === 'oldest' ? 'asc' : 'desc';
@@ -80,6 +76,29 @@ export const useInfiniteMergeRequests = (params: UseInfiniteMRsParams) => {
       };
 
       try {
+        // If no project IDs provided, use the global endpoint which will default to user's accessible projects
+        if (!params.projectIds || params.projectIds.length === 0) {
+          const globalResult = await apiService.getMergeRequestsForProjects(
+            [],
+            { ...baseOptions }
+          );
+
+          if (globalResult.success && globalResult.data) {
+            const items = Array.isArray(globalResult.data.items)
+              ? globalResult.data.items
+              : [];
+            const total = globalResult.data.total || items.length;
+            const hasMoreItems = items.length >= perPage;
+            return {
+              items,
+              total,
+              nextPage: hasMoreItems ? pageToFetch + 1 : null,
+            };
+          }
+
+          return { items: [], total: 0, nextPage: null };
+        }
+
         const results = await Promise.all(
           params.projectIds.map(projectId =>
             apiService.getMergeRequests(projectId, { ...baseOptions })
@@ -152,14 +171,6 @@ export const useInfiniteMergeRequests = (params: UseInfiniteMRsParams) => {
     queryKey,
     queryFn: async () => {
       try {
-        // Project IDs are required - return empty if not provided
-        if (!params.projectIds || params.projectIds.length === 0) {
-          setAllItems([]);
-          setCurrentPage(1);
-          setHasMore(false);
-          return { items: [], total: 0, nextPage: null };
-        }
-
         const pageResult = await fetchPage(1);
 
         setAllItems(pageResult.items);
@@ -175,17 +186,11 @@ export const useInfiniteMergeRequests = (params: UseInfiniteMRsParams) => {
     refetchOnWindowFocus: false,
     staleTime: 300_000, // 5 minutes
     gcTime: 300_000,
-    enabled: !!params.projectIds && params.projectIds.length > 0, // Only enabled when projects are selected
+    enabled: true, // Always enabled - backend will use default projects if none provided
   });
 
   const loadMore = useCallback(async () => {
-    if (
-      !hasMore ||
-      isLoadingMore ||
-      query.isFetching ||
-      !params.projectIds ||
-      params.projectIds.length === 0
-    ) {
+    if (!hasMore || isLoadingMore || query.isFetching) {
       return;
     }
 

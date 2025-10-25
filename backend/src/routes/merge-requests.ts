@@ -161,17 +161,12 @@ router.get(
       scope,
     } = req.query;
 
-    const projectIds = Array.from(
+    let projectIds = Array.from(
       new Set([
         ...parseProjectIdParam(projectIdsParam),
         ...parseProjectIdParam(projectIdsLegacy),
       ])
     );
-
-    if (projectIds.length === 0) {
-      sendResponse(res, 400, false, 'At least one projectId must be provided');
-      return;
-    }
 
     const userId = req.user!.id;
 
@@ -188,6 +183,39 @@ router.get(
         sendResponse(res, 401, false, 'GitLab not connected', null, {
           requiresGitLabAuth: true,
         });
+        return;
+      }
+
+      // If no project IDs provided, fetch first 5 accessible projects
+      if (projectIds.length === 0) {
+        try {
+          const gitlab = new GitLabService(oauthConnection.access_token);
+          const accessibleProjects = await gitlab.getProjects({
+            membership: true,
+            per_page: 5,
+            page: 1,
+          });
+          projectIds = accessibleProjects.map(project => String(project.id));
+          logger.info(
+            `No project IDs provided, using ${projectIds.length} accessible projects for merge requests for user ${userId}`
+          );
+        } catch (error) {
+          logger.warn(
+            'Failed to fetch accessible projects for merge requests:',
+            error
+          );
+          sendResponse(
+            res,
+            400,
+            false,
+            'Unable to fetch accessible projects. Please provide project IDs explicitly.'
+          );
+          return;
+        }
+      }
+
+      if (projectIds.length === 0) {
+        sendResponse(res, 404, false, 'No accessible projects found');
         return;
       }
 

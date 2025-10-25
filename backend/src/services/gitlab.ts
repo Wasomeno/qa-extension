@@ -485,11 +485,36 @@ export class GitLabService {
     } = {}
   ): Promise<GitLabIssue[]> {
     try {
-      const params = {
+      // Build params with only defined values
+      const params: Record<string, any> = {
         per_page: options.per_page || 20,
         page: options.page || 1,
-        ...options,
       };
+
+      // Only add parameters that have valid values
+      if (options.state) {
+        params.state = options.state;
+      }
+
+      if (options.labels && options.labels !== 'undefined') {
+        params.labels = options.labels;
+      }
+
+      if (options.milestone) {
+        params.milestone = options.milestone;
+      }
+
+      if (options.assignee_id !== undefined) {
+        params.assignee_id = options.assignee_id;
+      }
+
+      if (options.author_id !== undefined) {
+        params.author_id = options.author_id;
+      }
+
+      if (options.search) {
+        params.search = options.search;
+      }
 
       const cacheKey = `gitlab_issues:${projectId}:${JSON.stringify(params)}`;
 
@@ -527,35 +552,32 @@ export class GitLabService {
     } = {}
   ): Promise<GitLabIssue[]> {
     try {
+      // Build params object with only defined values (GitLab API doesn't like undefined/null params)
       const params: Record<string, any> = {
-        state: options.state || 'opened',
-        scope: 'all', // Default to 'all' to get all accessible issues
         per_page: options.per_page || 20,
         page: options.page || 1,
-        order_by: 'updated_at',
-        sort: 'desc',
       };
 
-      // DEBUG: Log what scope is being used
-      logger.info(
-        'getAllIssues called with scope:',
-        params.scope,
-        'options:',
-        JSON.stringify(options)
-      );
-
-      // Add optional filters
-      if (options.labels) params.labels = options.labels;
-      if (options.milestone) params.milestone = options.milestone;
-      if (options.search) params.search = options.search;
-
-      // Add labels matching mode (OR by default as per your preference)
-      if (options.labels_match_mode) {
-        params.labels =
-          options.labels_match_mode === 'and'
-            ? `${params.labels}`
-            : params.labels;
+      // Only add parameters that have valid values
+      if (options.state) {
+        params.state = options.state;
       }
+
+      if (options.labels && options.labels !== 'undefined') {
+        params.labels = options.labels;
+      }
+
+      if (options.milestone) {
+        params.milestone = options.milestone;
+      }
+
+      if (options.search) {
+        params.search = options.search;
+      }
+
+      // Add order_by and sort for consistent ordering
+      params.order_by = 'updated_at';
+      params.sort = 'desc';
 
       const cacheKey = `gitlab_global_issues:${JSON.stringify({
         ...params,
@@ -563,52 +585,46 @@ export class GitLabService {
         labels_match_mode: options.labels_match_mode || 'or',
       })}`;
 
-      // Check cache first
-      const cached = await this.safeRedisGet<GitLabIssue[]>(cacheKey);
-      if (cached) {
-        return cached;
-      }
+      // // Check cache first
+      // const cached = await this.safeRedisGet<GitLabIssue[]>(cacheKey);
+      // if (cached) {
+      //   return cached;
+      // }
 
       let allIssues: GitLabIssue[] = [];
 
       // If specific project_ids are provided, fetch from each project
-      if (options.project_ids && options.project_ids.length > 0) {
-        // Make parallel API calls for each project
-        const projectIssuesPromises = options.project_ids.map(
-          async projectId => {
-            try {
-              const projectParams: Record<string, any> = {
-                ...params,
-                project_id: projectId,
-              };
-              delete projectParams.scope; // Project-specific endpoint doesn't support scope
-
-              const response = await this.client.get(
-                `/projects/${this.normalizeProjectId(projectId)}/issues`,
-                {
-                  params: projectParams,
-                }
-              );
-              return response.data as GitLabIssue[];
-            } catch (error) {
-              logger.error(
-                `Failed to fetch issues for project ${projectId}:`,
-                error
-              );
-              return [];
-            }
-          }
-        );
-
-        const projectIssuesResults = await Promise.all(projectIssuesPromises);
-        allIssues = projectIssuesResults.flat();
-      } else {
-        // No specific projects - use GitLab's global issues API
-        const response = await this.client.get('/issues', { params });
-        allIssues = response.data as GitLabIssue[];
+      if (!options.project_ids || options.project_ids.length === 0) {
+        // No project IDs provided, return empty array
+        return allIssues;
       }
 
-      // Cache for 2 minutes
+      // Make parallel API calls for each project
+      const projectIssuesPromises = options.project_ids.map(
+        async (projectId): Promise<GitLabIssue[]> => {
+          try {
+            // Create a clean copy of params for this request
+            const projectParams: Record<string, any> = { ...params };
+
+            const response = await this.client.get(
+              `/projects/${this.normalizeProjectId(projectId)}/issues`,
+              {
+                params: projectParams,
+              }
+            );
+            return response.data as GitLabIssue[];
+          } catch (error) {
+            logger.error(
+              `Failed to fetch issues for project ${projectId}:`,
+              error
+            );
+            return [];
+          }
+        }
+      );
+
+      const projectIssuesResults = await Promise.all(projectIssuesPromises);
+      allIssues = projectIssuesResults.flat();
       await this.safeRedisSet(cacheKey, allIssues, 120);
 
       return allIssues;
@@ -1460,11 +1476,57 @@ export class GitLabService {
   ): Promise<GitLabMergeRequest[]> {
     try {
       const pid = this.normalizeProjectId(projectId);
-      const params = {
+
+      // Build params with only defined values
+      const params: Record<string, any> = {
         per_page: options.per_page || 20,
         page: options.page || 1,
-        ...options,
       };
+
+      // Only add parameters that have valid values
+      if (options.state) {
+        params.state = options.state;
+      }
+
+      if (options.order_by) {
+        params.order_by = options.order_by;
+      }
+
+      if (options.sort) {
+        params.sort = options.sort;
+      }
+
+      if (options.milestone) {
+        params.milestone = options.milestone;
+      }
+
+      if (options.scope) {
+        params.scope = options.scope;
+      }
+
+      if (options.author_id !== undefined) {
+        params.author_id = options.author_id;
+      }
+
+      if (options.assignee_id !== undefined) {
+        params.assignee_id = options.assignee_id;
+      }
+
+      if (options.reviewer_id !== undefined) {
+        params.reviewer_id = options.reviewer_id;
+      }
+
+      if (options.source_branch) {
+        params.source_branch = options.source_branch;
+      }
+
+      if (options.target_branch) {
+        params.target_branch = options.target_branch;
+      }
+
+      if (options.search) {
+        params.search = options.search;
+      }
 
       const cacheKey = `gitlab_merge_requests:${pid}:${JSON.stringify(params)}`;
 

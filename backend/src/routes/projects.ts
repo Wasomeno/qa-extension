@@ -1,9 +1,8 @@
-import { Router, Request, Response } from 'express';
+import { Router, Response } from 'express';
 import Joi from 'joi';
 import { databaseService } from '../services/database';
 import { GitLabService } from '../services/gitlab';
 import { authMiddleware, AuthenticatedRequest } from '../middleware/auth';
-// Rate limiting middleware removed to rely on upstream GitLab limits
 import {
   asyncHandler,
   validateRequest,
@@ -15,7 +14,6 @@ import { logger } from '../utils/logger';
 
 const router = Router();
 const db = databaseService;
-const gitlabService = new GitLabService();
 
 // Create a GitLab issue directly via GitLab API
 router.post(
@@ -1036,32 +1034,35 @@ router.get(
 
       const gitlab = new GitLabService(oauthConnection.access_token);
 
-      const rawProjectIds = Array.isArray(projectId)
+      let rawProjectIds = Array.isArray(projectId)
         ? projectId
         : typeof projectId === 'string'
           ? projectId.split(',').map((id: string) => id.trim())
           : [];
 
-      const directProjectIds: number[] = [];
-      const localProjectIds: string[] = [];
-
-      rawProjectIds.forEach((id: string) => {
-        if (!id) return;
-        if (/^\d+$/.test(id)) {
-          const parsed = parseInt(id, 10);
-          if (!Number.isNaN(parsed)) {
-            directProjectIds.push(parsed);
-          }
-        } else {
-          localProjectIds.push(id);
+      // If no project IDs provided, fetch first 5 accessible projects
+      if (rawProjectIds.length === 0) {
+        try {
+          const accessibleProjects = await gitlab.getProjects({
+            membership: true,
+            per_page: 5,
+            page: 1,
+          });
+          rawProjectIds = accessibleProjects.map(project => String(project.id));
+          logger.info(
+            `No project IDs provided, using ${rawProjectIds.length} accessible projects for user ${userId}`
+          );
+        } catch (error) {
+          logger.warn(
+            'Failed to fetch accessible projects for issues, proceeding with empty filter:',
+            error
+          );
         }
-      });
+      }
 
-      const projectIdFilters = Array.from(new Set(directProjectIds)).sort(
+      const projectIdFilters = Array.from(new Set(rawProjectIds)).sort(
         (a, b) => a - b
       );
-
-      let author_id: number | undefined;
 
       const perPage = parseInt(limit as string, 10) || 5;
       const pageNum = parseInt(page as string, 10) || 1;
@@ -1088,12 +1089,11 @@ router.get(
         state: normalizedState as any,
         labels: labelString,
         labels_match_mode: hasMultipleLabels ? 'or' : 'and',
-        author_id,
         search: (search as string) || undefined,
         per_page: perPage,
         page: pageNum,
         project_ids: projectIdFilters,
-      } as any);
+      });
 
       // Get unique project IDs from issues
       const uniqueProjectIds = Array.from(
@@ -1162,6 +1162,7 @@ router.get(
         projectLabels[String(projectId)] = labels;
       });
 
+      console.log('LKEPQEQEQ');
       sendResponse(res, 200, true, 'GitLab issues fetched', {
         items,
         nextCursor,
