@@ -71,9 +71,6 @@ export const useIssueData = (
 
       return res.data || { items: [], nextCursor: null, projectLabels: {} };
     },
-    staleTime: 300_000,
-    gcTime: 300_000,
-    refetchOnWindowFocus: false,
     enabled: filtersReady,
   });
 
@@ -115,29 +112,6 @@ export const useIssueData = (
   }, [currentPageData, currentPage, filtersReady]);
 
   // Filter issues by selected projects and assignees (client-side filtering)
-  const visibleIssues = allItems.filter(item => {
-    // Assignee filter
-    if (filters.selectedAssigneeIds.length > 0) {
-      const assignees = Array.isArray((item as any).assignees)
-        ? (item as any).assignees
-        : item.assignee
-          ? [item.assignee]
-          : [];
-
-      const hasUnassigned = filters.selectedAssigneeIds.includes('unassigned');
-      const assignedIds = assignees.map((a: any) => String(a.id));
-      const matchAssigned = assignedIds.some((id: string) =>
-        filters.selectedAssigneeIds.includes(id)
-      );
-      const isUnassigned = assignedIds.length === 0;
-
-      if (!((hasUnassigned && isUnassigned) || matchAssigned)) {
-        return false;
-      }
-    }
-
-    return true;
-  });
 
   const loadMore = () => {
     if (!filtersReady) return;
@@ -150,7 +124,7 @@ export const useIssueData = (
   const combinedLoading = !filtersReady || isLoading;
 
   return {
-    issues: visibleIssues,
+    issues: allItems,
     allProjectLabels,
     isLoading: combinedLoading,
     isError,
