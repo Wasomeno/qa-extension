@@ -1010,8 +1010,6 @@ router.get(
     const {
       search,
       labels,
-      assigneeId,
-      createdBy,
       page = '1',
       limit = '5',
       state = 'opened',
@@ -1083,21 +1081,6 @@ router.get(
 
       // Determine author scope
       let author_id: number | undefined;
-      let scope: 'created_by_me' | 'assigned_to_me' | 'all' | undefined;
-      if (createdBy && createdBy !== 'any') {
-        if (createdBy === 'me') {
-          scope = 'created_by_me';
-        } else {
-          const parsed = parseInt(createdBy as string, 10);
-          if (!isNaN(parsed)) author_id = parsed;
-        }
-      }
-
-      let assignee_id: number | undefined;
-      if (assigneeId && assigneeId !== 'unassigned') {
-        const parsed = parseInt(assigneeId as string, 10);
-        if (!isNaN(parsed)) assignee_id = parsed;
-      }
 
       const perPage = parseInt(limit as string, 10) || 5;
       const pageNum = parseInt(page as string, 10) || 1;
@@ -1124,13 +1107,11 @@ router.get(
         state: normalizedState as any,
         labels: labelString,
         labels_match_mode: hasMultipleLabels ? 'or' : 'and',
-        assignee_id,
         author_id,
         search: (search as string) || undefined,
         per_page: perPage,
         page: pageNum,
         project_ids: projectIdFilters,
-        ...(scope ? ({ scope } as any) : {}),
       } as any);
 
       // Get unique project IDs from issues

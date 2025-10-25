@@ -539,6 +539,14 @@ export class GitLabService {
         sort: 'desc',
       };
 
+      // DEBUG: Log what scope is being used
+      logger.info(
+        'getAllIssues called with scope:',
+        params.scope,
+        'options:',
+        JSON.stringify(options)
+      );
+
       // Add optional filters
       if (options.labels) params.labels = options.labels;
       if (options.milestone) params.milestone = options.milestone;
