@@ -532,6 +532,7 @@ export class GitLabService {
     try {
       const params: Record<string, any> = {
         state: options.state || 'opened',
+        scope: options.scope || 'all', // Default to 'all' to get all accessible issues
         per_page: options.per_page || 20,
         page: options.page || 1,
         order_by: 'updated_at',
@@ -544,15 +545,19 @@ export class GitLabService {
       if (options.assignee_id) params.assignee_id = options.assignee_id;
       if (options.author_id) params.author_id = options.author_id;
       if (options.search) params.search = options.search;
-      if (options.scope) params.scope = options.scope;
-      if (options.project_ids && options.project_ids.length === 1) {
-        params.project_id = options.project_ids[0];
+
+      // Add labels matching mode (OR by default as per your preference)
+      if (options.labels_match_mode) {
+        params.labels =
+          options.labels_match_mode === 'and'
+            ? `${params.labels}`
+            : params.labels;
       }
 
       const cacheKey = `gitlab_global_issues:${JSON.stringify({
         ...params,
         project_ids: options.project_ids || [],
-        labels_match_mode: options.labels_match_mode || 'and',
+        labels_match_mode: options.labels_match_mode || 'or',
       })}`;
 
       // Check cache first
@@ -561,28 +566,65 @@ export class GitLabService {
         return cached;
       }
 
-      // Use GitLab's global issues API - much more efficient
-      const response = await this.client.get('/issues', { params });
-      const issues = response.data as GitLabIssue[];
+      let allIssues: GitLabIssue[] = [];
 
-      // Filter by project_ids if specified
-      let filteredIssues = issues;
+      // If specific project_ids are provided, fetch from each project
+      if (options.project_ids && options.project_ids.length > 0) {
+        // Make parallel API calls for each project
+        const projectIssuesPromises = options.project_ids.map(
+          async projectId => {
+            try {
+              const projectParams: Record<string, any> = {
+                ...params,
+                project_id: projectId,
+              };
+              delete projectParams.scope; // Project-specific endpoint doesn't support scope
 
-      // Handle OR logic for labels if needed
-      if (options.labels && options.labels_match_mode === 'or') {
-        const labelList = options.labels
-          .split(',')
-          .map(l => l.trim())
-          .filter(Boolean);
-        filteredIssues = filteredIssues.filter(issue =>
-          labelList.some(label => issue.labels.includes(label))
+              const response = await this.client.get(
+                `/projects/${this.normalizeProjectId(projectId)}/issues`,
+                {
+                  params: projectParams,
+                }
+              );
+              return response.data as GitLabIssue[];
+            } catch (error) {
+              logger.error(
+                `Failed to fetch issues for project ${projectId}:`,
+                error
+              );
+              return [];
+            }
+          }
         );
+
+        const projectIssuesResults = await Promise.all(projectIssuesPromises);
+        allIssues = projectIssuesResults.flat();
+
+        // Remove duplicates based on issue ID (in case an issue appears in multiple results)
+        const uniqueIssuesMap = new Map<number, GitLabIssue>();
+        allIssues.forEach(issue => {
+          if (!uniqueIssuesMap.has(issue.id)) {
+            uniqueIssuesMap.set(issue.id, issue);
+          }
+        });
+        allIssues = Array.from(uniqueIssuesMap.values());
+
+        // Sort by updated_at descending to match the global API behavior
+        allIssues.sort((a, b) => {
+          const dateA = new Date(a.updated_at).getTime();
+          const dateB = new Date(b.updated_at).getTime();
+          return dateB - dateA;
+        });
+      } else {
+        // No specific projects - use GitLab's global issues API
+        const response = await this.client.get('/issues', { params });
+        allIssues = response.data as GitLabIssue[];
       }
 
       // Cache for 2 minutes
-      await this.safeRedisSet(cacheKey, filteredIssues, 120);
+      await this.safeRedisSet(cacheKey, allIssues, 120);
 
-      return filteredIssues;
+      return allIssues;
     } catch (error) {
       logger.error('Failed to fetch GitLab issues via global API:', error);
       throw new Error('Failed to fetch issues from GitLab');
