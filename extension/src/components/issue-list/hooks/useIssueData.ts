@@ -53,11 +53,6 @@ export const useIssueData = (
       const res = await api.listGitLabIssuesGlobal({
         search: filters.search || undefined,
         projectId: projectFilterValue || undefined,
-        assigneeId:
-          filters.selectedAssigneeIds.length === 1 &&
-          filters.selectedAssigneeIds[0] !== 'unassigned'
-            ? filters.selectedAssigneeIds[0]
-            : undefined,
         labels: filters.selectedLabels,
         status: statusFilter as any,
         limit: 5,
