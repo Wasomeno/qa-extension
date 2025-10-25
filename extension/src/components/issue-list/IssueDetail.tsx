@@ -623,7 +623,7 @@ const IssueDetail: React.FC<IssueDetailProps> = ({
               <Alert className="bg-green-50 border-green-200 text-green-800">
                 <div className="text-xs flex items-center gap-2">
                   <div className="w-3 h-3 rounded-full bg-green-500 flex items-center justify-center">
-                    <span className="text-white text-[8px] leading-none">
+                    <span className="text-neutral-800 text-[8px] leading-none">
                       ✓
                     </span>
                   </div>

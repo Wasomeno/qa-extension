@@ -109,16 +109,16 @@
   /* Extension-specific styles - Updated to use theme colors */
   .extension-popup {
     @apply w-96 min-h-[500px] max-h-[600px] overflow-y-auto overflow-x-hidden;
-    background: #fffff0;
+    background: #ffffff;
   }
 
   .extension-options {
     @apply min-h-screen;
-    background: #fffff0;
+    background: #ffffff;
   }
 
   .extension-floating-popup {
-    background: #fffff0;
+    background: #ffffff;
   }
 
   /* Background patterns removed - using solid theme color */
@@ -334,19 +334,19 @@
     --qa-fg: #0b1220;
     --qa-fg-muted: rgba(11, 18, 32, 0.65);
     --qa-border: rgba(11, 18, 32, 0.12);
-    --qa-bg: #fffff0;
+    --qa-bg: #ffffff;
     --qa-shadow: 0 8px 32px rgba(0, 0, 0, 0.08);
     color: var(--qa-fg);
   }
 
   /* Updated utilities using solid theme color */
   .glass {
-    background: #fffff0;
+    background: #ffffff;
     border: 1px solid rgba(11, 18, 32, 0.12);
   }
 
   .glass-panel {
-    background: #fffff0;
+    background: #ffffff;
     border: 1px solid rgba(11, 18, 32, 0.12);
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.08);
     border-radius: 16px;
@@ -354,14 +354,14 @@
   }
 
   .glass-card {
-    background: #fffff0;
+    background: #ffffff;
     border: 1px solid rgba(11, 18, 32, 0.12);
     border-radius: 12px;
     color: #0b1220;
   }
 
   .glass-button {
-    background: #fffff0;
+    background: #ffffff;
     border: 1px solid rgba(11, 18, 32, 0.12);
     box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
     border-radius: 8px;
@@ -370,14 +370,14 @@
   }
 
   .glass-button:hover {
-    background: #fffff0;
+    background: #ffffff;
     border-color: rgba(11, 18, 32, 0.2);
     box-shadow: 0 6px 24px rgba(0, 0, 0, 0.12);
     transform: translateY(-1px);
   }
 
   .glass-input {
-    background: #fffff0;
+    background: #ffffff;
     border: 1px solid rgba(11, 18, 32, 0.12);
     box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.06);
     border-radius: 8px;
@@ -386,7 +386,7 @@
   }
 
   .glass-input:focus {
-    background: #fffff0;
+    background: #ffffff;
     border-color: rgba(59, 130, 246, 0.4);
     box-shadow:
       0 0 0 3px rgba(59, 130, 246, 0.1),
@@ -401,13 +401,13 @@
   }
 
   .glass-modal {
-    background: #fffff0;
+    background: #ffffff;
     border: 1px solid rgba(11, 18, 32, 0.12);
     box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
   }
 
   .glass-nav {
-    background: #fffff0;
+    background: #ffffff;
     border-bottom: 1px solid rgba(11, 18, 32, 0.12);
     box-shadow: 0 2px 16px rgba(0, 0, 0, 0.08);
   }

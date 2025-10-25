@@ -1,5 +1,10 @@
 import React from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/src/components/ui/ui/dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/src/components/ui/ui/dialog';
 import { Button } from '@/src/components/ui/ui/button';
 import { Input } from '@/src/components/ui/ui/input';
 import { cn } from '@/lib/utils';
@@ -11,7 +16,12 @@ interface EvidenceDialogProps {
   busy?: boolean;
 }
 
-const EvidenceDialog: React.FC<EvidenceDialogProps> = ({ open, onOpenChange, onSubmit, busy }) => {
+const EvidenceDialog: React.FC<EvidenceDialogProps> = ({
+  open,
+  onOpenChange,
+  onSubmit,
+  busy,
+}) => {
   const [file, setFile] = React.useState<File | null>(null);
   const [text, setText] = React.useState<string>('');
   const [error, setError] = React.useState<string | null>(null);
@@ -52,7 +62,9 @@ const EvidenceDialog: React.FC<EvidenceDialogProps> = ({ open, onOpenChange, onS
   React.useEffect(() => {
     const el = dropRef.current;
     if (!el) return;
-    const onDragOver = (e: DragEvent) => { e.preventDefault(); };
+    const onDragOver = (e: DragEvent) => {
+      e.preventDefault();
+    };
     const onDrop = (e: DragEvent) => {
       e.preventDefault();
       const fl = e.dataTransfer?.files;
@@ -82,7 +94,10 @@ const EvidenceDialog: React.FC<EvidenceDialogProps> = ({ open, onOpenChange, onS
   };
 
   const onConfirm = async () => {
-    if (!file) { setError('Please paste or select an image'); return; }
+    if (!file) {
+      setError('Please paste or select an image');
+      return;
+    }
     setError(null);
     await onSubmit({ file, text: text.trim() || undefined });
   };
@@ -109,17 +124,23 @@ const EvidenceDialog: React.FC<EvidenceDialogProps> = ({ open, onOpenChange, onS
                   alt="Preview"
                   className="h-16 w-16 object-cover rounded border"
                 />
-                <div className="text-sm text-white/80 truncate">
+                <div className="text-sm text-neutral-800/80 truncate">
                   {file.name || 'image'}
                 </div>
               </div>
             ) : (
-              <div className="text-sm text-white/70">
+              <div className="text-sm text-neutral-800/70">
                 Paste an image, drag & drop, or click to choose
               </div>
             )}
           </div>
-          <input ref={inputRef} type="file" accept="image/*" className="hidden" onChange={handlePick} />
+          <input
+            ref={inputRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={handlePick}
+          />
           <div className="space-y-1">
             <div className="text-xs opacity-80">Optional note</div>
             <Input
@@ -131,8 +152,16 @@ const EvidenceDialog: React.FC<EvidenceDialogProps> = ({ open, onOpenChange, onS
           </div>
           {error ? <div className="text-xs text-red-400">{error}</div> : null}
           <div className="flex justify-end gap-2 pt-2">
-            <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={!!busy}>Cancel</Button>
-            <Button onClick={onConfirm} disabled={!file || !!busy}>{busy ? 'Submitting…' : 'Submit'}</Button>
+            <Button
+              variant="ghost"
+              onClick={() => onOpenChange(false)}
+              disabled={!!busy}
+            >
+              Cancel
+            </Button>
+            <Button onClick={onConfirm} disabled={!file || !!busy}>
+              {busy ? 'Submitting…' : 'Submit'}
+            </Button>
           </div>
         </div>
       </DialogContent>
@@ -141,4 +170,3 @@ const EvidenceDialog: React.FC<EvidenceDialogProps> = ({ open, onOpenChange, onS
 };
 
 export default EvidenceDialog;
-

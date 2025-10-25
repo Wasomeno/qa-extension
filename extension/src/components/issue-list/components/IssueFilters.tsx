@@ -69,7 +69,7 @@ const SkeletonRow = () => {
       <Skeleton className="h-4 w-40" />
     </div>
   );
-}
+};
 
 export const IssueFilters: React.FC<IssueFiltersProps> = ({
   filters,
@@ -109,10 +109,7 @@ export const IssueFilters: React.FC<IssueFiltersProps> = ({
   };
 
   const createOnOpenChange =
-    (
-      key: PopoverKey,
-      setter: React.Dispatch<React.SetStateAction<boolean>>
-    ) =>
+    (key: PopoverKey, setter: React.Dispatch<React.SetStateAction<boolean>>) =>
     (next: boolean) => {
       if (next && suppressOpenRef.current[key]) {
         suppressOpenRef.current[key] = false;
@@ -134,7 +131,9 @@ export const IssueFilters: React.FC<IssueFiltersProps> = ({
   // Data queries
   const projectsQuery = useProjectsQuery(debouncedProjectQuery);
   const usersQuery = useUsersQuery(
-    filters.selectedProjectIds.length === 1 ? filters.selectedProjectIds[0] : '',
+    filters.selectedProjectIds.length === 1
+      ? filters.selectedProjectIds[0]
+      : '',
     debouncedAssigneeQuery
   );
 
@@ -158,18 +157,20 @@ export const IssueFilters: React.FC<IssueFiltersProps> = ({
 
   // Filtered labels based on search
   const visibleLabels = combinedLabels
-    .filter(l =>
-      !debouncedLabelsQuery ||
-      l.name.toLowerCase().includes(debouncedLabelsQuery.toLowerCase())
+    .filter(
+      l =>
+        !debouncedLabelsQuery ||
+        l.name.toLowerCase().includes(debouncedLabelsQuery.toLowerCase())
     )
     .slice(0, 5);
 
   const visibleUsers = users
-    .filter(u =>
-      !debouncedAssigneeQuery ||
-      `${u.name} ${u.username}`
-        .toLowerCase()
-        .includes(debouncedAssigneeQuery.toLowerCase())
+    .filter(
+      u =>
+        !debouncedAssigneeQuery ||
+        `${u.name} ${u.username}`
+          .toLowerCase()
+          .includes(debouncedAssigneeQuery.toLowerCase())
     )
     .slice(0, 5);
 
@@ -180,7 +181,8 @@ export const IssueFilters: React.FC<IssueFiltersProps> = ({
     <div className="p-4 space-y-3">
       {authError && (
         <div className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-md p-2">
-          {String(authError)}. Please open the extension popup and sign in, then retry.
+          {String(authError)}. Please open the extension popup and sign in, then
+          retry.
         </div>
       )}
 
@@ -188,9 +190,9 @@ export const IssueFilters: React.FC<IssueFiltersProps> = ({
       <div className="flex items-center gap-2">
         <Input
           value={search}
-          onChange={(e) => onSearchChange(e.target.value)}
+          onChange={e => onSearchChange(e.target.value)}
           placeholder="Search issues..."
-          className="text-sm glass-input text-white placeholder:text-white"
+          className="text-sm glass-input text-neutral-800 placeholder:text-neutral-800/50"
           disabled={isLoading || projectsQuery.isLoading}
         />
       </div>
@@ -207,7 +209,12 @@ export const IssueFilters: React.FC<IssueFiltersProps> = ({
           open={openProjects}
           onOpenChange={createOnOpenChange('projects', setOpenProjects)}
           onTriggerPointerDown={event =>
-            handleTriggerPointerDown(event, openProjects, 'projects', setOpenProjects)
+            handleTriggerPointerDown(
+              event,
+              openProjects,
+              'projects',
+              setOpenProjects
+            )
           }
           isLoading={projectsQuery.isLoading || isLoading}
           portalContainer={portalContainer}
@@ -242,7 +249,12 @@ export const IssueFilters: React.FC<IssueFiltersProps> = ({
           open={openAssignees}
           onOpenChange={createOnOpenChange('assignees', setOpenAssignees)}
           onTriggerPointerDown={event =>
-            handleTriggerPointerDown(event, openAssignees, 'assignees', setOpenAssignees)
+            handleTriggerPointerDown(
+              event,
+              openAssignees,
+              'assignees',
+              setOpenAssignees
+            )
           }
           isLoading={usersQuery.isLoading || isLoading}
           portalContainer={portalContainer}
@@ -278,7 +290,9 @@ const ProjectFilter: React.FC<ProjectFilterProps> = ({
   isLoading,
   portalContainer,
 }) => {
-  const selectedProject = projects.find(p => String(p.id) === selectedProjectIds[0]);
+  const selectedProject = projects.find(
+    p => String(p.id) === selectedProjectIds[0]
+  );
 
   return (
     <div className="space-y-1">
@@ -297,14 +311,18 @@ const ProjectFilter: React.FC<ProjectFilterProps> = ({
                 <span className="truncate">All projects</span>
               )}
               {selectedProjectIds.length === 1 && (
-                <Badge variant="secondary" className="text-[10px] px-2 py-1 truncate max-w-[140px]">
+                <Badge
+                  variant="secondary"
+                  className="text-[10px] px-2 py-1 truncate max-w-[140px]"
+                >
                   {selectedProject?.name || '1 selected'}
                 </Badge>
               )}
               {selectedProjectIds.length > 1 && (
                 <span className="truncate">
                   {selectedProject?.name || 'Multiple'}
-                  {selectedProjectIds.length > 1 && ` +${selectedProjectIds.length - 1}`}
+                  {selectedProjectIds.length > 1 &&
+                    ` +${selectedProjectIds.length - 1}`}
                 </span>
               )}
             </div>
@@ -331,14 +349,16 @@ const ProjectFilter: React.FC<ProjectFilterProps> = ({
           <div className="space-y-2">
             <Input
               value={projectQuery}
-              onChange={(e) => onProjectQueryChange(e.target.value)}
+              onChange={e => onProjectQueryChange(e.target.value)}
               placeholder="Search projects"
               className="text-xs h-8"
             />
             <div className="max-h-56 overflow-auto">
               {isLoading ? (
                 <div className="space-y-2">
-                  {[...Array(4)].map((_, i) => <SkeletonRow key={i} />)}
+                  {[...Array(4)].map((_, i) => (
+                    <SkeletonRow key={i} />
+                  ))}
                 </div>
               ) : projects.length === 0 ? (
                 <div className="text-xs text-neutral-500 px-1 py-2">
@@ -431,13 +451,17 @@ const LabelsStatusFilter: React.FC<LabelsStatusFilterProps> = ({
                 </span>
               )}
               {totalSelected === 1 && (
-                <Badge variant="secondary" className="text-[10px] px-2 py-1 truncate max-w-[140px]">
+                <Badge
+                  variant="secondary"
+                  className="text-[10px] px-2 py-1 truncate max-w-[140px]"
+                >
                   {combined[0] || '1 selected'}
                 </Badge>
               )}
               {totalSelected > 1 && (
                 <span className="truncate">
-                  {combined[0]}{totalSelected > 1 && ` +${totalSelected - 1}`}
+                  {combined[0]}
+                  {totalSelected > 1 && ` +${totalSelected - 1}`}
                 </span>
               )}
             </div>
@@ -464,16 +488,21 @@ const LabelsStatusFilter: React.FC<LabelsStatusFilterProps> = ({
           <div className="space-y-2">
             <Input
               value={labelsQuery}
-              onChange={(e) => onLabelsQueryChange(e.target.value)}
+              onChange={e => onLabelsQueryChange(e.target.value)}
               placeholder="Search labels"
               className="text-xs h-8"
             />
             <div className="max-h-56 overflow-auto">
-              <ul className="text-xs" role="listbox" aria-label="Labels and Status">
+              <ul
+                className="text-xs"
+                role="listbox"
+                aria-label="Labels and Status"
+              >
                 {/* Status options */}
                 {['open', 'closed'].map(status => {
                   const checked = selectedStatuses.includes(status);
-                  const displayName = status.charAt(0).toUpperCase() + status.slice(1);
+                  const displayName =
+                    status.charAt(0).toUpperCase() + status.slice(1);
                   const dotColor = status === 'closed' ? '#6b7280' : '#22c55e';
 
                   return (
@@ -570,7 +599,7 @@ const AssigneeFilter: React.FC<AssigneeFilterProps> = ({
       if (id === 'unassigned') return 'Unassigned';
 
       const user = users.find(u => String(u.id) === id);
-      return user ? (user.name || user.username) : '1 selected';
+      return user ? user.name || user.username : '1 selected';
     }
 
     const firstId = selectedAssigneeIds[0];
@@ -603,7 +632,10 @@ const AssigneeFilter: React.FC<AssigneeFilterProps> = ({
               {selectedAssigneeIds.length <= 1 ? (
                 <span className="truncate">{getDisplayText()}</span>
               ) : (
-                <Badge variant="secondary" className="text-[10px] px-2 py-1 truncate max-w-[140px]">
+                <Badge
+                  variant="secondary"
+                  className="text-[10px] px-2 py-1 truncate max-w-[140px]"
+                >
                   {getDisplayText()}
                 </Badge>
               )}
@@ -631,14 +663,16 @@ const AssigneeFilter: React.FC<AssigneeFilterProps> = ({
           <div className="space-y-2">
             <Input
               value={assigneeQuery}
-              onChange={(e) => onAssigneeQueryChange(e.target.value)}
+              onChange={e => onAssigneeQueryChange(e.target.value)}
               placeholder="Search assignees"
               className="text-xs h-8"
             />
             <div className="max-h-56 overflow-auto">
               {isLoading ? (
                 <div className="space-y-2">
-                  {[...Array(4)].map((_, i) => <SkeletonRow key={i} />)}
+                  {[...Array(4)].map((_, i) => (
+                    <SkeletonRow key={i} />
+                  ))}
                 </div>
               ) : (
                 <ul className="text-xs" role="listbox" aria-label="Assignees">

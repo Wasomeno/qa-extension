@@ -65,21 +65,6 @@ export const useIssueData = (
         cursor: currentPage > 1 ? `page:${currentPage}` : null,
       });
 
-      console.log('PARAMS', {
-        search: filters.search || undefined,
-        projectId: projectFilterValue || undefined,
-        assigneeId:
-          filters.selectedAssigneeIds.length === 1 &&
-          filters.selectedAssigneeIds[0] !== 'unassigned'
-            ? filters.selectedAssigneeIds[0]
-            : undefined,
-        labels: filters.selectedLabels,
-        status: statusFilter as any,
-        limit: 5,
-        sort: filters.sort,
-        cursor: currentPage > 1 ? `page:${currentPage}` : null,
-      });
-
       if (!res.success) {
         throw new Error(res.error || 'Failed to load issues');
       }

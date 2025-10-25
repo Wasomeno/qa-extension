@@ -14,7 +14,7 @@ module.exports = {
       colors: {
         // Theme Management System
         // Primary theme color (Ivory) - easily changeable
-        'theme-primary': '#FFFFF0',
+        'theme-primary': '#FFFFFF',
         'theme-border': 'rgba(11, 18, 32, 0.12)',
         'theme-text': '#0b1220',
         'theme-text-muted': 'rgba(11, 18, 32, 0.65)',

@@ -48,9 +48,15 @@ export const IssueListContent: React.FC<IssueListContentProps> = ({
     'issues',
     {
       search: filters.search,
-      projectId: filters.selectedProjectIds.length === 1 ? filters.selectedProjectIds[0] : '',
+      projectId:
+        filters.selectedProjectIds.length === 1
+          ? filters.selectedProjectIds[0]
+          : '',
       labels: filters.selectedLabels.slice().sort().join(','),
-      assigneeId: filters.selectedAssigneeIds.length === 1 ? filters.selectedAssigneeIds[0] : '',
+      assigneeId:
+        filters.selectedAssigneeIds.length === 1
+          ? filters.selectedAssigneeIds[0]
+          : '',
       createdBy: 'any',
       status: getStatusFilter(filters.selectedStatuses),
       limit: 5,
@@ -218,9 +224,7 @@ export const IssueListContent: React.FC<IssueListContentProps> = ({
     <div className="flex-1 overflow-y-scroll px-4 py-2 space-y-2">
       {/* Loading State */}
       {isLoading && (
-        <div className="space-y-2">
-          {[...Array(5)].map(renderLoadingCard)}
-        </div>
+        <div className="space-y-2">{[...Array(5)].map(renderLoadingCard)}</div>
       )}
 
       {/* Error State */}
@@ -232,7 +236,7 @@ export const IssueListContent: React.FC<IssueListContentProps> = ({
 
       {/* Empty State */}
       {!isLoading && !isError && issues.length === 0 && (
-        <div className="text-xs text-white/70">No issues found.</div>
+        <div className="text-xs text-neutral-800/70">No issues found.</div>
       )}
 
       {/* Issue List */}
@@ -255,9 +259,7 @@ export const IssueListContent: React.FC<IssueListContentProps> = ({
 
       {/* Loading More Indicators */}
       {isFetching && !isLoading && (
-        <div className="space-y-2">
-          {[...Array(2)].map(renderLoadingCard)}
-        </div>
+        <div className="space-y-2">{[...Array(2)].map(renderLoadingCard)}</div>
       )}
     </div>
   );
@@ -265,7 +267,10 @@ export const IssueListContent: React.FC<IssueListContentProps> = ({
 
 function getStatusFilter(selectedStatuses: string[]): string | undefined {
   if (selectedStatuses.length === 0) return undefined;
-  if (selectedStatuses.includes('open') && selectedStatuses.includes('closed')) {
+  if (
+    selectedStatuses.includes('open') &&
+    selectedStatuses.includes('closed')
+  ) {
     return undefined; // Show both
   }
   return selectedStatuses.includes('closed') ? 'closed' : undefined;
