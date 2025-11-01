@@ -39,47 +39,22 @@ const useProjectsQuery = (search: string) => {
   return useQuery({
     queryKey: ['projects', search, user?.id],
     queryFn: async () => {
-      const allProjects: any[] = [];
-
-      // Fetch recent projects if user is authenticated
-      if (user?.id) {
-        try {
-          const recentRes = await api.getRecentProjects(user.id);
-          if (recentRes.success && recentRes.data) {
-            allProjects.push(...recentRes.data);
-          }
-        } catch (error) {
-          // Ignore errors, just won't show recent projects
-          console.warn('Failed to fetch recent projects:', error);
-        }
+      // Only fetch recent projects if user is authenticated
+      if (!user?.id) {
+        return [];
       }
 
-      // Fetch search projects
-      const res = await api.searchProjects({
-        search: search || undefined,
-        limit: 5,
-      });
-      if (!res.success) throw new Error(res.error || 'Failed to load projects');
-      const searchProjects = res.data || [];
-
-      // Combine recent projects with search results, deduping by ID
-      const projectMap = new Map<string, any>();
-
-      // Add recent projects first
-      allProjects.forEach(project => {
-        projectMap.set(String(project.id), project);
-      });
-
-      // Add search projects, only if not already added (recent projects have priority)
-      searchProjects.forEach(project => {
-        const id = String(project.id);
-        if (!projectMap.has(id)) {
-          projectMap.set(id, project);
-        }
-      });
-
-      return Array.from(projectMap.values());
+      try {
+        const res = await api.getRecentProjects(user.id);
+        if (!res.success)
+          throw new Error(res.error || 'Failed to load projects');
+        return res.data || [];
+      } catch (error) {
+        console.warn('Failed to fetch recent projects:', error);
+        return [];
+      }
     },
+    enabled: !!user?.id,
     staleTime: 300_000,
   });
 };

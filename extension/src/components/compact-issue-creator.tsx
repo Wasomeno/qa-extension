@@ -340,6 +340,7 @@ export const CompactIssueCreator: React.FC<CompactIssueCreatorProps> = ({
     errors,
     watchedValues,
     isLoading,
+    dataLoading,
     projects,
     users,
     error,
@@ -444,7 +445,7 @@ export const CompactIssueCreator: React.FC<CompactIssueCreatorProps> = ({
           disabled={isLoading}
         />
         <div className="max-h-56 overflow-auto">
-          {projects.length === 0 ? (
+          {dataLoading ? (
             <div className="space-y-2">
               <SkeletonRow />
               <SkeletonRow />

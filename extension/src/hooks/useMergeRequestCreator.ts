@@ -91,48 +91,26 @@ export function useMergeRequestCreator(options: UseMergeRequestCreatorOptions) {
 
   const watchedValues = watch();
 
-  // Fetch projects with recent projects priority
+  // Fetch projects - only recent projects
   const { data: projectsData } = useQuery({
     queryKey: ['projects', user?.id],
     queryFn: async () => {
-      const res = await apiService.getProjects();
-      if (!res.success) throw new Error(res.error || 'Failed to load projects');
-
-      let combinedProjects = res.data || [];
-
-      // If user is authenticated, fetch recent projects and combine
-      if (user?.id) {
-        try {
-          const recentRes = await apiService.getRecentProjects(user.id);
-          if (recentRes.success && recentRes.data) {
-            const recentProjects = recentRes.data || [];
-
-            // Combine recent projects with all projects, deduping by ID
-            const projectMap = new Map<string, any>();
-
-            // Add recent projects first (higher priority)
-            recentProjects.forEach(project => {
-              projectMap.set(String(project.id), project);
-            });
-
-            // Add all projects, only if not already added
-            combinedProjects.forEach(project => {
-              const id = String(project.id);
-              if (!projectMap.has(id)) {
-                projectMap.set(id, project);
-              }
-            });
-
-            combinedProjects = Array.from(projectMap.values());
-          }
-        } catch (error) {
-          // Ignore errors, just use the regular projects
-          console.warn('Failed to fetch recent projects:', error);
-        }
+      // Only fetch recent projects if user is authenticated
+      if (!user?.id) {
+        return [];
       }
 
-      return combinedProjects;
+      try {
+        const res = await apiService.getRecentProjects(user.id);
+        if (!res.success)
+          throw new Error(res.error || 'Failed to load projects');
+        return res.data || [];
+      } catch (error) {
+        console.warn('Failed to fetch recent projects:', error);
+        return [];
+      }
     },
+    enabled: !!user?.id,
     staleTime: 300_000, // 5 minutes
   });
 

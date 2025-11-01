@@ -54,50 +54,74 @@ router.get(
         return;
       }
 
+      // Fetch user's recent events from GitLab
       const events = await gitlab.getUserEvents(gitlabUserId, {
         limit: 100,
         after: afterDate,
       });
 
-      // Extract unique projects from events, sorted by most recent activity
-      const projectMap = new Map<
+      // Extract unique project IDs from events
+      const projectIds = new Set<number>();
+      const projectActivityMap = new Map<
         number,
-        { project: any; lastActivity: string }
+        { projectId: number; lastActivity: string }
       >();
 
       events.forEach(event => {
-        if (event.project) {
-          const existing = projectMap.get(event.project_id);
+        if (event.project_id) {
+          projectIds.add(event.project_id);
+
+          const existing = projectActivityMap.get(event.project_id);
           if (
             !existing ||
             new Date(event.created_at) > new Date(existing.lastActivity)
           ) {
-            projectMap.set(event.project_id, {
-              project: event.project,
+            projectActivityMap.set(event.project_id, {
+              projectId: event.project_id,
               lastActivity: event.created_at,
             });
           }
         }
       });
 
+      // Fetch project details for each project ID
+      const projectMap = new Map<number, any>();
+      await Promise.all(
+        Array.from(projectIds).map(async projectId => {
+          try {
+            const project = await gitlab.getProject(projectId);
+            projectMap.set(projectId, project);
+          } catch (error) {
+            logger.warn(`Failed to fetch project ${projectId}:`, error);
+          }
+        })
+      );
+
       // Convert to array and sort by most recent activity (limit to 5 projects)
-      const recentProjects = Array.from(projectMap.values())
+      const recentProjects = Array.from(projectActivityMap.values())
         .sort(
           (a, b) =>
             new Date(b.lastActivity).getTime() -
             new Date(a.lastActivity).getTime()
         )
         .slice(0, 5)
-        .map(item => ({
-          id: item.project.id.toString(),
-          name: item.project.name,
-          description: item.project.description || '',
-          path_with_namespace: item.project.path_with_namespace,
-          web_url: item.project.web_url,
-          avatar_url: item.project.avatar_url,
-          last_activity_at: item.lastActivity,
-          gitlab_project_id: item.project.id,
-        }));
+        .map(({ projectId, lastActivity }) => {
+          const project = projectMap.get(projectId);
+          if (!project) {
+            return null;
+          }
+          return {
+            id: project.id.toString(),
+            name: project.name,
+            description: project.description || '',
+            path_with_namespace: project.path_with_namespace,
+            web_url: project.web_url,
+            avatar_url: project.avatar_url,
+            last_activity_at: lastActivity,
+            gitlab_project_id: project.id,
+          };
+        })
+        .filter(Boolean);
 
       sendResponse(res, 200, true, 'Recent projects retrieved', recentProjects);
     } catch (error) {

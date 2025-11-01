@@ -660,22 +660,17 @@ export const CompactMergeRequestCreator: React.FC<
       return () => clearTimeout(timer);
     }, [query]);
 
-    // Server-side search
-    const projectsQuery = useQuery({
-      queryKey: ['projects-search', debouncedQuery],
-      queryFn: async () => {
-        const res = await apiService.searchProjects({
-          search: debouncedQuery || undefined,
-          limit: 100,
-        });
-        if (!res.success)
-          throw new Error(res.error || 'Failed to load projects');
-        return res.data || [];
-      },
-      staleTime: 60_000,
-    });
-
-    const list = projectsQuery.data || [];
+    // Filter projects from the hook (recent projects only)
+    const list = React.useMemo(() => {
+      const q = debouncedQuery.trim().toLowerCase();
+      return (projects || []).filter(p =>
+        !q
+          ? true
+          : p.name.toLowerCase().includes(q) ||
+            (p.path_with_namespace &&
+              p.path_with_namespace.toLowerCase().includes(q))
+      );
+    }, [projects, debouncedQuery]);
 
     React.useEffect(() => {
       inputRef.current?.focus();
@@ -713,8 +708,6 @@ export const CompactMergeRequestCreator: React.FC<
       }
     };
 
-    const isSearching = projectsQuery.isLoading || projectsQuery.isFetching;
-
     return (
       <div className="space-y-2">
         <input
@@ -727,7 +720,7 @@ export const CompactMergeRequestCreator: React.FC<
           disabled={isLoading}
         />
         <div className="max-h-56 overflow-auto">
-          {isSearching && list.length === 0 ? (
+          {list.length === 0 ? (
             <div className="space-y-2">
               <SkeletonRow />
               <SkeletonRow />
