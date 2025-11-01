@@ -140,17 +140,27 @@ export const MRCard: React.FC<MRCardProps> = ({ mr, onClick }) => {
             </h3>
           </div>
           <div className="flex items-center gap-2 w-full text-xs text-slate-500">
-            <div className="rounded-md flex items-center gap-1 bg-slate-100 px-2 py-0.5 font-medium text-slate-600">
-              <GitBranch className="h-2 w-2" /> <span>{mr.source_branch}</span>
+            <div className="rounded-md flex items-center gap-1 bg-slate-100 px-2 py-0.5 font-medium text-slate-600 min-w-0">
+              <GitBranch className="h-2 w-2 flex-shrink-0" />{' '}
+              <span className="truncate">{mr.source_branch}</span>
             </div>
-            <span className="text-slate-300">→</span>
-            <div className="rounded-md flex items-center gap-1 bg-blue-100 px-2 py-0.5 font-medium text-blue-700">
-              <GitBranch className="h-2 w-2" /> <span>{mr.target_branch}</span>
+            <span className="text-slate-300 flex-shrink-0">→</span>
+            <div className="rounded-md flex items-center gap-1 bg-blue-100 px-2 py-0.5 font-medium text-blue-700 min-w-0">
+              <GitBranch className="h-2 w-2 flex-shrink-0" />{' '}
+              <span className="truncate">{mr.target_branch}</span>
             </div>
           </div>
         </div>
 
         <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
+          {mr.project?.name ? (
+            <>
+              <span className="font-medium text-slate-600">
+                {mr.project.name}
+              </span>
+              <span className="text-slate-300">·</span>
+            </>
+          ) : null}
           <span>
             by {mr.author.name || mr.author.username || 'Unknown Author'}
           </span>

@@ -44,6 +44,10 @@ export interface MergeRequestSummary {
   merge_status?: string;
   pipeline?: MRPipeline;
   labels?: string[];
+  project?: {
+    id: number;
+    name: string;
+  };
 }
 
 export interface MergeRequestDetail extends MergeRequestSummary {

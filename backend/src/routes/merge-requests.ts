@@ -398,9 +398,51 @@ router.get(
         })
       );
 
-      const combinedItems = projectResults.flatMap(
-        result => result.items ?? []
+      // Enrich MRs with project information
+      // First, collect all unique project IDs that need fetching
+      const projectNamesCache = new Map<number, string>();
+      const projectIdsToFetch = new Set<number>();
+
+      for (const result of projectResults) {
+        for (const mr of result.items ?? []) {
+          if (mr.project_id && !result.localProject?.name) {
+            projectIdsToFetch.add(mr.project_id);
+          }
+        }
+      }
+
+      // Batch fetch all project names from GitLab
+      await Promise.all(
+        Array.from(projectIdsToFetch).map(async projectId => {
+          try {
+            const gitlabProject = await gitlab.getProject(projectId);
+            const projectName =
+              gitlabProject?.path_with_namespace || gitlabProject?.name;
+            if (projectName) {
+              projectNamesCache.set(projectId, projectName);
+            }
+          } catch (error) {
+            logger.warn('Failed to fetch project name from GitLab', {
+              projectId,
+              error: error instanceof Error ? error.message : error,
+            });
+          }
+        })
       );
+
+      // Now enrich MRs with project information
+      const combinedItems = projectResults.flatMap(result => {
+        return (result.items ?? []).map((mr: any) => {
+          const projectName =
+            result.localProject?.name || projectNamesCache.get(mr.project_id);
+          return {
+            ...mr,
+            project: projectName
+              ? { id: mr.project_id, name: projectName }
+              : undefined,
+          };
+        });
+      });
 
       const orderField =
         fetchOptions.order_by === 'created_at' ? 'created_at' : 'updated_at';

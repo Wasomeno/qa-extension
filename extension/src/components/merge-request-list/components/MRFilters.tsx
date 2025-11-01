@@ -368,14 +368,7 @@ const StateFilter: React.FC<StateFilterProps> = ({
             disabled={isLoading}
             onPointerDown={onTriggerPointerDown}
           >
-            <div className="flex items-center gap-2 truncate">
-              <Badge
-                variant="secondary"
-                className="text-[10px] px-2 py-1 truncate max-w-[140px]"
-              >
-                {displayLabel}
-              </Badge>
-            </div>
+            <span className="truncate">{displayLabel}</span>
             <ChevronRight
               className={cn(
                 'h-3.5 w-3.5 text-neutral-400 transition-transform duration-200',
@@ -389,37 +382,37 @@ const StateFilter: React.FC<StateFilterProps> = ({
           container={portalContainer || undefined}
           align="start"
         >
-          <div className="space-y-2">
-            <div className="max-h-56 overflow-auto">
-              <ul className="text-xs" role="listbox" aria-label="State">
-                {stateOptions.map(option => {
-                  const checked = selectedState === option.value;
-                  return (
-                    <li
-                      key={option.value}
-                      role="option"
-                      aria-selected={checked}
+          <div className="max-h-56 overflow-auto">
+            <ul className="text-xs" role="listbox" aria-label="State">
+              {stateOptions.map(option => {
+                const isSelected = selectedState === option.value;
+                return (
+                  <li
+                    key={option.value}
+                    role="option"
+                    aria-selected={isSelected}
+                  >
+                    <button
+                      type="button"
+                      className={cn(
+                        'w-full text-left px-3 py-2 hover:bg-neutral-100 flex items-center gap-2 transition-colors',
+                        isSelected && 'bg-neutral-100 font-medium'
+                      )}
+                      onClick={() => {
+                        onToggleState(option.value);
+                        onOpenChange(false);
+                      }}
                     >
-                      <button
-                        type="button"
-                        className="w-full text-left px-2 py-1.5 rounded-md hover:bg-neutral-100 flex items-center gap-2"
-                        onClick={() => {
-                          onToggleState(option.value);
-                          onOpenChange(false);
-                        }}
-                      >
-                        <Checkbox className="mr-1" checked={checked} />
-                        <span
-                          className="inline-block w-2.5 h-2.5 rounded-full border"
-                          style={{ backgroundColor: option.color }}
-                        />
-                        <span className="truncate">{option.label}</span>
-                      </button>
-                    </li>
-                  );
-                })}
-              </ul>
-            </div>
+                      <span
+                        className="inline-block w-2.5 h-2.5 rounded-full border"
+                        style={{ backgroundColor: option.color }}
+                      />
+                      <span className="truncate">{option.label}</span>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
           </div>
         </PopoverContent>
       </Popover>
