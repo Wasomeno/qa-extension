@@ -1048,17 +1048,19 @@ router.get(
           ? projectId.split(',').map((id: string) => id.trim())
           : [];
 
-      // If no project IDs provided, fetch first 5 accessible projects
+      // If no project IDs provided, fetch 5 most recently active projects
       if (rawProjectIds.length === 0) {
         try {
           const accessibleProjects = await gitlab.getProjects({
             membership: true,
             per_page: 5,
             page: 1,
+            order_by: 'last_activity_at',
+            sort: 'desc',
           });
           rawProjectIds = accessibleProjects.map(project => String(project.id));
           logger.info(
-            `No project IDs provided, using ${rawProjectIds.length} accessible projects for user ${userId}`
+            `No project IDs provided, using ${rawProjectIds.length} most recently active projects for user ${userId}`
           );
         } catch (error) {
           logger.warn(

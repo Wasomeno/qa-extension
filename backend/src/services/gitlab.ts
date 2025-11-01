@@ -290,6 +290,14 @@ export class GitLabService {
       search?: string;
       per_page?: number;
       page?: number;
+      order_by?:
+        | 'id'
+        | 'name'
+        | 'path'
+        | 'created_at'
+        | 'updated_at'
+        | 'last_activity_at';
+      sort?: 'asc' | 'desc';
     } = {}
   ): Promise<GitLabProject[]> {
     try {

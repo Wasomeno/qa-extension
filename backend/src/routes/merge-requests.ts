@@ -186,7 +186,7 @@ router.get(
         return;
       }
 
-      // If no project IDs provided, fetch first 5 accessible projects
+      // If no project IDs provided, fetch 5 most recently active projects
       if (projectIds.length === 0) {
         try {
           const gitlab = new GitLabService(oauthConnection.access_token);
@@ -194,10 +194,12 @@ router.get(
             membership: true,
             per_page: 5,
             page: 1,
+            order_by: 'last_activity_at',
+            sort: 'desc',
           });
           projectIds = accessibleProjects.map(project => String(project.id));
           logger.info(
-            `No project IDs provided, using ${projectIds.length} accessible projects for merge requests for user ${userId}`
+            `No project IDs provided, using ${projectIds.length} most recently active projects for merge requests for user ${userId}`
           );
         } catch (error) {
           logger.warn(
