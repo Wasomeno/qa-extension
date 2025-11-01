@@ -12,6 +12,7 @@ export interface GitLabProject {
   web_url: string;
   avatar_url: string;
   default_branch: string;
+  last_activity_at: string;
 }
 
 export interface GitLabIssue {

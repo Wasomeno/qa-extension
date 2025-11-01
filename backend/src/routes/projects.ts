@@ -902,8 +902,15 @@ router.get(
         page: Number(page),
       });
 
+      // Sort projects by last_activity_at (most recent first)
+      const sortedProjects = gitlabProjects.sort((a, b) => {
+        const dateA = new Date(a.last_activity_at).getTime();
+        const dateB = new Date(b.last_activity_at).getTime();
+        return dateB - dateA; // Descending order (most recent first)
+      });
+
       // Transform GitLab projects to match our expected format
-      const transformedProjects = gitlabProjects.map(project => ({
+      const transformedProjects = sortedProjects.map(project => ({
         id: project.id.toString(),
         name: project.name,
         description: project.description || '',
@@ -913,6 +920,7 @@ router.get(
         default_branch: project.default_branch,
         path_with_namespace: project.path_with_namespace,
         gitlab_project_id: project.id,
+        last_activity_at: project.last_activity_at,
         team_name: 'GitLab',
         member_role: 'developer',
         status: 'active',

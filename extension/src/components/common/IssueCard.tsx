@@ -88,8 +88,8 @@ const IssueCard: React.FC<IssueCardProps> = ({
               className={cn(
                 'transition-all space-y-1 duration-200 ease-out',
                 isHovered
-                  ? 'opacity-100 relative z-10'
-                  : 'opacity-0 pointer-events-none absolute inset-0 z-0'
+                  ? 'opacity-100 max-h-[200px]'
+                  : 'opacity-0 max-h-0 overflow-hidden pointer-events-none'
               )}
               onClick={e => e.stopPropagation()}
             >

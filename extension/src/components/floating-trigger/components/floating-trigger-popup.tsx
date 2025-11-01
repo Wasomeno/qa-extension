@@ -4,7 +4,6 @@ import {
   ChevronLeft,
   FileText,
   X,
-  WorkflowIcon,
   Pin,
   ListCheck,
   ChevronRight,
@@ -315,7 +314,7 @@ const FloatingTriggerPopup: React.FC<FloatingTriggerPopupProps> = ({
   const renderFeatureList = () => {
     return (
       <div
-        className="flex relative flex-col h-full p-3"
+        className="flex relative flex-col gap-2 h-full p-3"
         onMouseDown={onMouseDown}
       >
         {!isAuthenticated && (
@@ -368,7 +367,7 @@ const FloatingTriggerPopup: React.FC<FloatingTriggerPopupProps> = ({
           </Card>
         )}
 
-        <div className="px-3 py-2 flex items-center justify-between relative z-50">
+        <div className="px-3 py-2 mb-1 flex items-center justify-between relative z-50">
           <span className="text-sm font-semibold">Quick Actions</span>
           <Button
             variant="ghost"
@@ -382,7 +381,7 @@ const FloatingTriggerPopup: React.FC<FloatingTriggerPopupProps> = ({
         <button
           disabled={!isAuthenticated}
           onClick={() => onFeatureSelect('issue')}
-          className="group w-full text-left hover:bg-neutral-100/60 rounded-lg px-3 py-2 transition-colors pointer-events-auto disabled:opacity-60 disabled:cursor-not-allowed"
+          className="group overflow-hidden text-nowrap w-full text-left hover:bg-neutral-100/60 rounded-lg px-3 py-2 transition-colors pointer-events-auto disabled:opacity-60 disabled:cursor-not-allowed"
         >
           <div className="flex items-center">
             <FileText className="w-4 h-4 mr-3" />
@@ -390,7 +389,6 @@ const FloatingTriggerPopup: React.FC<FloatingTriggerPopupProps> = ({
               <div className="text-sm font-medium text-neutral-900">
                 Create Issue
               </div>
-              <span className="text-xs text-neutral-500">Open a new issue</span>
             </div>
             <div className="ml-3">
               <ChevronRight className="w-4 h-4 opacity-60 group-hover:opacity-100" />
@@ -402,7 +400,7 @@ const FloatingTriggerPopup: React.FC<FloatingTriggerPopupProps> = ({
         <button
           disabled={!isAuthenticated}
           onClick={() => onFeatureSelect('merge-request')}
-          className="group w-full text-left hover:bg-neutral-100/60 rounded-lg px-3 py-2 transition-colors pointer-events-auto disabled:opacity-60 disabled:cursor-not-allowed"
+          className="group w-full overflow-hidden text-nowrap text-left hover:bg-neutral-100/60 rounded-lg px-3 py-2 transition-colors pointer-events-auto disabled:opacity-60 disabled:cursor-not-allowed"
         >
           <div className="flex items-center">
             <GitMerge className="w-4 h-4 mr-3" />
@@ -410,9 +408,6 @@ const FloatingTriggerPopup: React.FC<FloatingTriggerPopupProps> = ({
               <div className="text-sm font-medium text-neutral-900">
                 Create Merge Request
               </div>
-              <span className="text-xs text-neutral-500">
-                Open a new merge request
-              </span>
             </div>
             <div className="ml-3">
               <ChevronRight className="w-4 h-4 opacity-60 group-hover:opacity-100" />
@@ -424,16 +419,13 @@ const FloatingTriggerPopup: React.FC<FloatingTriggerPopupProps> = ({
         <button
           disabled={!isAuthenticated}
           onClick={() => onFeatureSelect('issues')}
-          className="group w-full text-left hover:bg-neutral-100/60 rounded-lg px-3 py-2 transition-colors pointer-events-auto disabled:opacity-60 disabled:cursor-not-allowed"
+          className="group w-full overflow-hidden text-nowrap text-left hover:bg-neutral-100/60 rounded-lg px-3 py-2 transition-colors pointer-events-auto disabled:opacity-60 disabled:cursor-not-allowed"
         >
           <div className="flex items-center">
             <ListCheck className="w-4 h-4 mr-3 text-neutral-700" />
             <div className="flex-1 min-w-0">
               <div className="text-sm font-medium text-neutral-900">
                 Issue List
-              </div>
-              <div className="text-xs text-neutral-500 ">
-                List of issues on your project
               </div>
             </div>
             <div className="ml-3 flex items-center gap-2 text-xs text-neutral-700">
@@ -446,16 +438,13 @@ const FloatingTriggerPopup: React.FC<FloatingTriggerPopupProps> = ({
         <button
           disabled={!isAuthenticated}
           onClick={() => onFeatureSelect('merge-requests')}
-          className="group w-full text-left hover:bg-neutral-100/60 rounded-lg px-3 py-2 transition-colors pointer-events-auto disabled:opacity-60 disabled:cursor-not-allowed"
+          className="group w-full overflow-hidden text-nowrap text-left hover:bg-neutral-100/60 rounded-lg px-3 py-2 transition-colors pointer-events-auto disabled:opacity-60 disabled:cursor-not-allowed"
         >
           <div className="flex items-center">
             <GitMerge className="w-4 h-4 mr-3 text-neutral-700" />
             <div className="flex-1 min-w-0">
               <div className="text-sm font-medium text-neutral-900">
                 Merge Requests
-              </div>
-              <div className="text-xs text-neutral-500 ">
-                List of merge requests
               </div>
             </div>
             <div className="ml-3 flex items-center gap-2 text-xs text-neutral-700">
@@ -469,7 +458,7 @@ const FloatingTriggerPopup: React.FC<FloatingTriggerPopupProps> = ({
         {/* Pinned */}
         <button
           onClick={() => onFeatureSelect('pinned')}
-          className="group w-full text-left hover:bg-neutral-100/60 rounded-lg px-3 py-2 transition-colors pointer-events-auto"
+          className="group w-full overflow-hidden text-nowrap text-left hover:bg-neutral-100/60 rounded-lg px-3 py-2 transition-colors pointer-events-auto"
         >
           <div className="flex items-center">
             <Pin className="w-4 h-4 mr-3 text-neutral-700" />

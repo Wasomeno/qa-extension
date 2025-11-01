@@ -9,7 +9,6 @@ import {
   XCircle,
   ExternalLink,
   Copy,
-  MoreHorizontal,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { MergeRequestSummary } from '@/types/merge-requests';
@@ -127,36 +126,27 @@ export const MRCard: React.FC<MRCardProps> = ({ mr, onClick }) => {
     }
   };
 
-  const handleMore = (event: React.MouseEvent<HTMLButtonElement>) => {
-    event.stopPropagation();
-    // Placeholder for future context menu / actions
-  };
-
   return (
     <button
       onClick={onClick}
-      className="group flex w-full items-start gap-6 bg-white px-6 py-4 text-left transition hover:bg-slate-50"
+      className="group border rounded-lg flex w-full items-start gap-6 bg-white px-4 py-2 text-left transition hover:bg-slate-50"
       aria-label={`Open merge request ${mr.title}`}
     >
       <div className="flex min-w-0 flex-1 flex-col gap-3">
-        <div className="flex flex-col gap-1">
+        <div className="flex flex-col gap-2">
           <div className="flex items-center gap-2">
-            <span className="rounded-md bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-600">
-              !{mr.iid}
-            </span>
             <h3 className="truncate text-sm font-semibold text-slate-900 group-hover:text-slate-950">
               {mr.title}
             </h3>
           </div>
-          <div className="flex items-center gap-2 text-xs text-slate-500">
-            <GitBranch className="h-3.5 w-3.5 text-slate-400" />
-            <span className="rounded-md bg-slate-100 px-2 py-0.5 font-medium text-slate-600">
-              {mr.source_branch}
-            </span>
+          <div className="flex items-center gap-2 w-full text-xs text-slate-500">
+            <div className="rounded-md flex items-center gap-1 bg-slate-100 px-2 py-0.5 font-medium text-slate-600">
+              <GitBranch className="h-2 w-2" /> <span>{mr.source_branch}</span>
+            </div>
             <span className="text-slate-300">→</span>
-            <span className="rounded-md bg-emerald-100 px-2 py-0.5 font-medium text-emerald-700">
-              {mr.target_branch}
-            </span>
+            <div className="rounded-md flex items-center gap-1 bg-blue-100 px-2 py-0.5 font-medium text-blue-700">
+              <GitBranch className="h-2 w-2" /> <span>{mr.target_branch}</span>
+            </div>
           </div>
         </div>
 
@@ -209,7 +199,7 @@ export const MRCard: React.FC<MRCardProps> = ({ mr, onClick }) => {
         <button
           type="button"
           onClick={handleOpenGitLab}
-          className="rounded-md border border-transparent p-2 text-slate-400 transition hover:border-slate-200 hover:bg-slate-100 hover:text-slate-700"
+          className="rounded-md border-none leading-5 bg-transparent text-slate-400 transition hover:border-slate-200 hover:bg-slate-100 hover:text-slate-700"
           title="Open in GitLab"
         >
           <ExternalLink className="h-4 w-4" />
@@ -217,7 +207,7 @@ export const MRCard: React.FC<MRCardProps> = ({ mr, onClick }) => {
         <button
           type="button"
           onClick={handleCopyLink}
-          className="relative rounded-md border border-transparent p-2 text-slate-400 transition hover:border-slate-200 hover:bg-slate-100 hover:text-slate-700"
+          className="relative rounded-md leading-5 border-none bg-transparent text-slate-400 transition hover:border-slate-200 hover:bg-slate-100 hover:text-slate-700"
           title="Copy link"
         >
           <Copy className="h-4 w-4" />

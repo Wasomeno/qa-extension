@@ -239,16 +239,6 @@ const FloatingTriggerButton: React.FC<FloatingTriggerButtonProps> = ({
         zIndex: 999999,
         pointerEvents: hidden ? 'none' : 'auto',
         backdropFilter: viewState === 'closed' ? 'blur(12px)' : 'blur(16px)',
-        background:
-          viewState === 'closed' && !isHovered
-            ? 'linear-gradient(90deg, #ef4444 0%, #f97316 100%)'
-            : 'var(--qa-glass)',
-        border:
-          viewState === 'closed' && !isHovered
-            ? 'none'
-            : viewState === 'closed'
-              ? '1px solid var(--qa-border)'
-              : undefined,
         boxShadow:
           viewState === 'closed'
             ? '0 4px 12px rgba(0,0,0,0.15)'
@@ -273,7 +263,7 @@ const FloatingTriggerButton: React.FC<FloatingTriggerButtonProps> = ({
               : selectedFeature === 'pinned'
                 ? 440
                 : 580,
-        borderRadius: viewState === 'closed' ? (isHovered ? 100 : 100) : 16,
+        borderRadius: viewState === 'closed' ? 100 : 16,
         scale: 1,
         opacity: opacity,
       }}
@@ -316,8 +306,8 @@ const FloatingTriggerButton: React.FC<FloatingTriggerButtonProps> = ({
               >
                 <motion.div
                   animate={{
-                    scale: isHovered ? 1 : 0,
-                    opacity: isHovered ? 1 : 0,
+                    scale: isHovered ? 1 : 0.8,
+                    opacity: isHovered ? 1 : 0.8,
                     rotate: isHovered && !isDragging ? 5 : 0,
                   }}
                   whileTap={!isDragging ? { scale: 0.8, rotate: -5 } : {}}
@@ -341,7 +331,7 @@ const FloatingTriggerButton: React.FC<FloatingTriggerButtonProps> = ({
             <TooltipPortal container={rootRef.current ?? undefined}>
               <TooltipContent
                 side="top"
-                sideOffset={12}
+                sideOffset={10}
                 className="animate-in fade-in-0 zoom-in-95 slide-in-from-bottom-2 duration-200"
               >
                 <motion.div
@@ -354,7 +344,7 @@ const FloatingTriggerButton: React.FC<FloatingTriggerButtonProps> = ({
                     duration: 0.2,
                   }}
                 >
-                  Let's manage some issue!
+                  Hello!
                 </motion.div>
               </TooltipContent>
             </TooltipPortal>

@@ -91,6 +91,7 @@ export interface Project {
   slackChannelId?: string;
   isActive: boolean;
   createdAt: string;
+  last_activity_at?: string; // GitLab last activity timestamp
 }
 
 export interface GitLabUser {
