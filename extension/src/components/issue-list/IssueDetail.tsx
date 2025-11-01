@@ -111,6 +111,8 @@ const IssueDetail: React.FC<IssueDetailProps> = ({
     null
   );
   const evidenceMessageRef = React.useRef<HTMLTextAreaElement>(null);
+  const [pastingImage, setPastingImage] = React.useState(false);
+  const [pasteError, setPasteError] = React.useState<string | null>(null);
   const [issueDescription, setIssueDescription] = React.useState<string>('');
   const [descriptionSaving, setDescriptionSaving] = React.useState(false);
   const [descriptionError, setDescriptionError] = React.useState<string | null>(
@@ -183,6 +185,68 @@ const IssueDetail: React.FC<IssueDetailProps> = ({
     setEvidenceMessage('');
     setEvidenceError(null);
     setEvidenceSuccess(null);
+    setPasteError(null);
+  };
+
+  // Clipboard paste handler for evidence textarea: uploads image and inserts Markdown
+  const handleEvidencePaste = async (
+    e: React.ClipboardEvent<HTMLTextAreaElement>
+  ) => {
+    try {
+      const cd = e.clipboardData;
+      if (!cd) return;
+      const files: File[] = [];
+      if (cd.items && cd.items.length) {
+        for (const item of Array.from(cd.items)) {
+          if (item.kind === 'file') {
+            const f = item.getAsFile();
+            if (f && f.type && f.type.startsWith('image/')) files.push(f);
+          }
+        }
+      }
+      if (!files.length && cd.files && cd.files.length) {
+        for (const f of Array.from(cd.files)) {
+          if (f.type && f.type.startsWith('image/')) files.push(f);
+        }
+      }
+      if (!files.length) return; // let default paste proceed
+
+      // Intercept paste to upload image
+      e.preventDefault();
+      setPastingImage(true);
+      setPasteError(null);
+
+      const file = files[0];
+      const resp = await api.uploadFile(file, 'screenshot');
+      if (resp.success && (resp.data as any)?.url) {
+        const url = (resp.data as any).url as string;
+        const el = evidenceMessageRef.current;
+        const v = evidenceMessage || '';
+        const start = el?.selectionStart ?? v.length;
+        const end = el?.selectionEnd ?? start;
+        const before = v.slice(0, start);
+        const after = v.slice(end);
+        const insertion =
+          (before.endsWith('\n') ? '' : '\n') +
+          `![pasted-image](${url})` +
+          '\n';
+        const newText = before + insertion + after;
+        setEvidenceMessage(newText);
+        setTimeout(() => {
+          try {
+            el?.focus();
+            const pos = before.length + insertion.length;
+            el?.setSelectionRange(pos, pos);
+          } catch {}
+        }, 0);
+      } else {
+        setPasteError((resp as any)?.error || 'Image upload failed');
+      }
+    } catch (err: any) {
+      setPasteError(err?.message || 'Image upload failed');
+    } finally {
+      setPastingImage(false);
+    }
   };
 
   const handleEvidenceSubmit = async () => {
@@ -196,7 +260,10 @@ const IssueDetail: React.FC<IssueDetailProps> = ({
         evidenceStatus === 'passed'
           ? '✅ Evidence (Passed):'
           : '❌ Evidence (Not Passed):';
-      const body = `${prefix} ${evidenceMessage || ''}`.trim();
+
+      // Format message with images on new lines for better GitLab rendering
+      const message = evidenceMessage || '';
+      const body = message.trim() ? `${prefix} ${message}`.trim() : prefix;
 
       const resp = await api.addGitLabIssueNote(projectId, iid, body);
 
@@ -212,6 +279,7 @@ const IssueDetail: React.FC<IssueDetailProps> = ({
       setTimeout(() => {
         setEvidenceMessage('');
         setEvidenceSuccess(null);
+        setPasteError(null);
       }, 2000);
     } catch (err) {
       console.error('Add evidence failed:', err);
@@ -710,12 +778,22 @@ const IssueDetail: React.FC<IssueDetailProps> = ({
               </Label>
               <Textarea
                 className="h-16 resize-none text-xs"
-                placeholder="Add a short note or paste a link"
+                placeholder="Add a short note, paste a link, or paste an image"
                 value={evidenceMessage}
                 onChange={e => setEvidenceMessage(e.target.value)}
+                onPaste={handleEvidencePaste}
                 ref={evidenceMessageRef}
-                disabled={!!evidenceSuccess}
+                disabled={!!evidenceSuccess || pastingImage}
               />
+              {pastingImage && (
+                <div className="mt-2 text-xs text-neutral-600 flex items-center gap-1">
+                  <span className="inline-block w-3 h-3 border-2 border-neutral-300 border-t-neutral-600 rounded-full animate-spin" />
+                  Uploading image…
+                </div>
+              )}
+              {pasteError && (
+                <div className="mt-2 text-xs text-red-600">{pasteError}</div>
+              )}
             </div>
 
             <div className="flex items-center gap-2">

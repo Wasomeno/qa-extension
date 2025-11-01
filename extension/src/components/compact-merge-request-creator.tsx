@@ -59,6 +59,7 @@ import { apiService } from '@/services/api';
 import MarkdownIt from 'markdown-it';
 import taskLists from 'markdown-it-task-lists';
 import { getLastUsedPreset } from '@/utils/mrPresets';
+import { formatProjectName } from '@/utils/project-formatter';
 
 const PLACEHOLDER_FEATURES = new Set(['Feature A', 'Feature B', 'Feature C']);
 
@@ -690,7 +691,7 @@ export const CompactMergeRequestCreator: React.FC<
       const p = list[idx];
       if (!p) return;
       setValue('projectId', p.id, { shouldDirty: true, shouldValidate: true });
-      setSelectedProjectName(p.name ?? '');
+      setSelectedProjectName(formatProjectName(p));
       setQuery('');
       setDebouncedQuery('');
       setHighlight(0);
@@ -749,7 +750,7 @@ export const CompactMergeRequestCreator: React.FC<
                     onMouseEnter={() => setHighlight(idx)}
                     onClick={() => selectAt(idx)}
                   >
-                    {p.name}
+                    {formatProjectName(p)}
                   </button>
                 </li>
               ))}
@@ -1226,7 +1227,7 @@ export const CompactMergeRequestCreator: React.FC<
                     )
                   }
                 >
-                  <LuFolderGit2 />
+                  <LuFolderGit2 className="text-blue-600" />
                   <div className="flex items-center gap-2 text-sm text-neutral-600">
                     <span>Project</span>
                     {(() => {
@@ -1285,7 +1286,7 @@ export const CompactMergeRequestCreator: React.FC<
                     )
                   }
                 >
-                  <LuGitBranch />
+                  <LuGitBranch className="text-green-600" />
                   <div className="flex items-center gap-2 text-sm text-neutral-600">
                     <span>Source</span>
                     <span className="text-neutral-900 truncate max-w-[120px]">
@@ -1334,7 +1335,7 @@ export const CompactMergeRequestCreator: React.FC<
                     )
                   }
                 >
-                  <LuGitBranch />
+                  <LuGitBranch className="text-green-600" />
                   <div className="flex items-center gap-2 text-sm text-neutral-600">
                     <span>Target</span>
                     <span className="text-neutral-900 truncate max-w-[120px]">
@@ -1380,7 +1381,7 @@ export const CompactMergeRequestCreator: React.FC<
                     )
                   }
                 >
-                  <IoPersonOutline />
+                  <IoPersonOutline className="text-teal-600" />
                   <div className="flex items-center gap-2 text-sm text-neutral-600">
                     <span>Assignees</span>
                     <span className="text-neutral-900 truncate max-w-[100px]">
@@ -1428,7 +1429,7 @@ export const CompactMergeRequestCreator: React.FC<
                     )
                   }
                 >
-                  <IoPersonOutline />
+                  <IoPersonOutline className="text-teal-600" />
                   <div className="flex items-center gap-2 text-sm text-neutral-600">
                     <span>Reviewers</span>
                     <span className="text-neutral-900 truncate max-w-[100px]">
@@ -1476,7 +1477,7 @@ export const CompactMergeRequestCreator: React.FC<
                     )
                   }
                 >
-                  <PiSlackLogoLight />
+                  <PiSlackLogoLight className="text-[#E01E5A]" />
                   <div className="flex items-center gap-2 text-sm text-neutral-600">
                     <span>Slack</span>
                     {(() => {

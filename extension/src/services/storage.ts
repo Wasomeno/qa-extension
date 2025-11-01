@@ -59,6 +59,7 @@ export interface PendingAction<T = any> {
 export interface FloatingTriggerSettings {
   autoHideOnBlur: boolean;
   manualHideDurationMs: number;
+  whitelistedDomains: string[]; // Domains where floating trigger should inject
 }
 
 export interface ExtensionSettings {
@@ -121,6 +122,7 @@ export const DEFAULT_SETTINGS: ExtensionSettings = {
   floatingTrigger: {
     autoHideOnBlur: true,
     manualHideDurationMs: 10_000,
+    whitelistedDomains: [], // Empty array = enabled on all sites by default
   },
 };
 
@@ -862,7 +864,15 @@ class StorageService {
   async getParsedPinnedSnapshots(): Promise<PinnedIssueSnapshot[]> {
     const snapshots = await this.get('pinnedSnapshots');
     if (!snapshots) return [];
-    const parsedSnapshot = Object.keys(snapshots).map(key => snapshots[key]);
+
+    // Only return snapshots that are actually pinned
+    const pinnedIssues = await this.getPinnedIssues();
+    const pinnedIds = new Set(pinnedIssues.map(p => p.id));
+
+    const parsedSnapshot = Object.keys(snapshots)
+      .filter(key => pinnedIds.has(key))
+      .map(key => snapshots[key]);
+
     return parsedSnapshot || [];
   }
 

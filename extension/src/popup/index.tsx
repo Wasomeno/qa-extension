@@ -14,6 +14,7 @@ import {
   FiCheckCircle,
   FiCamera,
   FiFileText,
+  FiArrowLeft,
 } from 'react-icons/fi';
 import { Loader } from 'lucide-react';
 
@@ -21,9 +22,10 @@ import { apiService } from '@/services/api';
 import { storageService } from '@/services/storage';
 import useOAuth from '@/hooks/useOAuth';
 import { UserData, MessageType } from '@/types/messages';
+import SettingsPage from '@/popup/components/SettingsPage';
 
 interface PopupState {
-  currentView: 'dashboard' | 'login' | 'loading';
+  currentView: 'dashboard' | 'login' | 'loading' | 'settings';
   user: UserData | null;
   isAuthenticated: boolean;
   connectionStatus: 'connected' | 'disconnected' | 'connecting';
@@ -652,6 +654,20 @@ const PopupApp: React.FC = () => {
     window.close();
   };
 
+  const openSettings = (): void => {
+    setState(prev => ({
+      ...prev,
+      currentView: 'settings',
+    }));
+  };
+
+  const closeSettings = (): void => {
+    setState(prev => ({
+      ...prev,
+      currentView: 'dashboard',
+    }));
+  };
+
   // Removed screenshot timestamp formatting
 
   const clearMessage = (): void => {
@@ -783,6 +799,10 @@ const PopupApp: React.FC = () => {
     );
   }
 
+  if (state.currentView === 'settings') {
+    return <SettingsPage onClose={closeSettings} />;
+  }
+
   return (
     <div className="flex flex-col h-full w-full max-w-sm mx-auto glass-bg-pattern relative overflow-hidden">
       <div className="absolute inset-0 glass-bg-grid opacity-20"></div>
@@ -823,7 +843,7 @@ const PopupApp: React.FC = () => {
             </button>
             <button
               type="button"
-              onClick={openOptionsPage}
+              onClick={openSettings}
               className="p-2 rounded-md text-gray-600 hover:text-gray-900 hover:bg-gray-100 transition-colors"
               title="Settings"
             >

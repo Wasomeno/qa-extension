@@ -65,6 +65,7 @@ import { useQuery } from '@tanstack/react-query';
 import { IoPricetagsOutline, IoPersonOutline } from 'react-icons/io5';
 import { CgNotes } from 'react-icons/cg';
 import { PiSlackLogoLight } from 'react-icons/pi';
+import { formatProjectName } from '@/utils/project-formatter';
 
 interface CompactIssueCreatorProps {
   initialData?: Partial<IssueData>;
@@ -394,7 +395,11 @@ export const CompactIssueCreator: React.FC<CompactIssueCreatorProps> = ({
     const list = React.useMemo(() => {
       const q = query.trim().toLowerCase();
       return (projects || []).filter(p =>
-        !q ? true : p.name.toLowerCase().includes(q)
+        !q
+          ? true
+          : p.name.toLowerCase().includes(q) ||
+            (p.path_with_namespace &&
+              p.path_with_namespace.toLowerCase().includes(q))
       );
     }, [projects, query]);
 
@@ -463,7 +468,7 @@ export const CompactIssueCreator: React.FC<CompactIssueCreatorProps> = ({
                     onMouseEnter={() => setHighlight(idx)}
                     onClick={() => selectAt(idx)}
                   >
-                    {p.name}
+                    {formatProjectName(p)}
                   </button>
                 </li>
               ))}
@@ -1044,7 +1049,7 @@ export const CompactIssueCreator: React.FC<CompactIssueCreatorProps> = ({
                     )
                   }
                 >
-                  <LuFolderGit2 />
+                  <LuFolderGit2 className="text-blue-600" />
                   <div className="flex items-center gap-2 text-sm text-neutral-600">
                     <span>Project</span>
                     {(() => {
@@ -1053,7 +1058,7 @@ export const CompactIssueCreator: React.FC<CompactIssueCreatorProps> = ({
                       );
                       return (
                         <span className="text-neutral-900 truncate max-w-[140px]">
-                          {p ? p.name : 'Select'}
+                          {p ? formatProjectName(p) : 'Select'}
                         </span>
                       );
                     })()}
@@ -1098,7 +1103,7 @@ export const CompactIssueCreator: React.FC<CompactIssueCreatorProps> = ({
                     )
                   }
                 >
-                  <IoPricetagsOutline />
+                  <IoPricetagsOutline className="text-purple-600" />
                   <div className="flex items-center gap-2 text-sm text-neutral-600">
                     <span>Labels</span>
                     {(() => {
@@ -1163,7 +1168,7 @@ export const CompactIssueCreator: React.FC<CompactIssueCreatorProps> = ({
                     )
                   }
                 >
-                  <CgNotes />
+                  <CgNotes className="text-orange-600" />
                   <div className="flex items-center gap-2 text-sm text-neutral-600">
                     <span>Format</span>
                     <span className="text-neutral-900 truncate max-w-[120px]">
@@ -1215,7 +1220,7 @@ export const CompactIssueCreator: React.FC<CompactIssueCreatorProps> = ({
                     )
                   }
                 >
-                  <IoPersonOutline />
+                  <IoPersonOutline className="text-teal-600" />
                   <div className="flex items-center gap-2 text-sm text-neutral-600">
                     <span>Assignee</span>
                     {(() => {
@@ -1267,7 +1272,7 @@ export const CompactIssueCreator: React.FC<CompactIssueCreatorProps> = ({
                     )
                   }
                 >
-                  <PiSlackLogoLight />
+                  <PiSlackLogoLight className="text-[#E01E5A]" />
                   <div className="flex items-center gap-2 text-sm text-neutral-600">
                     <span>Slack</span>
                     {(() => {

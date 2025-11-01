@@ -6,6 +6,8 @@ import { getViewportInfo, getInteractiveElements } from '@/utils/dom';
 import { shadowDOMManager } from '@/utils/shadow-dom';
 import { loadShadowDOMCSS } from '@/utils/css-loader';
 import { createIframeHost } from '@/utils/iframe-host';
+import { storageService } from '@/services/storage';
+import { isUrlWhitelisted } from '@/utils/domain-matcher';
 
 class SimpleTrigger {
   private floatingTriggerContainer: HTMLDivElement | null = null;
@@ -55,11 +57,45 @@ class SimpleTrigger {
     this.registerScreenshotShortcutListener();
     this.ensureKeepalive();
 
-    // Auto-activate on allowed domains
-    if (this.shouldShowFloatingTrigger()) {
-      setTimeout(() => {
-        this.activate();
-      }, 1000);
+    // Auto-activate on allowed domains (check whitelist)
+    this.checkWhitelistAndActivate();
+
+    // Listen for whitelist changes
+    storageService.onChanged('settings', () => {
+      this.checkWhitelistAndActivate();
+    });
+  }
+
+  private async checkWhitelistAndActivate(): Promise<void> {
+    if (!this.shouldShowFloatingTrigger()) {
+      return;
+    }
+
+    try {
+      const settings = await storageService.getSettings();
+      const whitelistedDomains =
+        settings.floatingTrigger.whitelistedDomains || [];
+      const currentUrl = window.location.href;
+
+      if (isUrlWhitelisted(currentUrl, whitelistedDomains)) {
+        console.log(
+          'QA Extension: URL is whitelisted, activating floating trigger'
+        );
+        setTimeout(() => {
+          this.activate();
+        }, 1000);
+      } else {
+        console.log('QA Extension: URL not whitelisted, skipping activation');
+        // Deactivate if currently active
+        this.removeFloatingTrigger();
+      }
+    } catch (error) {
+      console.warn(
+        'QA Extension: Failed to check whitelist, skipping activation',
+        error
+      );
+      // On error, do NOT activate - fail safely by not showing the trigger
+      this.removeFloatingTrigger();
     }
   }
 
@@ -425,6 +461,12 @@ class SimpleTrigger {
   }
 
   private async activate(): Promise<void> {
+    // Check whitelist before activating
+    if (!(await this.isUrlAllowedByWhitelist())) {
+      console.log('QA Extension: Activation blocked - URL not whitelisted');
+      return;
+    }
+
     if (!this.isActive) {
       this.isActive = true;
       try {
@@ -435,6 +477,28 @@ class SimpleTrigger {
       }
     }
     this.hiddenReason = null;
+  }
+
+  /**
+   * Check if current URL is allowed by whitelist
+   * @returns true if URL is whitelisted or whitelist is empty, false otherwise
+   */
+  private async isUrlAllowedByWhitelist(): Promise<boolean> {
+    try {
+      const settings = await storageService.getSettings();
+      const whitelistedDomains =
+        settings.floatingTrigger.whitelistedDomains || [];
+      const currentUrl = window.location.href;
+
+      return isUrlWhitelisted(currentUrl, whitelistedDomains);
+    } catch (error) {
+      console.warn(
+        'QA Extension: Failed to check whitelist in activate()',
+        error
+      );
+      // Fail safely - don't activate if we can't check whitelist
+      return false;
+    }
   }
 
   private async injectFloatingTrigger(): Promise<void> {

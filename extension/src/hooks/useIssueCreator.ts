@@ -8,6 +8,7 @@ interface Project {
   id: string;
   name: string;
   description?: string;
+  path_with_namespace?: string;
 }
 
 interface UseIssueCreatorProps {

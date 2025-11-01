@@ -10,7 +10,12 @@ import IssueCard from '@/components/common/IssueCard';
 import AvatarGroup from '@/components/issue-list/AvatarGroup';
 
 function Dot({ color }: { color: string }) {
-  return <span className="inline-block h-3 w-3 rounded-full border" style={{ backgroundColor: color }} />;
+  return (
+    <span
+      className="inline-block h-3 w-3 rounded-full border"
+      style={{ backgroundColor: color }}
+    />
+  );
 }
 
 dayjs.extend(relativeTime);
@@ -53,7 +58,9 @@ const IssueRow: React.FC<IssueRowProps> = ({
   const statusValue: 'open' | 'closed' = isClosed ? 'closed' : 'open';
 
   const [localLabels, setLocalLabels] = React.useState<string[]>(
-    Array.isArray(selectedLabels) ? [...selectedLabels, statusValue] : [statusValue]
+    Array.isArray(selectedLabels)
+      ? [...selectedLabels, statusValue]
+      : [statusValue]
   );
   const [saving, setSaving] = React.useState(false);
 
@@ -63,7 +70,9 @@ const IssueRow: React.FC<IssueRowProps> = ({
   }, [selectedLabels, statusValue]);
 
   const isDirty = React.useMemo(() => {
-    const a = Array.isArray(selectedLabels) ? [...selectedLabels, statusValue] : [statusValue];
+    const a = Array.isArray(selectedLabels)
+      ? [...selectedLabels, statusValue]
+      : [statusValue];
     const b = Array.isArray(localLabels) ? localLabels : [];
     if (a.length !== b.length) return true;
     const sa = [...a].sort().join('\n');
@@ -80,10 +89,10 @@ const IssueRow: React.FC<IssueRowProps> = ({
   const handleGitLabClick = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    
+
     // GitLab API returns web_url field directly
     const webUrl = (item as any)?.web_url || (item as any)?.webUrl;
-    
+
     if (webUrl) {
       window.open(webUrl, '_blank', 'noopener,noreferrer');
     } else {
@@ -119,24 +128,29 @@ const IssueRow: React.FC<IssueRowProps> = ({
       <span
         className="inline-block w-2.5 h-2.5 rounded-full"
         style={{
-          backgroundColor: statusValue === 'closed' ? '#6b7280' : '#22c55e'
+          backgroundColor: statusValue === 'closed' ? '#6b7280' : '#22c55e',
         }}
       />
       <span className="capitalize">{statusValue}</span>
     </Badge>
   );
 
-  const regularLabelItems = labelsArray.filter(l =>
-    localLabels.includes(l.name) &&
-    l.name.toLowerCase() !== 'open' &&
-    l.name.toLowerCase() !== 'closed'
+  const regularLabelItems = labelsArray.filter(
+    l =>
+      localLabels.includes(l.name) &&
+      l.name.toLowerCase() !== 'open' &&
+      l.name.toLowerCase() !== 'closed'
   );
 
   const staticLabels = (
     <div className="flex flex-wrap gap-2">
       {statusBadge}
-      {regularLabelItems.map((l) => (
-        <Badge key={l.id} variant="secondary" className="gap-1 glass-card border-white/50 bg-white/60 backdrop-blur-sm">
+      {regularLabelItems.map(l => (
+        <Badge
+          key={l.id}
+          variant="secondary"
+          className="gap-1 glass-card border-white/50 bg-white/60 backdrop-blur-sm"
+        >
           <Dot color={l.color} />
           <span className="leading-none">{l.name}</span>
         </Badge>
@@ -166,7 +180,11 @@ const IssueRow: React.FC<IssueRowProps> = ({
           {assignees.length > 0 && (
             <>
               <span className="text-black/70 mx-1">•</span>
-              <AvatarGroup users={assignees as any} size={20} portalContainer={portalContainer || undefined} />
+              <AvatarGroup
+                users={assignees as any}
+                size={20}
+                portalContainer={portalContainer || undefined}
+              />
             </>
           )}
         </div>
@@ -215,8 +233,12 @@ const IssueRow: React.FC<IssueRowProps> = ({
               setSaving(true);
 
               // Check if status changed
-              const hasOpenLabel = localLabels.some(label => label.toLowerCase() === 'open');
-              const hasClosedLabel = localLabels.some(label => label.toLowerCase() === 'closed');
+              const hasOpenLabel = localLabels.some(
+                label => label.toLowerCase() === 'open'
+              );
+              const hasClosedLabel = localLabels.some(
+                label => label.toLowerCase() === 'closed'
+              );
               const newStatus = hasClosedLabel ? 'closed' : 'open';
 
               if (newStatus !== statusValue) {
@@ -224,8 +246,10 @@ const IssueRow: React.FC<IssueRowProps> = ({
               }
 
               // Update labels (excluding status labels for the API)
-              const regularLabels = localLabels.filter(label =>
-                label.toLowerCase() !== 'open' && label.toLowerCase() !== 'closed'
+              const regularLabels = localLabels.filter(
+                label =>
+                  label.toLowerCase() !== 'open' &&
+                  label.toLowerCase() !== 'closed'
               );
               await onChangeLabels(regularLabels);
             } finally {
@@ -233,7 +257,9 @@ const IssueRow: React.FC<IssueRowProps> = ({
             }
           }}
           onCancel={() => {
-            const baseLabels = Array.isArray(selectedLabels) ? selectedLabels : [];
+            const baseLabels = Array.isArray(selectedLabels)
+              ? selectedLabels
+              : [];
             setLocalLabels([...baseLabels, statusValue]);
           }}
         />

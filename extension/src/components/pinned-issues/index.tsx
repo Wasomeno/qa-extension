@@ -125,6 +125,7 @@ const PinnedIssuesInner: React.FC<PinnedIssuesProps> = ({
         id,
         Object.assign({}, issue as any, { lastSyncedAt: Date.now() }) as any
       );
+      await queryClient.invalidateQueries({ queryKey: ['pinnedIssues'] });
     } catch {}
   };
 

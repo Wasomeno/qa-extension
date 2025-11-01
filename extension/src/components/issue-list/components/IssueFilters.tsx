@@ -16,6 +16,7 @@ import { Checkbox } from '@/src/components/ui/ui/checkbox';
 import { Label } from '@/src/components/ui/ui/label';
 import { ChevronRight } from 'lucide-react';
 import type { IssueFilterState, GitLabLabel } from '../types';
+import { formatProjectName } from '@/utils/project-formatter';
 
 export interface IssueFiltersProps {
   filters: IssueFilterState;
@@ -293,6 +294,9 @@ const ProjectFilter: React.FC<ProjectFilterProps> = ({
   const selectedProject = projects.find(
     p => String(p.id) === selectedProjectIds[0]
   );
+  const selectedProjectLabel = selectedProject
+    ? formatProjectName(selectedProject)
+    : '1 selected';
 
   return (
     <div className="space-y-1">
@@ -315,12 +319,12 @@ const ProjectFilter: React.FC<ProjectFilterProps> = ({
                   variant="secondary"
                   className="text-[10px] px-2 py-1 truncate max-w-[140px]"
                 >
-                  {selectedProject?.name || '1 selected'}
+                  {selectedProjectLabel}
                 </Badge>
               )}
               {selectedProjectIds.length > 1 && (
                 <span className="truncate">
-                  {selectedProject?.name || 'Multiple'}
+                  {selectedProjectLabel}
                   {selectedProjectIds.length > 1 &&
                     ` +${selectedProjectIds.length - 1}`}
                 </span>
@@ -380,7 +384,9 @@ const ProjectFilter: React.FC<ProjectFilterProps> = ({
                             className="mr-1 data-[state=checked]:accent-neutral-500"
                             checked={checked}
                           />
-                          <span className="truncate">{p.name}</span>
+                          <span className="truncate">
+                            {formatProjectName(p)}
+                          </span>
                         </button>
                       </li>
                     );

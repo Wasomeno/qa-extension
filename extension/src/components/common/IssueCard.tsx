@@ -71,49 +71,32 @@ const IssueCard: React.FC<IssueCardProps> = ({
               {statusControl}
             </div>
           </div>
-          {(metaLeft || actionRight) && (
-            <div className="flex items-center justify-between gap-2">
-              <div className="text-[12px] text-black/70 truncate">{metaLeft}</div>
-              <div
-                className={cn(
-                  'flex items-center gap-1.5 transition-all duration-200 ease-out',
-                  isHovered ? 'opacity-100' : 'opacity-0'
-                )}
-              >
-                {actionRight}
-              </div>
+          {(metaLeft || actionRight) && isHovered ? (
+            <div
+              className={cn(
+                'flex items-center justify-end gap-1.5 transition-all duration-200 ease-out'
+              )}
+            >
+              {actionRight}
             </div>
-          )}
+          ) : null}
 
-          {labelsSection || labelsStatic ? <div className="h-1" /> : null}
+          {labelsSection ? <div className="h-1" /> : null}
 
-          {labelsSection || labelsStatic ? (
-            <div className="space-y-1" onClick={e => e.stopPropagation()}>
-              <div className="text-[11px] font-medium text-black/70">Labels</div>
-              <div className="relative">
-                <div
-                  className={cn(
-                    'transition-all duration-200 ease-out',
-                    isHovered
-                      ? 'opacity-100 relative z-10'
-                      : 'opacity-0 pointer-events-none absolute inset-0 z-0'
-                  )}
-                >
-                  {labelsSection}
-                </div>
-                {labelsStatic && (
-                  <div
-                    className={cn(
-                      'transition-all duration-200 ease-out',
-                      isHovered
-                        ? 'opacity-0 pointer-events-none absolute inset-0 z-0'
-                        : 'opacity-100 relative z-10'
-                    )}
-                  >
-                    {labelsStatic}
-                  </div>
-                )}
+          {labelsSection ? (
+            <div
+              className={cn(
+                'transition-all space-y-1 duration-200 ease-out',
+                isHovered
+                  ? 'opacity-100 relative z-10'
+                  : 'opacity-0 pointer-events-none absolute inset-0 z-0'
+              )}
+              onClick={e => e.stopPropagation()}
+            >
+              <div className="text-[11px] font-medium text-black/70">
+                Labels
               </div>
+              <div className="relative">{labelsSection}</div>
             </div>
           ) : null}
         </div>

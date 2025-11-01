@@ -25,32 +25,32 @@ module.exports = {
         background: 'hsl(var(--background))',
         foreground: 'hsl(var(--foreground))',
         primary: {
-          50: '#eff6ff',
-          100: '#dbeafe',
-          200: '#bfdbfe',
-          300: '#93c5fd',
-          400: '#60a5fa',
-          500: '#3b82f6',
-          600: '#2563eb',
-          700: '#1d4ed8',
-          800: '#1e40af',
-          900: '#1e3a8a',
-          950: '#172554',
+          50: '#fff5f0',
+          100: '#ffe8dc',
+          200: '#ffd1b8',
+          300: '#fca326', // Primary-300 from palette
+          400: '#ff864d',
+          500: '#fc6d26', // Primary from palette
+          600: '#e24329', // Primary-700 from palette (using as 600 for better scale)
+          700: '#e24329', // Primary-700 from palette
+          800: '#b83622',
+          900: '#8f2a1a',
+          950: '#661d12',
           DEFAULT: 'hsl(var(--primary))',
           foreground: 'hsl(var(--primary-foreground))',
         },
         secondary: {
           50: '#f8fafc',
-          100: '#f1f5f9',
-          200: '#e2e8f0',
-          300: '#cbd5e1',
-          400: '#94a3b8',
-          500: '#64748b',
-          600: '#475569',
-          700: '#334155',
-          800: '#1e293b',
-          900: '#0f172a',
-          950: '#020617',
+          100: '#f5f7fa', // Neutral-100 from palette
+          200: '#e5e8ed',
+          300: '#d3d6db', // Neutral-300 from palette
+          400: '#9ca3af',
+          500: '#6b7078', // Neutral-500 from palette
+          600: '#4b5563',
+          700: '#3d4046', // Neutral-700 from palette
+          800: '#1f2937',
+          900: '#17181a', // Neutral-900 from palette
+          950: '#0b0b0c', // Neutral-950 from palette
           DEFAULT: 'hsl(var(--secondary))',
           foreground: 'hsl(var(--secondary-foreground))',
         },
@@ -63,6 +63,17 @@ module.exports = {
           foreground: 'hsl(var(--muted-foreground))',
         },
         accent: {
+          50: '#eff8ff',
+          100: '#dbeeff',
+          200: '#bfe0ff',
+          300: '#93d0ff',
+          400: '#60b5fa',
+          500: '#3bb2f6', // Accent from palette
+          600: '#2090d8',
+          700: '#1a73af',
+          800: '#1c5f90',
+          900: '#1c4f76',
+          950: '#15324e',
           DEFAULT: 'hsl(var(--accent))',
           foreground: 'hsl(var(--accent-foreground))',
         },
@@ -75,17 +86,17 @@ module.exports = {
           foreground: 'hsl(var(--card-foreground))',
         },
         success: {
-          50: '#f0fdf4',
-          100: '#dcfce7',
-          200: '#bbf7d0',
-          300: '#86efac',
-          400: '#4ade80',
-          500: '#22c55e',
-          600: '#16a34a',
-          700: '#15803d',
-          800: '#166534',
-          900: '#14532d',
-          950: '#052e16',
+          50: '#ecfdf5',
+          100: '#d1fae5',
+          200: '#a7f3d0',
+          300: '#6ee7b7',
+          400: '#34d399',
+          500: '#10b981', // Success from palette
+          600: '#059669',
+          700: '#047857',
+          800: '#065f46',
+          900: '#064e3b',
+          950: '#022c22',
         },
         warning: {
           50: '#fffbeb',
@@ -93,7 +104,7 @@ module.exports = {
           200: '#fde68a',
           300: '#fcd34d',
           400: '#fbbf24',
-          500: '#f59e0b',
+          500: '#f59e0b', // Warning from palette
           600: '#d97706',
           700: '#b45309',
           800: '#92400e',
@@ -107,7 +118,20 @@ module.exports = {
           300: '#fca5a5',
           400: '#f87171',
           500: '#ef4444',
-          600: '#dc2626',
+          600: '#dc2626', // Danger from palette
+          700: '#b91c1c',
+          800: '#991b1b',
+          900: '#7f1d1d',
+          950: '#450a0a',
+        },
+        danger: {
+          50: '#fef2f2',
+          100: '#fee2e2',
+          200: '#fecaca',
+          300: '#fca5a5',
+          400: '#f87171',
+          500: '#ef4444',
+          600: '#dc2626', // Danger from palette (alias for error)
           700: '#b91c1c',
           800: '#991b1b',
           900: '#7f1d1d',

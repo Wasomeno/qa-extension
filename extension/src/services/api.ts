@@ -86,6 +86,7 @@ export interface Project {
   gitlabProjectId?: string;
   // May be present when listing GitLab projects merged with local records
   gitlab_project_id?: number;
+  path_with_namespace?: string; // GitLab group/project path (e.g., "group/project-name")
   hasLocalData?: boolean;
   slackChannelId?: string;
   isActive: boolean;

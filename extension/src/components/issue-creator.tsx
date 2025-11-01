@@ -34,6 +34,7 @@ import {
 } from '@/src/components/ui/ui/select';
 import { Badge } from '@/src/components/ui/ui/badge';
 import { Textarea } from '@/src/components/ui/ui/textarea';
+import { formatProjectName } from '@/utils/project-formatter';
 
 interface IssueCreatorProps {
   initialData?: Partial<IssueData>;
@@ -54,9 +55,8 @@ interface Project {
   id: string;
   name: string;
   description?: string;
+  path_with_namespace?: string;
 }
-
-
 
 export const IssueCreator: React.FC<IssueCreatorProps> = ({
   initialData = {},
@@ -78,7 +78,6 @@ export const IssueCreator: React.FC<IssueCreatorProps> = ({
   const [isGeneratingAI, setIsGeneratingAI] = useState(false);
   const [duplicateCheck, setDuplicateCheck] = useState<any>(null);
   const [isCheckingDuplicates, setIsCheckingDuplicates] = useState(false);
-
 
   const {
     register,
@@ -160,18 +159,34 @@ export const IssueCreator: React.FC<IssueCreatorProps> = ({
   const loadUsers = async (projectId: string): Promise<void> => {
     try {
       // First try to get project-specific users
-      const projectUsersResponse = await apiService.getUsersInProject(projectId);
-      
-      if (projectUsersResponse.success && projectUsersResponse.data && Array.isArray(projectUsersResponse.data) && projectUsersResponse.data.length > 0) {
+      const projectUsersResponse =
+        await apiService.getUsersInProject(projectId);
+
+      if (
+        projectUsersResponse.success &&
+        projectUsersResponse.data &&
+        Array.isArray(projectUsersResponse.data) &&
+        projectUsersResponse.data.length > 0
+      ) {
         setUsers(projectUsersResponse.data);
-        console.log(`Loaded ${projectUsersResponse.data.length} project-specific users`);
+        console.log(
+          `Loaded ${projectUsersResponse.data.length} project-specific users`
+        );
       } else {
         // Fallback to all GitLab users if project-specific users fail or empty
-        console.log('Project-specific users failed or empty, trying GitLab users fallback');
+        console.log(
+          'Project-specific users failed or empty, trying GitLab users fallback'
+        );
         const allUsersResponse = await apiService.getGitLabUsers();
-        if (allUsersResponse.success && allUsersResponse.data && Array.isArray(allUsersResponse.data)) {
+        if (
+          allUsersResponse.success &&
+          allUsersResponse.data &&
+          Array.isArray(allUsersResponse.data)
+        ) {
           setUsers(allUsersResponse.data);
-          console.log(`Loaded ${allUsersResponse.data.length} GitLab users as fallback`);
+          console.log(
+            `Loaded ${allUsersResponse.data.length} GitLab users as fallback`
+          );
         } else {
           console.log('Both user loading methods failed, setting empty users');
           setUsers([]);
@@ -183,9 +198,15 @@ export const IssueCreator: React.FC<IssueCreatorProps> = ({
       try {
         console.log('Trying GitLab users fallback after error');
         const allUsersResponse = await apiService.getGitLabUsers();
-        if (allUsersResponse.success && allUsersResponse.data && Array.isArray(allUsersResponse.data)) {
+        if (
+          allUsersResponse.success &&
+          allUsersResponse.data &&
+          Array.isArray(allUsersResponse.data)
+        ) {
           setUsers(allUsersResponse.data);
-          console.log(`Loaded ${allUsersResponse.data.length} GitLab users as fallback`);
+          console.log(
+            `Loaded ${allUsersResponse.data.length} GitLab users as fallback`
+          );
         } else {
           setUsers([]);
         }
@@ -219,9 +240,6 @@ export const IssueCreator: React.FC<IssueCreatorProps> = ({
       setIsCheckingDuplicates(false);
     }
   };
-
-
-
 
   const saveDraft = async (): Promise<void> => {
     const draftData: IssueData = {
@@ -268,7 +286,6 @@ export const IssueCreator: React.FC<IssueCreatorProps> = ({
       setIsLoading(false);
     }
   };
-
 
   return (
     <div className="min-h-screen">
@@ -463,7 +480,7 @@ export const IssueCreator: React.FC<IssueCreatorProps> = ({
                     ) : (
                       projects.map(project => (
                         <SelectItem key={project.id} value={project.id}>
-                          {project.name}
+                          {formatProjectName(project)}
                         </SelectItem>
                       ))
                     )}
@@ -488,7 +505,9 @@ export const IssueCreator: React.FC<IssueCreatorProps> = ({
                 </Label>
                 <Select
                   value={watchedValues.assigneeId || ''}
-                  onValueChange={(value: any) => setValue('assigneeId', value === 'unassigned' ? '' : value)}
+                  onValueChange={(value: any) =>
+                    setValue('assigneeId', value === 'unassigned' ? '' : value)
+                  }
                   disabled={isLoading || !watchedValues.projectId}
                 >
                   <SelectTrigger className="text-sm">
@@ -498,24 +517,29 @@ export const IssueCreator: React.FC<IssueCreatorProps> = ({
                     <SelectItem value="unassigned">Unassigned</SelectItem>
                     {users.length === 0 ? (
                       <SelectItem value="#" disabled>
-                        {watchedValues.projectId ? 'Loading users...' : 'Select a project first'}
+                        {watchedValues.projectId
+                          ? 'Loading users...'
+                          : 'Select a project first'}
                       </SelectItem>
                     ) : (
                       users.map(user => (
                         <SelectItem key={user.id} value={user.id}>
                           <div className="flex items-center gap-2">
                             {user.avatarUrl && (
-                              <img 
-                                src={user.avatarUrl} 
-                                alt={user.name} 
+                              <img
+                                src={user.avatarUrl}
+                                alt={user.name}
                                 className="w-4 h-4 rounded-full"
-                                onError={(e) => {
-                                  (e.target as HTMLImageElement).style.display = 'none';
+                                onError={e => {
+                                  (e.target as HTMLImageElement).style.display =
+                                    'none';
                                 }}
                               />
                             )}
                             <span>{user.name}</span>
-                            <span className="text-gray-500">(@{user.username})</span>
+                            <span className="text-gray-500">
+                              (@{user.username})
+                            </span>
                           </div>
                         </SelectItem>
                       ))
@@ -523,8 +547,6 @@ export const IssueCreator: React.FC<IssueCreatorProps> = ({
                   </SelectContent>
                 </Select>
               </div>
-
-
 
               {/* Description */}
               <div className="space-y-4">
@@ -587,10 +609,7 @@ export const IssueCreator: React.FC<IssueCreatorProps> = ({
                   </Button>
                   <Button
                     type="submit"
-                    disabled={
-                      isLoading ||
-                      !watchedValues.description
-                    }
+                    disabled={isLoading || !watchedValues.description}
                     className="glass-button glass-glow-green flex-1 bg-green-500/20 text-green-700 border-green-300/30 hover:bg-green-500/300"
                   >
                     {isLoading ? (

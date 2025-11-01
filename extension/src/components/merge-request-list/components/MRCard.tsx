@@ -7,8 +7,10 @@ import {
   CheckCircle2,
   Clock,
   XCircle,
+  ExternalLink,
+  Copy,
+  MoreHorizontal,
 } from 'lucide-react';
-import { Badge } from '@/src/components/ui/ui/badge';
 import { cn } from '@/lib/utils';
 import type { MergeRequestSummary } from '@/types/merge-requests';
 
@@ -17,7 +19,58 @@ interface MRCardProps {
   onClick: () => void;
 }
 
+const stateStyles: Record<
+  MergeRequestSummary['state'],
+  { label: string; badge: string; dot: string }
+> = {
+  opened: {
+    label: 'Opened',
+    badge: 'bg-emerald-100 text-emerald-700',
+    dot: 'bg-emerald-500',
+  },
+  merged: {
+    label: 'Merged',
+    badge: 'bg-violet-100 text-violet-700',
+    dot: 'bg-violet-500',
+  },
+  closed: {
+    label: 'Closed',
+    badge: 'bg-rose-100 text-rose-700',
+    dot: 'bg-rose-500',
+  },
+  locked: {
+    label: 'Locked',
+    badge: 'bg-slate-200 text-slate-700',
+    dot: 'bg-slate-500',
+  },
+};
+
+const pipelineStyles = {
+  success: {
+    icon: <CheckCircle2 className="h-3.5 w-3.5" />,
+    badge: 'bg-emerald-100 text-emerald-700',
+    label: 'Passed',
+  },
+  failed: {
+    icon: <XCircle className="h-3.5 w-3.5" />,
+    badge: 'bg-rose-100 text-rose-700',
+    label: 'Failed',
+  },
+  pending: {
+    icon: <Clock className="h-3.5 w-3.5" />,
+    badge: 'bg-blue-100 text-blue-700',
+    label: 'Pending',
+  },
+  running: {
+    icon: <Clock className="h-3.5 w-3.5 animate-spin" />,
+    badge: 'bg-blue-100 text-blue-700',
+    label: 'Running',
+  },
+};
+
 export const MRCard: React.FC<MRCardProps> = ({ mr, onClick }) => {
+  const [copied, setCopied] = React.useState(false);
+
   const timeAgo = React.useMemo(() => {
     try {
       return formatDistanceToNow(new Date(mr.created_at), { addSuffix: true });
@@ -26,163 +79,155 @@ export const MRCard: React.FC<MRCardProps> = ({ mr, onClick }) => {
     }
   }, [mr.created_at]);
 
-  const getStateColor = () => {
-    switch (mr.state) {
-      case 'merged':
-        return '#8b5cf6'; // purple
-      case 'closed':
-        return '#ef4444'; // red
-      case 'opened':
-        return '#22c55e'; // green
-      default:
-        return '#6b7280'; // gray
-    }
-  };
+  const stateStyle = stateStyles[mr.state] || stateStyles.opened;
 
-  const getStateBadge = () => {
-    const color = getStateColor();
-    return (
-      <Badge
-        variant="secondary"
-        className="gap-1 glass-card border-white/50 bg-white/60 backdrop-blur-sm ring-1 ring-blue-200 bg-blue-50/60"
-      >
-        <span
-          className="inline-block w-2.5 h-2.5 rounded-full"
-          style={{ backgroundColor: color }}
-        />
-        <span className="capitalize">{mr.state}</span>
-      </Badge>
-    );
-  };
-
-  const getPipelineBadge = () => {
+  const pipelineBadge = React.useMemo(() => {
     if (!mr.pipeline) return null;
-
-    const status = mr.pipeline.status;
-    let icon = null;
-    let label = '';
-    let colorClass = '';
-
-    switch (status) {
-      case 'success':
-        icon = <CheckCircle2 className="w-3 h-3" />;
-        label = 'Passed';
-        colorClass = 'text-green-600 bg-green-50/60';
-        break;
-      case 'failed':
-        icon = <XCircle className="w-3 h-3" />;
-        label = 'Failed';
-        colorClass = 'text-red-600 bg-red-50/60';
-        break;
-      case 'pending':
-      case 'running':
-        icon = <Clock className="w-3 h-3" />;
-        label = status === 'running' ? 'Running' : 'Pending';
-        colorClass = 'text-blue-600 bg-blue-50/60';
-        break;
-      default:
-        return null;
-    }
+    const status =
+      pipelineStyles[mr.pipeline.status as keyof typeof pipelineStyles];
+    if (!status) return null;
 
     return (
-      <Badge
-        variant="secondary"
-        className={`gap-1 glass-card border-white/50 backdrop-blur-sm ${colorClass}`}
+      <span
+        className={cn(
+          'inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-semibold',
+          status.badge
+        )}
       >
-        {icon}
-        <span>{label}</span>
-      </Badge>
+        {status.icon}
+        {status.label}
+      </span>
     );
+  }, [mr.pipeline]);
+
+  const handleOpenGitLab = (event: React.MouseEvent<HTMLButtonElement>) => {
+    event.stopPropagation();
+    try {
+      const chromeInstance = (window as any)?.chrome;
+      if (chromeInstance?.tabs?.create) {
+        chromeInstance.tabs.create({ url: mr.web_url });
+        return;
+      }
+    } catch (_) {
+      // Fallback to window.open below
+    }
+    window.open(mr.web_url, '_blank', 'noopener');
+  };
+
+  const handleCopyLink = async (event: React.MouseEvent<HTMLButtonElement>) => {
+    event.stopPropagation();
+    try {
+      if (navigator?.clipboard?.writeText) {
+        await navigator.clipboard.writeText(mr.web_url);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 1500);
+      }
+    } catch (err) {
+      console.warn('Failed to copy MR link:', err);
+    }
+  };
+
+  const handleMore = (event: React.MouseEvent<HTMLButtonElement>) => {
+    event.stopPropagation();
+    // Placeholder for future context menu / actions
   };
 
   return (
-    <div className="group glass-card overflow-hidden shadow-none w-full text-left rounded-md border border-gray-200">
-      <button
-        onClick={onClick}
-        className="px-4 py-3 w-full text-left hover:bg-gray-50/50 transition-colors"
-        aria-label={`Open merge request ${mr.title}`}
-      >
-        <div className="flex flex-col gap-2">
-          {/* Title row */}
-          <div className="flex items-start justify-between gap-2">
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-2 min-w-0">
-                <span className="text-xs font-medium text-blue-600 shrink-0">
-                  !{mr.iid}
-                </span>
-                <div className="truncate max-w-[260px] text-[13px] font-semibold text-black hover:text-blue-600">
-                  {mr.title}
-                </div>
-              </div>
-              {/* Branches */}
-              <div className="mt-0.5 flex items-center gap-1.5 text-[12px] text-black/70">
-                <GitBranch className="w-3 h-3" />
-                <span
-                  className="truncate max-w-[120px]"
-                  title={mr.source_branch}
-                >
-                  {mr.source_branch}
-                </span>
-                <span>→</span>
-                <span
-                  className="truncate max-w-[120px]"
-                  title={mr.target_branch}
-                >
-                  {mr.target_branch}
-                </span>
-              </div>
-            </div>
+    <button
+      onClick={onClick}
+      className="group flex w-full items-start gap-6 bg-white px-6 py-4 text-left transition hover:bg-slate-50"
+      aria-label={`Open merge request ${mr.title}`}
+    >
+      <div className="flex min-w-0 flex-1 flex-col gap-3">
+        <div className="flex flex-col gap-1">
+          <div className="flex items-center gap-2">
+            <span className="rounded-md bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-600">
+              !{mr.iid}
+            </span>
+            <h3 className="truncate text-sm font-semibold text-slate-900 group-hover:text-slate-950">
+              {mr.title}
+            </h3>
           </div>
-
-          {/* Meta row */}
-          <div className="flex items-center justify-between gap-2">
-            <div className="text-[12px] text-black/70 truncate">
-              <div className="flex items-center gap-2">
-                <span>by {mr.author.name || mr.author.username}</span>
-                <span>·</span>
-                <span>{timeAgo}</span>
-                {mr.user_notes_count !== undefined &&
-                  mr.user_notes_count > 0 && (
-                    <>
-                      <span>·</span>
-                      <div className="flex items-center gap-1">
-                        <MessageCircle className="w-3 h-3" />
-                        <span>{mr.user_notes_count}</span>
-                      </div>
-                    </>
-                  )}
-              </div>
-            </div>
-          </div>
-
-          {/* Labels/Badges */}
-          <div className="h-1" />
-          <div className="space-y-1">
-            <div className="text-[11px] font-medium text-black/70">Status</div>
-            <div className="flex flex-wrap gap-2">
-              {getStateBadge()}
-              {mr.draft && (
-                <Badge
-                  variant="outline"
-                  className="glass-card border-white/50 bg-white/60 backdrop-blur-sm"
-                >
-                  Draft
-                </Badge>
-              )}
-              {mr.has_conflicts && (
-                <Badge
-                  variant="outline"
-                  className="glass-card border-white/50 bg-amber-50/60 text-amber-700 backdrop-blur-sm"
-                >
-                  <AlertCircle className="w-3 h-3 mr-1" />
-                  Conflicts
-                </Badge>
-              )}
-              {getPipelineBadge()}
-            </div>
+          <div className="flex items-center gap-2 text-xs text-slate-500">
+            <GitBranch className="h-3.5 w-3.5 text-slate-400" />
+            <span className="rounded-md bg-slate-100 px-2 py-0.5 font-medium text-slate-600">
+              {mr.source_branch}
+            </span>
+            <span className="text-slate-300">→</span>
+            <span className="rounded-md bg-emerald-100 px-2 py-0.5 font-medium text-emerald-700">
+              {mr.target_branch}
+            </span>
           </div>
         </div>
-      </button>
-    </div>
+
+        <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
+          <span>
+            by {mr.author.name || mr.author.username || 'Unknown Author'}
+          </span>
+          <span className="text-slate-300">·</span>
+          <span>{timeAgo}</span>
+          {mr.user_notes_count !== undefined && mr.user_notes_count > 0 ? (
+            <>
+              <span className="text-slate-300">·</span>
+              <span className="flex items-center gap-1">
+                <MessageCircle className="h-3.5 w-3.5 text-slate-400" />
+                {mr.user_notes_count}
+              </span>
+            </>
+          ) : null}
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <span
+            className={cn(
+              'inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold',
+              stateStyle.badge
+            )}
+          >
+            <span
+              className={cn(
+                'h-1.5 w-1.5 rounded-full',
+                stateStyle.dot || 'bg-emerald-500'
+              )}
+            />
+            {stateStyle.label}
+          </span>
+          {mr.draft ? (
+            <span className="inline-flex items-center rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-700">
+              Draft
+            </span>
+          ) : null}
+          {mr.has_conflicts ? (
+            <span className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-700">
+              <AlertCircle className="h-3.5 w-3.5" />
+              Conflicts
+            </span>
+          ) : null}
+          {pipelineBadge}
+        </div>
+      </div>
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          onClick={handleOpenGitLab}
+          className="rounded-md border border-transparent p-2 text-slate-400 transition hover:border-slate-200 hover:bg-slate-100 hover:text-slate-700"
+          title="Open in GitLab"
+        >
+          <ExternalLink className="h-4 w-4" />
+        </button>
+        <button
+          type="button"
+          onClick={handleCopyLink}
+          className="relative rounded-md border border-transparent p-2 text-slate-400 transition hover:border-slate-200 hover:bg-slate-100 hover:text-slate-700"
+          title="Copy link"
+        >
+          <Copy className="h-4 w-4" />
+          {copied ? (
+            <span className="absolute -bottom-6 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-md bg-slate-900 px-2 py-1 text-[10px] font-medium text-white shadow-lg">
+              Copied!
+            </span>
+          ) : null}
+        </button>
+      </div>
+    </button>
   );
 };

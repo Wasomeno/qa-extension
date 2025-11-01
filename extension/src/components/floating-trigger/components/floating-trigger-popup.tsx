@@ -315,7 +315,7 @@ const FloatingTriggerPopup: React.FC<FloatingTriggerPopupProps> = ({
   const renderFeatureList = () => {
     return (
       <div
-        className="flex relative flex-col h-full w-[260px] p-3"
+        className="flex relative flex-col h-full p-3"
         onMouseDown={onMouseDown}
       >
         {!isAuthenticated && (
@@ -335,7 +335,7 @@ const FloatingTriggerPopup: React.FC<FloatingTriggerPopupProps> = ({
               <div className="flex flex-col gap-2">
                 <Button
                   size="sm"
-                  className="h-8 pointer-events-auto bg-black hover:bg-gray-800 text-white text-xs"
+                  className="h-8 pointer-events-auto bg-primary-500 hover:bg-primary-400 text-white text-xs"
                   disabled={authBusy}
                   onClick={async () => {
                     setAuthError(null);
@@ -356,7 +356,7 @@ const FloatingTriggerPopup: React.FC<FloatingTriggerPopupProps> = ({
                     }
                   }}
                 >
-                  {authBusy ? 'Opening…' : 'Sign in Gitlab'}
+                  {authBusy ? 'Opening…' : 'Sign in with Gitlab'}
                 </Button>
                 {authError && (
                   <p className="text-xs text-red-600 text-center mt-1">
@@ -391,6 +391,28 @@ const FloatingTriggerPopup: React.FC<FloatingTriggerPopupProps> = ({
                 Create Issue
               </div>
               <span className="text-xs text-neutral-500">Open a new issue</span>
+            </div>
+            <div className="ml-3">
+              <ChevronRight className="w-4 h-4 opacity-60 group-hover:opacity-100" />
+            </div>
+          </div>
+        </button>
+
+        {/* Create Merge Request */}
+        <button
+          disabled={!isAuthenticated}
+          onClick={() => onFeatureSelect('merge-request')}
+          className="group w-full text-left hover:bg-neutral-100/60 rounded-lg px-3 py-2 transition-colors pointer-events-auto disabled:opacity-60 disabled:cursor-not-allowed"
+        >
+          <div className="flex items-center">
+            <GitMerge className="w-4 h-4 mr-3" />
+            <div className="flex-1 min-w-0">
+              <div className="text-sm font-medium text-neutral-900">
+                Create Merge Request
+              </div>
+              <span className="text-xs text-neutral-500">
+                Open a new merge request
+              </span>
             </div>
             <div className="ml-3">
               <ChevronRight className="w-4 h-4 opacity-60 group-hover:opacity-100" />
@@ -472,7 +494,7 @@ const FloatingTriggerPopup: React.FC<FloatingTriggerPopupProps> = ({
     switch (selectedFeature) {
       case 'issue':
         return (
-          <div className="flex flex-col w-[500px] h-full">
+          <div className="flex flex-col h-full">
             <HeaderBar
               title="Create Issue"
               onBack={onBack}
@@ -497,7 +519,7 @@ const FloatingTriggerPopup: React.FC<FloatingTriggerPopupProps> = ({
         );
       case 'merge-request':
         return (
-          <div className="flex flex-col w-[500px] h-full">
+          <div className="flex flex-col h-full">
             <HeaderBar
               title="Create Merge Request"
               onBack={onBack}
@@ -523,7 +545,7 @@ const FloatingTriggerPopup: React.FC<FloatingTriggerPopupProps> = ({
         );
       case 'issues':
         return (
-          <div className="flex flex-col w-[500px] h-full">
+          <div className="flex flex-col h-full">
             <HeaderBar
               title="Issues"
               onBack={onBack}
@@ -549,7 +571,7 @@ const FloatingTriggerPopup: React.FC<FloatingTriggerPopupProps> = ({
         );
       case 'merge-requests':
         return (
-          <div className="flex flex-col w-[500px] h-full">
+          <div className="flex flex-col h-full">
             <HeaderBar
               title="Merge Requests"
               onBack={onBack}
@@ -568,7 +590,6 @@ const FloatingTriggerPopup: React.FC<FloatingTriggerPopupProps> = ({
                 <MRList
                   portalContainer={portalRef.current}
                   onSelect={mr => onMRSelect && onMRSelect(mr)}
-                  onCreateClick={() => onFeatureSelect('merge-request')}
                 />
               </ErrorBoundary>
             </div>
@@ -656,7 +677,7 @@ const FloatingTriggerPopup: React.FC<FloatingTriggerPopupProps> = ({
         );
       case 'scenario-generator':
         return (
-          <div className="flex flex-col w-[500px] h-full">
+          <div className="flex flex-col h-full">
             <HeaderBar
               title="Task Scenario Generator"
               onBack={onBack}
@@ -670,7 +691,7 @@ const FloatingTriggerPopup: React.FC<FloatingTriggerPopupProps> = ({
         );
       case 'mr-detail':
         return (
-          <div className="flex flex-col w-[500px] h-full">
+          <div className="flex flex-col h-full">
             {selectedMR ? (
               <>
                 <HeaderBar
