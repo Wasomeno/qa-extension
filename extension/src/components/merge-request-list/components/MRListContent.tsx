@@ -4,6 +4,7 @@ import { Skeleton } from '@/src/components/ui/ui/skeleton';
 import type { MergeRequestSummary } from '@/types/merge-requests';
 import type { MRFilters } from '../types';
 import { MRCard } from './MRCard';
+import EmptyState from '@/components/common/EmptyState';
 
 interface MRListContentProps {
   mergeRequests: MergeRequestSummary[];
@@ -89,8 +90,11 @@ export const MRListContent: React.FC<MRListContentProps> = ({
 
       {/* Empty State */}
       {!isLoading && !isError && mergeRequests.length === 0 && (
-        <div className="text-xs text-neutral-800/70">
-          No merge requests found.
+        <div className="h-full">
+          <EmptyState
+            title="No merge requests found"
+            description="When there are merge requests to show, they will appear here."
+          />
         </div>
       )}
 

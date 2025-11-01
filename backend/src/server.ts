@@ -18,6 +18,7 @@ import { slackRouter } from './routes/slack';
 import { healthRouter } from './routes/health';
 import { scenariosRouter } from './routes/scenarios';
 import { mergeRequestRouter } from './routes/merge-requests';
+import { userRouter } from './routes/users';
 import { databaseService } from './services/database';
 import { redisService } from './services/redis';
 import { WebSocketService } from './services/websocket';
@@ -136,6 +137,7 @@ class App {
     this.app.use('/api/scenarios', scenariosRouter);
     this.app.use('/api/files', filesRouter);
     this.app.use('/api/merge-requests', mergeRequestRouter);
+    this.app.use('/api/users', userRouter);
 
     // Static serving for uploaded assets (dev-friendly; secure appropriately in prod)
     this.app.use(

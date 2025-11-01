@@ -7,6 +7,7 @@ import api from '@/services/api';
 import { useQuery, useQueries, useQueryClient } from '@tanstack/react-query';
 import PinnedIssueRow from './pinned-issue-row';
 import IssueCardSkeleton from '@/components/common/IssueCardSkeleton';
+import EmptyState from '@/components/common/EmptyState';
 
 interface PinnedIssuesProps {
   className?: string;
@@ -222,16 +223,15 @@ const PinnedIssuesInner: React.FC<PinnedIssuesProps> = ({
         )}
 
         {!pinnedIssues.isLoading && pinnedIssues.data?.length === 0 ? (
-          <div className="flex flex-1 justify-center items-center gap-3 rounded-xl border border-dashed border-gray-200 dark:border-white/15 p-4 text-sm text-gray-600 dark:text-gray-300">
-            <span className="text-center">
-              Nothing pinned. Use the issue list menu to{' '}
-              <span className="font-medium">Pin</span> issues you’re tracking.
-            </span>
+          <div className="flex-1">
+            <EmptyState
+              title="Nothing pinned yet"
+              description="Use the issue list menu to pin issues you're tracking."
+            />
           </div>
-        ) : null}
-
-        {!pinnedIssues.isLoading && pinnedIssues.data?.length
-          ? pinnedIssues.data?.map(issue => {
+        ) : pinnedIssues.data?.length ? (
+          <>
+            {pinnedIssues.data?.map(issue => {
               const projectId = issue.project?.id as string | undefined;
               const iid = issue.number as number | undefined;
               const palette = projectId ? labelPalettes[projectId] : undefined;
@@ -264,8 +264,9 @@ const PinnedIssuesInner: React.FC<PinnedIssuesProps> = ({
                   onExitEvidenceMode={() => exitEvidenceMode(issue.id)}
                 />
               );
-            })
-          : null}
+            })}
+          </>
+        ) : null}
       </div>
     </div>
   );

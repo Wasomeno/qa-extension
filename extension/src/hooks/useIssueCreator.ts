@@ -96,13 +96,44 @@ export const useIssueCreator = ({
         storageService.getUser(),
       ]);
 
-      if (projectsResponse.success) {
-        setProjects(projectsResponse.data || []);
+      let combinedProjects = projectsResponse.data || [];
 
-        // Set default project if available
-        if (!initialData.projectId && userData?.preferences?.defaultProject) {
-          setValue('projectId', userData.preferences.defaultProject);
+      // If user is authenticated, fetch recent projects and combine
+      if (userData?.id && projectsResponse.success) {
+        try {
+          const recentRes = await apiService.getRecentProjects(userData.id);
+          if (recentRes.success && recentRes.data) {
+            const recentProjects = recentRes.data || [];
+
+            // Combine recent projects with all projects, deduping by ID
+            const projectMap = new Map<string, any>();
+
+            // Add recent projects first (higher priority)
+            recentProjects.forEach(project => {
+              projectMap.set(String(project.id), project);
+            });
+
+            // Add all projects, only if not already added
+            combinedProjects.forEach(project => {
+              const id = String(project.id);
+              if (!projectMap.has(id)) {
+                projectMap.set(id, project);
+              }
+            });
+
+            combinedProjects = Array.from(projectMap.values());
+          }
+        } catch (error) {
+          // Ignore errors, just use the regular projects
+          console.warn('Failed to fetch recent projects:', error);
         }
+      }
+
+      setProjects(combinedProjects);
+
+      // Set default project if available
+      if (!initialData.projectId && userData?.preferences?.defaultProject) {
+        setValue('projectId', userData.preferences.defaultProject);
       }
 
       setUser(userData || null);

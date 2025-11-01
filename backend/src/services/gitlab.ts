@@ -46,6 +46,18 @@ export interface GitLabUser {
   web_url: string;
 }
 
+export interface GitLabEvent {
+  id: string;
+  action: string;
+  project_id: number;
+  author_id: number;
+  target_type: string;
+  target_id: number;
+  created_at: string;
+  author: GitLabUser;
+  project: GitLabProject;
+}
+
 export interface GitLabLabel {
   id: number;
   name: string;
@@ -1280,6 +1292,51 @@ export class GitLabService {
     } catch (error) {
       logger.error('Failed to get GitLab user:', error);
       throw new Error('Failed to get GitLab user information');
+    }
+  }
+
+  public async getUserEvents(
+    userId: number,
+    options: {
+      limit?: number;
+      action?: string;
+      target_type?: string;
+      after?: string;
+      before?: string;
+    } = {}
+  ): Promise<GitLabEvent[]> {
+    try {
+      const params = {
+        per_page: options.limit || 50,
+        page: 1,
+        ...(options.action && { action: options.action }),
+        ...(options.target_type && { target_type: options.target_type }),
+        ...(options.after && { after: options.after }),
+        ...(options.before && { before: options.before }),
+      };
+
+      const cacheKey = `gitlab_user_events:${userId}:${JSON.stringify(params)}`;
+
+      // Check cache first
+      const cached = await this.safeRedisGet<GitLabEvent[]>(cacheKey);
+      if (cached) {
+        return cached;
+      }
+
+      const response = await this.client.get(`/users/${userId}/events`, {
+        params,
+      });
+
+      // Cache for 5 minutes
+      await this.safeRedisSet(cacheKey, response.data, 300);
+
+      return response.data;
+    } catch (error) {
+      logger.error(
+        `Failed to fetch GitLab user events for user ${userId}:`,
+        error
+      );
+      throw new Error('Failed to fetch user events from GitLab');
     }
   }
 

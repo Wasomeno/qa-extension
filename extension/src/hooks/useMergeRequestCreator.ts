@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useForm } from 'react-hook-form';
 import { useQuery } from '@tanstack/react-query';
 import { apiService } from '@/services/api';
+import useAuth from '@/hooks/useAuth';
 import { MergeRequestData } from '@/types/messages';
 import {
   getLastUsedPreset,
@@ -51,6 +52,7 @@ type CreateMergeRequestPayload = {
 
 export function useMergeRequestCreator(options: UseMergeRequestCreatorOptions) {
   const { initialData = {}, onSubmit, onCancel } = options;
+  const { user } = useAuth();
 
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -89,13 +91,47 @@ export function useMergeRequestCreator(options: UseMergeRequestCreatorOptions) {
 
   const watchedValues = watch();
 
-  // Fetch projects
+  // Fetch projects with recent projects priority
   const { data: projectsData } = useQuery({
-    queryKey: ['projects'],
+    queryKey: ['projects', user?.id],
     queryFn: async () => {
       const res = await apiService.getProjects();
       if (!res.success) throw new Error(res.error || 'Failed to load projects');
-      return res.data || [];
+
+      let combinedProjects = res.data || [];
+
+      // If user is authenticated, fetch recent projects and combine
+      if (user?.id) {
+        try {
+          const recentRes = await apiService.getRecentProjects(user.id);
+          if (recentRes.success && recentRes.data) {
+            const recentProjects = recentRes.data || [];
+
+            // Combine recent projects with all projects, deduping by ID
+            const projectMap = new Map<string, any>();
+
+            // Add recent projects first (higher priority)
+            recentProjects.forEach(project => {
+              projectMap.set(String(project.id), project);
+            });
+
+            // Add all projects, only if not already added
+            combinedProjects.forEach(project => {
+              const id = String(project.id);
+              if (!projectMap.has(id)) {
+                projectMap.set(id, project);
+              }
+            });
+
+            combinedProjects = Array.from(projectMap.values());
+          }
+        } catch (error) {
+          // Ignore errors, just use the regular projects
+          console.warn('Failed to fetch recent projects:', error);
+        }
+      }
+
+      return combinedProjects;
     },
     staleTime: 300_000, // 5 minutes
   });

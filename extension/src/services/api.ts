@@ -764,6 +764,13 @@ class ApiService {
     return this.request<Project[]>(`/api/projects?${q.toString()}`);
   }
 
+  /**
+   * Get user's recent projects based on GitLab Events API
+   */
+  async getRecentProjects(userId: string): Promise<ApiResponse<Project[]>> {
+    return this.request<Project[]>(`/api/users/${userId}/recent-projects`);
+  }
+
   async createProject(
     project: Omit<Project, 'id' | 'createdAt'>
   ): Promise<ApiResponse<Project>> {

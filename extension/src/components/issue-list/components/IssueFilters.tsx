@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useDebounce } from '@/utils/useDebounce';
 import api, { GitLabUser, Project } from '@/services/api';
 import { cn } from '@/lib/utils';
+import useAuth from '@/hooks/useAuth';
 import { Button } from '@/src/components/ui/ui/button';
 import { Input } from '@/src/components/ui/ui/input';
 import { Badge } from '@/src/components/ui/ui/badge';
@@ -32,15 +33,51 @@ export interface IssueFiltersProps {
 }
 
 const useProjectsQuery = (search: string) => {
+  const { user } = useAuth();
+
   return useQuery({
-    queryKey: ['projects', search],
+    queryKey: ['projects', search, user?.id],
     queryFn: async () => {
+      const allProjects: any[] = [];
+
+      // Fetch recent projects if user is authenticated
+      if (user?.id) {
+        try {
+          const recentRes = await api.getRecentProjects(user.id);
+          if (recentRes.success && recentRes.data) {
+            allProjects.push(...recentRes.data);
+          }
+        } catch (error) {
+          // Ignore errors, just won't show recent projects
+          console.warn('Failed to fetch recent projects:', error);
+        }
+      }
+
+      // Fetch search projects
       const res = await api.searchProjects({
         search: search || undefined,
         limit: 5,
       });
       if (!res.success) throw new Error(res.error || 'Failed to load projects');
-      return res.data || [];
+      const searchProjects = res.data || [];
+
+      // Combine recent projects with search results, deduping by ID
+      const projectMap = new Map<string, any>();
+
+      // Add recent projects first
+      allProjects.forEach(project => {
+        projectMap.set(String(project.id), project);
+      });
+
+      // Add search projects, only if not already added (recent projects have priority)
+      searchProjects.forEach(project => {
+        const id = String(project.id);
+        if (!projectMap.has(id)) {
+          projectMap.set(id, project);
+        }
+      });
+
+      return Array.from(projectMap.values());
     },
     staleTime: 300_000,
   });

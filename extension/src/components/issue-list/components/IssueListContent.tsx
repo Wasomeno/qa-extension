@@ -4,6 +4,7 @@ import api from '@/services/api';
 import { Button } from '@/src/components/ui/ui/button';
 import { Skeleton } from '@/src/components/ui/ui/skeleton';
 import IssueRow from '@/components/issue-list/issue-row';
+import EmptyState from '@/components/common/EmptyState';
 import type { IssueFilterState, GitLabLabel } from '../types';
 
 interface IssueListContentProps {
@@ -236,7 +237,12 @@ export const IssueListContent: React.FC<IssueListContentProps> = ({
 
       {/* Empty State */}
       {!isLoading && !isError && issues.length === 0 && (
-        <div className="text-xs text-neutral-800/70">No issues found.</div>
+        <div className="h-full">
+          <EmptyState
+            title="No issues found"
+            description="When there are issues to show, they will appear here."
+          />
+        </div>
       )}
 
       {/* Issue List */}
