@@ -1327,6 +1327,7 @@ export class GitLabService {
         params,
       });
       console.log('RAW EVENTS:', response);
+      console.log('PARAMS:', params);
 
       // Cache for 5 minutes
       await this.safeRedisSet(cacheKey, response.data, 300);

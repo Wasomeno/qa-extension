@@ -67,36 +67,11 @@ const fetchRecentProjects = async (
     }
 
     // Filtered events per GitLab Events API docs (target_type accepts 'issue', 'merge_request', etc.)
-    const rawEvents = await gitlab.getUserEvents(gitlabUserId, {
+    const events = await gitlab.getUserEvents(gitlabUserId, {
       limit: 100,
       after: afterDate,
       ...(targetType && { target_type: targetType }),
     });
-
-    let events = rawEvents;
-
-    if (targetType) {
-      const normalizedTarget = targetType.toLowerCase();
-      const filtered = rawEvents.filter(event => {
-        const value = event.target_type || '';
-        return value.toLowerCase() === normalizedTarget;
-      });
-
-      if (filtered.length > 0) {
-        events = filtered;
-      } else {
-        // Fallback: fetch without target filter and filter manually. Some GitLab
-        // instances have case-sensitive target_type filtering quirks.
-        const fallbackEvents = await gitlab.getUserEvents(gitlabUserId, {
-          limit: 100,
-          after: afterDate,
-        });
-        events = fallbackEvents.filter(event => {
-          const value = event.target_type || '';
-          return value.toLowerCase() === normalizedTarget;
-        });
-      }
-    }
 
     // Extract unique project IDs from events
     const projectIds = new Set<number>();
