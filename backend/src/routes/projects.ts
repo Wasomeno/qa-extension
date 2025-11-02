@@ -1172,7 +1172,6 @@ router.get(
         projectLabels[String(projectId)] = labels;
       });
 
-      console.log('LKEPQEQEQ');
       sendResponse(res, 200, true, 'GitLab issues fetched', {
         items,
         nextCursor,
