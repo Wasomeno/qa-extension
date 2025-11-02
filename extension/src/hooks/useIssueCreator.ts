@@ -33,6 +33,7 @@ export const useIssueCreator = ({
   onSaveDraft,
 }: UseIssueCreatorProps) => {
   const [isLoading, setIsLoading] = useState(false);
+  const [dataLoading, setDataLoading] = useState(true);
   const [projects, setProjects] = useState<Project[]>([]);
   const [users, setUsers] = useState<GitLabUser[]>([]);
   const [user, setUser] = useState<UserData | null>(null);
@@ -91,45 +92,24 @@ export const useIssueCreator = ({
 
   const loadInitialData = async (): Promise<void> => {
     try {
-      const [projectsResponse, userData] = await Promise.all([
-        apiService.getProjects(),
-        storageService.getUser(),
-      ]);
+      const userData = await storageService.getUser();
 
-      let combinedProjects = projectsResponse.data || [];
+      let projects: Project[] = [];
 
-      // If user is authenticated, fetch recent projects and combine
-      if (userData?.id && projectsResponse.success) {
+      // If user is authenticated, fetch only recent projects
+      if (userData?.id) {
         try {
           const recentRes = await apiService.getRecentProjects(userData.id);
           if (recentRes.success && recentRes.data) {
-            const recentProjects = recentRes.data || [];
-
-            // Combine recent projects with all projects, deduping by ID
-            const projectMap = new Map<string, any>();
-
-            // Add recent projects first (higher priority)
-            recentProjects.forEach(project => {
-              projectMap.set(String(project.id), project);
-            });
-
-            // Add all projects, only if not already added
-            combinedProjects.forEach(project => {
-              const id = String(project.id);
-              if (!projectMap.has(id)) {
-                projectMap.set(id, project);
-              }
-            });
-
-            combinedProjects = Array.from(projectMap.values());
+            projects = recentRes.data || [];
           }
         } catch (error) {
-          // Ignore errors, just use the regular projects
+          // Ignore errors, just show empty list
           console.warn('Failed to fetch recent projects:', error);
         }
       }
 
-      setProjects(combinedProjects);
+      setProjects(projects);
 
       // Set default project if available
       if (!initialData.projectId && userData?.preferences?.defaultProject) {
@@ -139,6 +119,8 @@ export const useIssueCreator = ({
       setUser(userData || null);
     } catch (error) {
       console.error('Failed to load initial data:', error);
+    } finally {
+      setDataLoading(false);
     }
   };
 
@@ -339,6 +321,7 @@ export const useIssueCreator = ({
 
     // State
     isLoading,
+    dataLoading,
     projects,
     users,
     user,
