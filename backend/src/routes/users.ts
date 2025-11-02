@@ -67,48 +67,22 @@ router.get(
         {
           projectId: number;
           lastActivity: string;
-          hasRecentIssueActivity: boolean;
         }
       >();
 
-      console.log('EVENTS', events);
-
-      // Process all events and separate issue events
       events.forEach(event => {
         if (event.project_id) {
           projectIds.add(event.project_id);
 
-          const isIssueEvent = event.target_type === 'Issue';
           const existing = projectActivityMap.get(event.project_id);
-
-          if (!existing) {
-            // First time seeing this project
+          if (
+            !existing ||
+            new Date(event.created_at) > new Date(existing.lastActivity)
+          ) {
             projectActivityMap.set(event.project_id, {
               projectId: event.project_id,
               lastActivity: event.created_at,
-              hasRecentIssueActivity: isIssueEvent,
             });
-          } else {
-            // Update last activity if this event is more recent
-            const newLastActivity = new Date(event.created_at);
-            const currentLastActivity = new Date(existing.lastActivity);
-
-            if (newLastActivity > currentLastActivity) {
-              projectActivityMap.set(event.project_id, {
-                projectId: event.project_id,
-                lastActivity: event.created_at,
-                hasRecentIssueActivity:
-                  existing.hasRecentIssueActivity || isIssueEvent,
-              });
-            } else {
-              // Just mark as having issue activity if this is an issue event
-              if (isIssueEvent) {
-                projectActivityMap.set(event.project_id, {
-                  ...existing,
-                  hasRecentIssueActivity: true,
-                });
-              }
-            }
           }
         }
       });
@@ -134,7 +108,7 @@ router.get(
             new Date(a.lastActivity).getTime()
         )
         .slice(0, 10)
-        .map(({ projectId, lastActivity, hasRecentIssueActivity }) => {
+        .map(({ projectId, lastActivity }) => {
           const project = projectMap.get(projectId);
           if (!project) {
             return null;
@@ -148,7 +122,6 @@ router.get(
             avatar_url: project.avatar_url,
             last_activity_at: lastActivity,
             gitlab_project_id: project.id,
-            hasRecentIssueActivity,
           };
         })
         .filter(Boolean);
