@@ -44,7 +44,7 @@ const useProjectsQuery = (search: string) => {
       }
 
       try {
-        const res = await api.getRecentIssueProjects(user.id);
+        const res = await api.getProjects();
         if (!res.success)
           throw new Error(res.error || 'Failed to load projects');
         return res.data || [];

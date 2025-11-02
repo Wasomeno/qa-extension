@@ -7,7 +7,6 @@ import {
   asyncHandler,
   validateRequest,
   sendResponse,
-  ValidationError,
   AuthorizationError,
 } from '../middleware/errorHandler';
 import { logger } from '../utils/logger';

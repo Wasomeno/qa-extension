@@ -334,7 +334,7 @@ const FloatingTriggerPopup: React.FC<FloatingTriggerPopupProps> = ({
               <div className="flex flex-col gap-2">
                 <Button
                   size="sm"
-                  className="h-8 pointer-events-auto bg-primary-500 hover:bg-primary-400 text-white text-xs"
+                  className="h-8 pointer-events-auto text-xs"
                   disabled={authBusy}
                   onClick={async () => {
                     setAuthError(null);

@@ -30,7 +30,6 @@ export const useIssueCreator = ({
   context,
   onSubmit,
   onCancel,
-  onSaveDraft,
 }: UseIssueCreatorProps) => {
   const [isLoading, setIsLoading] = useState(false);
   const [dataLoading, setDataLoading] = useState(true);
@@ -99,9 +98,7 @@ export const useIssueCreator = ({
       // If user is authenticated, fetch only recent projects
       if (userData?.id) {
         try {
-          const recentRes = await apiService.getRecentIssueProjects(
-            userData.id
-          );
+          const recentRes = await apiService.getProjects();
           if (recentRes.success && recentRes.data) {
             projects = recentRes.data || [];
           }
