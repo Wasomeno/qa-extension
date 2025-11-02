@@ -73,6 +73,7 @@ const fetchRecentProjects = async (
       ...(targetType && { target_type: targetType }),
     });
 
+    console.log('RAW EVENTS:', rawEvents);
     let events = rawEvents;
 
     if (targetType) {
