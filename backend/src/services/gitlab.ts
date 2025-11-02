@@ -1306,27 +1306,11 @@ export class GitLabService {
     } = {}
   ): Promise<GitLabEvent[]> {
     try {
-      // Normalize target_type to match GitLab API's case-sensitive requirements
-      // GitLab API expects: "Issue", "MergeRequest", "Project", "Snippet", "User"
-      const targetTypeMap: Record<string, string> = {
-        issue: 'Issue',
-        merge_request: 'MergeRequest',
-        mergerequest: 'MergeRequest',
-        project: 'Project',
-        snippet: 'Snippet',
-        user: 'User',
-      };
-
-      const normalizedTargetType = options.target_type
-        ? targetTypeMap[options.target_type.toLowerCase()] ||
-          options.target_type
-        : undefined;
-
       const params = {
         per_page: options.limit || 50,
         page: 1,
         ...(options.action && { action: options.action }),
-        ...(normalizedTargetType && { target_type: normalizedTargetType }),
+        ...(options.target_type && { target_type: options.target_type }),
         ...(options.after && { after: options.after }),
         ...(options.before && { before: options.before }),
       };
