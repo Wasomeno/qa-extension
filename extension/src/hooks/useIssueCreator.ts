@@ -99,7 +99,9 @@ export const useIssueCreator = ({
       // If user is authenticated, fetch only recent projects
       if (userData?.id) {
         try {
-          const recentRes = await apiService.getRecentProjects(userData.id);
+          const recentRes = await apiService.getRecentIssueProjects(
+            userData.id
+          );
           if (recentRes.success && recentRes.data) {
             projects = recentRes.data || [];
           }

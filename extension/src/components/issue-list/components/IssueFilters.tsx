@@ -36,7 +36,7 @@ const useProjectsQuery = (search: string) => {
   const { user } = useAuth();
 
   return useQuery({
-    queryKey: ['projects', search, user?.id],
+    queryKey: ['recent-issue-projects', search, user?.id],
     queryFn: async () => {
       // Only fetch recent projects if user is authenticated
       if (!user?.id) {
@@ -44,7 +44,7 @@ const useProjectsQuery = (search: string) => {
       }
 
       try {
-        const res = await api.getRecentProjects(user.id);
+        const res = await api.getRecentIssueProjects(user.id);
         if (!res.success)
           throw new Error(res.error || 'Failed to load projects');
         return res.data || [];
