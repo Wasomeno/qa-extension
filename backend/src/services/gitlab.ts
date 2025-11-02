@@ -1319,13 +1319,14 @@ export class GitLabService {
 
       // Check cache first
       const cached = await this.safeRedisGet<GitLabEvent[]>(cacheKey);
-      if (cached) {
-        return cached;
-      }
+      // if (cached) {
+      //   return cached;
+      // }
 
       const response = await this.client.get(`/users/${userId}/events`, {
         params,
       });
+      console.log('RAW EVENTS:', response);
 
       // Cache for 5 minutes
       await this.safeRedisSet(cacheKey, response.data, 300);
