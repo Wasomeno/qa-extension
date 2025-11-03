@@ -810,37 +810,97 @@ NOW FILL THE TEMPLATE:`;
       'the relevant programming language';
 
     const trimmedContext =
-      codeContext.length > 6000
-        ? `${codeContext.slice(0, 6000)}\n... (context truncated)`
+      codeContext.length > 8000
+        ? `${codeContext.slice(0, 8000)}\n... (context truncated)`
         : codeContext;
 
-    const systemPrompt = `You are a senior ${language} engineer reviewing code review comments.
+    const systemPrompt = `You are a senior ${language} engineer who provides precise code fixes based on code review feedback.
 
-Your job is to suggest precise code fixes that fully address the reviewer feedback while maintaining code quality.
+Your task is to analyze the reviewer's comment, understand their intent, and provide a targeted code fix.
 
-Constraints:
-- Provide safe, production-ready code that passes linting and formatting rules implicit to the language/framework.
-- Only modify the lines that were highlighted in the diff (between the provided line numbers). Do not introduce unrelated changes.
-- Respect the surrounding coding style and patterns.
-- If the reviewer is incorrect or the code is already correct, explain why in the summary and return the original code unchanged.
-- Output must be valid JSON with the shape: {"summary": string, "updated_code": string, "warnings": string[] | []}
-- Keep "updated_code" as the exact replacement block with no extra commentary or markdown.`;
+CRITICAL RULES:
+1. UNDERSTAND THE REVIEW INTENT FIRST:
+   - Is it a bug fix? Security issue? Performance optimization? Style improvement? Refactoring suggestion?
+   - What specific problem is the reviewer pointing out?
+   - What outcome does the reviewer want to achieve?
+   - Does the reviewer want you to ADD code, MODIFY code, or REMOVE code?
 
-    const userPrompt = `Repository file: ${filePath}
-Language: ${language}
-Target lines: ${highlightStart}-${highlightEnd}
+2. ANALYZE THE CODE CONTEXT:
+   - Lines marked with ">>" are the EXACT lines you must modify/replace
+   - Read surrounding code (without ">>") to understand patterns and dependencies
+   - Understand the current logic flow and data structures
+   - Identify patterns and conventions used in the codebase
+   - Consider the file path and framework (React hooks, TypeScript types, etc.)
+   - Note any imports, types, or functions used in the surrounding context
 
-Reviewer comment:
-${comment.trim()}
+3. PROVIDE PRECISE FIXES THAT TARGET THE MARKED LINES:
+   - Your fix must DIRECTLY address what the reviewer asked for
+   - ONLY modify the lines marked with ">>" - these are lines ${highlightStart}-${highlightEnd}
+   - Don't add unrelated improvements or optimizations not mentioned in the review
+   - Keep the same coding style (indentation, naming, patterns) as surrounding code
+   - Preserve existing logic unless the review explicitly asks to change it
+   - Maintain type safety and framework best practices
+   - If the review asks to "add validation", ADD the validation code
+   - If the review asks to "use useMemo", WRAP the code in useMemo
+   - If the review asks to "fix the bug", FIX the specific bug mentioned
 
-${additionalInstructions ? `Additional developer instructions:\n${additionalInstructions.trim()}\n\n` : ''}
-Current code context (">>" marks the lines under review):
+4. WHEN TO NOT CHANGE CODE:
+   - If the reviewer is asking a question (not making a suggestion)
+   - If the code is already correct and the review is mistaken
+   - If the suggestion would introduce bugs or break existing functionality
+   - In these cases, explain why in the summary and return the original code unchanged
+
+5. OUTPUT FORMAT:
+   - Must be valid JSON: {"summary": "Brief explanation of what changed and why", "updated_code": "exact replacement code", "warnings": ["any caveats"]}
+   - "updated_code" should be the EXACT code block to replace lines ${highlightStart}-${highlightEnd}
+   - NO markdown formatting, NO code fences, NO line numbers, NO comments explaining the change
+   - Match the original indentation exactly (count spaces/tabs carefully)
+   - The code should be production-ready and immediately usable
+
+VALIDATION CHECKLIST BEFORE RESPONDING:
+- [ ] Does my fix directly address what the reviewer asked for?
+- [ ] Did I only modify the lines marked with ">>"?
+- [ ] Does my code match the indentation and style of the original?
+- [ ] Is the fix based on the actual review comment, not my assumptions?
+- [ ] Would a developer understand why this change addresses the review?`;
+
+    const userPrompt = `FILE: ${filePath}
+LANGUAGE: ${language}
+TARGET LINES TO MODIFY: ${highlightStart}-${highlightEnd}
+
+=== REVIEWER'S FEEDBACK ===
+"${comment.trim()}"
+
+READ THIS CAREFULLY: The reviewer is commenting on lines ${highlightStart}-${highlightEnd}. Your job is to fix ONLY these lines to address their feedback.
+
+${additionalInstructions ? `=== ADDITIONAL CONTEXT FROM DEVELOPER ===\n"${additionalInstructions.trim()}"\n\n` : ''}=== CODE CONTEXT (FULL VIEW) ===
+Lines marked with ">>" are the EXACT lines (${highlightStart}-${highlightEnd}) that need to be modified.
+All other lines are for context only - DO NOT include them in your updated_code.
+
 ${trimmedContext}
 
-Highlighted lines (exact block to replace):
+=== CURRENT CODE (LINES ${highlightStart}-${highlightEnd}) ===
+This is the code that needs to be replaced:
+
 ${highlightedBlock}
 
-Respond with JSON only.`;
+=== YOUR TASK ===
+1. Read the reviewer's feedback: "${comment.trim()}"
+2. Identify WHAT they want changed (add? modify? remove? refactor? optimize?)
+3. Look at the current code (lines ${highlightStart}-${highlightEnd})
+4. Generate the FIXED version that directly addresses the review
+5. Return ONLY the fixed lines (${highlightStart}-${highlightEnd}), not the surrounding context
+
+=== CRITICAL REMINDERS ===
+- Your "updated_code" must be ONLY lines ${highlightStart}-${highlightEnd}
+- The fix must DIRECTLY address: "${comment.trim()}"
+- Match the indentation exactly (look at the line numbers and spacing)
+- Don't add features the reviewer didn't ask for
+- If the reviewer says "add X", then ADD X to the code
+- If the reviewer says "use Y instead", then REPLACE with Y
+- If the reviewer says "remove Z", then REMOVE Z from the code
+
+Respond with JSON only: {"summary": "...", "updated_code": "...", "warnings": [...]}`;
 
     try {
       const response = await this.safeChatCompletion(
@@ -848,8 +908,8 @@ Respond with JSON only.`;
           { role: 'system', content: systemPrompt },
           { role: 'user', content: userPrompt },
         ],
-        900,
-        0.1
+        1500, // Increased from 900 to allow more complex fixes
+        0.3 // Increased from 0.1 for better reasoning while staying deterministic
       );
 
       if (!response) {

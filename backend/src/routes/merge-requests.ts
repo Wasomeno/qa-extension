@@ -1097,8 +1097,8 @@ router.get(
 
       const start = Number(startLine);
       const end = Number(endLine);
-      const before = Math.min(Number(contextBefore), 20);
-      const after = Math.min(Number(contextAfter), 20);
+      const before = Math.min(Number(contextBefore), 50);
+      const after = Math.min(Number(contextAfter), 50);
 
       const low = Math.min(start, end);
       const high = Math.max(start, end);
@@ -1159,8 +1159,8 @@ router.post(
       startLine: Joi.number().integer().min(1).required(),
       endLine: Joi.number().integer().min(1).required(),
       comment: Joi.string().min(1).required(),
-      contextBefore: Joi.number().integer().min(0).max(20).default(2),
-      contextAfter: Joi.number().integer().min(0).max(20).default(2),
+      contextBefore: Joi.number().integer().min(0).max(50).default(10),
+      contextAfter: Joi.number().integer().min(0).max(50).default(10),
       languageHint: Joi.string().optional(),
       additionalInstructions: Joi.string().allow('').max(2000).optional(),
     })
@@ -1270,37 +1270,42 @@ router.post(
       };
 
       // Log the full context being sent to AI
+      console.log('\n' + '='.repeat(80));
+      console.log('🤖 AI CONTEXT FOR CODE FIX SUGGESTION');
       console.log('='.repeat(80));
-      console.log('AI CONTEXT FOR CODE FIX SUGGESTION');
-      console.log('='.repeat(80));
-      console.log('File Path:', aiContextPayload.filePath);
+      console.log('📁 File Path:', aiContextPayload.filePath);
       console.log(
-        'Language Hint:',
-        aiContextPayload.languageHint || 'auto-detect'
+        '💻 Language:',
+        aiContextPayload.languageHint || 'auto-detected'
       );
       console.log(
-        'Target Lines:',
+        '📍 Target Lines:',
         `${aiContextPayload.highlightStart}-${aiContextPayload.highlightEnd}`
       );
-      console.log('\nReviewer Comment:');
+      console.log(
+        '📊 Context Size:',
+        `${before} lines before, ${after} lines after`
+      );
+      console.log('📏 Total Context:', `${snippetLines.length} lines`);
+      console.log('\n💬 REVIEWER COMMENT:');
       console.log('-'.repeat(80));
       console.log(aiContextPayload.comment);
       console.log('-'.repeat(80));
       if (aiContextPayload.additionalInstructions) {
-        console.log('\nAdditional Instructions:');
+        console.log('\n📝 ADDITIONAL DEVELOPER INSTRUCTIONS:');
         console.log('-'.repeat(80));
         console.log(aiContextPayload.additionalInstructions);
         console.log('-'.repeat(80));
       }
-      console.log('\nCode Context (with line markers):');
+      console.log('\n📋 CODE CONTEXT (">>" = lines to modify):');
       console.log('-'.repeat(80));
       console.log(aiContextPayload.codeContext);
       console.log('-'.repeat(80));
-      console.log('\nHighlighted Block (exact code to replace):');
+      console.log('\n🎯 HIGHLIGHTED BLOCK (exact code to replace):');
       console.log('-'.repeat(80));
       console.log(aiContextPayload.highlightedBlock);
       console.log('-'.repeat(80));
-      console.log('='.repeat(80));
+      console.log('='.repeat(80) + '\n');
 
       const suggestion =
         await openaiService.generateCodeFixSuggestion(aiContextPayload);
