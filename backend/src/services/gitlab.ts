@@ -1689,6 +1689,28 @@ export class GitLabService {
   }
 
   /**
+   * Get changes (diffs) for a merge request
+   */
+  public async getMergeRequestChanges(
+    projectId: string | number,
+    mrIid: number
+  ): Promise<any> {
+    const pid = this.normalizeProjectId(projectId);
+    const urlPath = `/projects/${pid}/merge_requests/${mrIid}/changes`;
+    try {
+      const response = await this.client.get(urlPath);
+      return response.data;
+    } catch (error: any) {
+      const status = error?.response?.status;
+      logger.error(`Failed to fetch GitLab MR changes ${pid}:${mrIid}:`, error);
+      if (status === 404) {
+        throw new Error('GitLab merge request changes not found');
+      }
+      throw new Error('Failed to fetch MR changes from GitLab');
+    }
+  }
+
+  /**
    * Compare two branches and get commits between them
    * Uses GitLab's repository compare API
    */

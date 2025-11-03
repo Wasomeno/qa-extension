@@ -977,6 +977,64 @@ router.get(
   })
 );
 
+// Get MR changes/diffs
+router.get(
+  '/:projectId/gitlab/merge-requests/:mrIid/changes',
+  authMiddleware.authenticate,
+  asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+    const { projectId, mrIid } = req.params;
+    const userId = req.user!.id;
+
+    try {
+      const oauthConnection = await db
+        .getConnection()
+        .select('*')
+        .from('oauth_connections')
+        .where('user_id', userId)
+        .where('provider', 'gitlab')
+        .first();
+
+      if (!oauthConnection || !oauthConnection.access_token) {
+        sendResponse(res, 401, false, 'GitLab not connected', null, {
+          requiresGitLabAuth: true,
+        });
+        return;
+      }
+
+      const gitlab = new GitLabService(oauthConnection.access_token);
+
+      // Resolve project ID
+      let pid: string | number = projectId;
+      if (!/^\d+$/.test(String(projectId))) {
+        try {
+          const localProject = await db
+            .projects()
+            .where('id', projectId)
+            .first();
+          if (localProject?.gitlab_project_id) {
+            pid = localProject.gitlab_project_id;
+          }
+        } catch {}
+      }
+
+      const changes = await gitlab.getMergeRequestChanges(
+        pid,
+        parseInt(mrIid, 10)
+      );
+
+      sendResponse(res, 200, true, 'MR changes fetched successfully', changes);
+    } catch (error: any) {
+      logger.error('Failed to fetch MR changes:', error);
+      sendResponse(
+        res,
+        error.statusCode || 500,
+        false,
+        error.message || 'Failed to fetch MR changes'
+      );
+    }
+  })
+);
+
 // Get code snippet for a diff note
 router.get(
   '/:projectId/gitlab/merge-requests/:mrIid/note-snippet',
