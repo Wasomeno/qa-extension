@@ -1256,7 +1256,7 @@ router.post(
 
       const highlightedBlock = highlightedLines.join('\n');
 
-      const suggestion = await openaiService.generateCodeFixSuggestion({
+      const aiContextPayload = {
         filePath: String(filePath),
         comment: String(comment),
         codeContext: contextForPrompt,
@@ -1267,7 +1267,43 @@ router.post(
         additionalInstructions: additionalInstructions
           ? String(additionalInstructions)
           : undefined,
-      });
+      };
+
+      // Log the full context being sent to AI
+      console.log('='.repeat(80));
+      console.log('AI CONTEXT FOR CODE FIX SUGGESTION');
+      console.log('='.repeat(80));
+      console.log('File Path:', aiContextPayload.filePath);
+      console.log(
+        'Language Hint:',
+        aiContextPayload.languageHint || 'auto-detect'
+      );
+      console.log(
+        'Target Lines:',
+        `${aiContextPayload.highlightStart}-${aiContextPayload.highlightEnd}`
+      );
+      console.log('\nReviewer Comment:');
+      console.log('-'.repeat(80));
+      console.log(aiContextPayload.comment);
+      console.log('-'.repeat(80));
+      if (aiContextPayload.additionalInstructions) {
+        console.log('\nAdditional Instructions:');
+        console.log('-'.repeat(80));
+        console.log(aiContextPayload.additionalInstructions);
+        console.log('-'.repeat(80));
+      }
+      console.log('\nCode Context (with line markers):');
+      console.log('-'.repeat(80));
+      console.log(aiContextPayload.codeContext);
+      console.log('-'.repeat(80));
+      console.log('\nHighlighted Block (exact code to replace):');
+      console.log('-'.repeat(80));
+      console.log(aiContextPayload.highlightedBlock);
+      console.log('-'.repeat(80));
+      console.log('='.repeat(80));
+
+      const suggestion =
+        await openaiService.generateCodeFixSuggestion(aiContextPayload);
 
       sendResponse(res, 200, true, 'MR fix generated successfully', {
         snippet: {
