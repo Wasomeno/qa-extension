@@ -1,1306 +1,397 @@
-import React, { useRef } from 'react';
+import React, { useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import {
-  ChevronLeft,
-  FileText,
-  X,
-  Pin,
-  ListCheck,
-  ChevronRight,
-  Link as LinkIcon,
-  Loader2,
-  FileDown,
-  CheckCircle2,
-  AlertCircle,
-  KeyRound,
-  Copy,
-  GitMerge,
-} from 'lucide-react';
-import { RxOpenInNewWindow } from 'react-icons/rx';
-import CompactIssueCreator from '@/components/compact-issue-creator';
-import CompactMergeRequestCreator from '@/components/compact-merge-request-creator';
-import IssueList from '@/components/issue-list';
-import IssueDetail from '@/components/issue-list/IssueDetail';
-import MRList from '@/components/merge-request-list';
-import { MRDetail } from '@/components/merge-request-list/components/MRDetail';
-import ErrorBoundary from '@/components/common/error-boundary';
+import { X, Send, Loader2 } from 'lucide-react';
 import { useKeyboardIsolation } from '@/hooks/useKeyboardIsolation';
-import WorkflowList from '@/components/workflows';
-import PinnedIssues from '@/components/pinned-issues';
-// Recording feature removed
 import { Button } from '@/src/components/ui/ui/button';
 import { Input } from '@/src/components/ui/ui/input';
-import { Badge } from '@/src/components/ui/ui/badge';
-import { Alert, AlertDescription } from '@/src/components/ui/ui/alert';
+import { Textarea } from '@/src/components/ui/ui/textarea';
 import { ScrollArea } from '@/src/components/ui/ui/scroll-area';
-import {
-  Card,
-  CardHeader,
-  CardTitle,
-  CardContent,
-} from '@/src/components/ui/ui/card';
+import { Badge } from '@/src/components/ui/ui/badge';
 import useAuth from '@/hooks/useAuth';
-import { authService } from '@/services/auth';
-import { useQueryClient } from '@tanstack/react-query';
-import { storageService } from '@/services/storage';
 import { apiService } from '@/services/api';
-
-// Export ViewState type
-export type ViewState =
-  | 'closed'
-  | 'features'
-  | 'feature-detail'
-  | 'mrList'
-  | 'mrDetail';
-
-// Unified header bar matching Workflows style
-function HeaderBar(props: {
-  title: string;
-  onBack: () => void;
-  onClose: () => void;
-  onMouseDown?: (e: React.MouseEvent) => void;
-}) {
-  const { title, onBack, onClose, onMouseDown } = props;
-  return (
-    <div
-      className="flex items-center justify-between p-4 border-b border-gray-100"
-      onMouseDown={onMouseDown}
-    >
-      <div className="flex items-center gap-3 min-w-0">
-        <Button
-          onClick={onBack}
-          variant="ghost"
-          size="sm"
-          className="p-0 h-fit w-fit pointer-events-auto"
-          aria-label="Back"
-        >
-          <ChevronLeft className="w-4 h-4" />
-        </Button>
-        <h3 className="text-base font-semibold truncate">{title}</h3>
-      </div>
-      <Button
-        variant="ghost"
-        onClick={onClose}
-        className="p-0 h-fit w-fit pointer-events-auto"
-        aria-label="Close"
-      >
-        <X className="w-3 h-3" />
-      </Button>
-    </div>
-  );
-}
-
-// Issue Detail Header with full issue information
-function IssueDetailHeaderBar(props: {
-  issue: any;
-  onBack: () => void;
-  onClose: () => void;
-  onMouseDown?: (e: React.MouseEvent) => void;
-}) {
-  const { issue, onBack, onClose, onMouseDown } = props;
-  const [copyStatus, setCopyStatus] = React.useState<
-    'idle' | 'copied' | 'error'
-  >('idle');
-  const copyTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(
-    null
-  );
-
-  React.useEffect(() => {
-    return () => {
-      if (copyTimeoutRef.current) {
-        clearTimeout(copyTimeoutRef.current);
-        copyTimeoutRef.current = null;
-      }
-    };
-  }, []);
-
-  const issueWebUrl =
-    issue?.web_url ?? (issue as any)?.webUrl ?? (issue as any)?.web_url;
-
-  const handleCopyIssueLink = React.useCallback(
-    async (event?: React.MouseEvent<HTMLButtonElement>) => {
-      event?.preventDefault();
-      event?.stopPropagation();
-
-      if (!issueWebUrl) {
-        console.warn('No web URL available to copy for issue:', issue);
-        return;
-      }
-
-      if (copyTimeoutRef.current) {
-        clearTimeout(copyTimeoutRef.current);
-        copyTimeoutRef.current = null;
-      }
-
-      try {
-        if (navigator.clipboard?.writeText) {
-          await navigator.clipboard.writeText(issueWebUrl);
-          setCopyStatus('copied');
-        } else {
-          throw new Error('Clipboard API not available');
-        }
-      } catch (err) {
-        console.error('Failed to copy issue link:', err);
-        setCopyStatus('error');
-      } finally {
-        copyTimeoutRef.current = setTimeout(() => {
-          setCopyStatus('idle');
-        }, 2000);
-      }
-    },
-    [issue, issueWebUrl]
-  );
-
-  const handleOpenInGitlab = React.useCallback(
-    (event: React.MouseEvent<HTMLButtonElement>) => {
-      event.preventDefault();
-      event.stopPropagation();
-
-      if (!issueWebUrl) {
-        console.warn('No web URL available to open for issue:', issue);
-        return;
-      }
-
-      window.open(issueWebUrl, '_blank', 'noopener,noreferrer');
-    },
-    [issue, issueWebUrl]
-  );
-
-  const iid = issue?.number;
-
-  return (
-    <div
-      className="flex items-center justify-between p-4 border-b border-gray-100 gap-4"
-      onMouseDown={onMouseDown}
-    >
-      <div className="flex items-center gap-3 min-w-0 flex-1">
-        <Button
-          onClick={onBack}
-          variant="ghost"
-          size="sm"
-          className="p-0 h-fit w-fit pointer-events-auto shrink-0"
-          aria-label="Back"
-        >
-          <ChevronLeft className="w-4 h-4" />
-        </Button>
-        <div className="min-w-0 flex-1 space-y-0.5">
-          <div className="text-sm font-semibold leading-snug truncate">
-            {issue?.title}
-          </div>
-          <div className="text-[11px] text-neutral-500">
-            #{iid ?? '—'} · {issue.project?.name ?? 'Unknown project'} · by{' '}
-            {issue.author?.name ?? 'Unknown'}
-          </div>
-        </div>
-      </div>
-      <div className="flex gap-2 items-center shrink-0">
-        <Button
-          variant="ghost"
-          className="p-0 h-fit w-fit pointer-events-auto"
-          onClick={handleCopyIssueLink}
-          disabled={!issueWebUrl}
-          aria-label="Copy issue link"
-          title={
-            copyStatus === 'copied'
-              ? 'Copied!'
-              : copyStatus === 'error'
-                ? 'Copy failed'
-                : 'Copy Link'
-          }
-        >
-          <Copy className="text-neutral-400 w-4 h-4" />
-        </Button>
-        <Button
-          variant="ghost"
-          className="p-0 h-fit w-fit pointer-events-auto"
-          onClick={handleOpenInGitlab}
-          disabled={!issueWebUrl}
-          aria-label="Open issue in GitLab"
-          title="Open in GitLab"
-        >
-          <RxOpenInNewWindow className="text-neutral-400 w-4 h-4" />
-        </Button>
-        <Button
-          variant="ghost"
-          onClick={onClose}
-          className="p-0 h-fit w-fit pointer-events-auto"
-          aria-label="Close"
-        >
-          <X className="w-3 h-3" />
-        </Button>
-      </div>
-    </div>
-  );
-}
+import { storageService } from '@/services/storage';
 
 interface FloatingTriggerPopupProps {
-  viewState: ViewState;
-  selectedFeature: string | null;
+  feature: 'issue' | 'issues' | 'pinned';
+  position: { x: number; y: number };
   selectedIssue?: any | null;
-  selectedMR?: any | null;
-  onFeatureSelect: (feature: string) => void;
-  onBack: () => void;
   onClose: () => void;
-  onQuickAction: (action: string) => void;
-  onMouseDown: (e: React.MouseEvent) => void;
   onIssueSelect?: (issue: any) => void;
-  onMRSelect?: (mr: any) => void;
 }
 
 const FloatingTriggerPopup: React.FC<FloatingTriggerPopupProps> = ({
-  viewState,
-  selectedFeature,
+  feature,
+  position,
   selectedIssue,
-  selectedMR,
-  onFeatureSelect,
-  onBack,
   onClose,
-  onMouseDown,
   onIssueSelect,
-  onMRSelect,
 }) => {
   const keyboardIsolation = useKeyboardIsolation();
   const portalRef = useRef<HTMLDivElement>(null);
-  const [pinnedCount, setPinnedCount] = React.useState<number>(0);
-  const [resetTrigger, setResetTrigger] = React.useState(0);
-  // Recording state removed
   const { isAuthenticated } = useAuth();
-  const [authBusy, setAuthBusy] = React.useState(false);
-  const [authError, setAuthError] = React.useState<string | null>(null);
 
-  // Track feature changes and trigger reset when navigating away from form features
-  const prevFeatureRef = React.useRef<string | null>(selectedFeature);
-  React.useEffect(() => {
-    const prev = prevFeatureRef.current;
-    const current = selectedFeature;
-
-    // If we're navigating away from a form feature, trigger reset
-    if (
-      prev &&
-      prev !== current &&
-      (prev === 'issue' || prev === 'merge-request')
-    ) {
-      setResetTrigger(t => t + 1);
-    }
-
-    prevFeatureRef.current = current;
-  }, [selectedFeature]);
-
-  React.useEffect(() => {
-    let unsub: (() => void) | null = null;
-    (async () => {
-      const list = await storageService.getPinnedIssues();
-      setPinnedCount(list.length);
-      unsub = storageService.onChanged('pinnedIssues', v => {
-        const arr = (v as any[]) || [];
-        setPinnedCount(arr.length);
-      });
-    })();
-    return () => {
-      if (unsub) unsub();
-    };
-  }, []);
-
-  // Handler for generating fixes from DiffNote comments
-  const handleGenerateFix = React.useCallback((note: any) => {
-    console.log('Generate fix for DiffNote:', note);
-    // TODO: Implement AI-powered fix generation
-    // This will integrate with the AI service to generate code fixes
-    // based on the review comment and diff context
-  }, []);
-
-  // Recording summary removed
-
-  const renderFeatureList = () => {
-    return (
-      <div
-        className="flex relative flex-col gap-2 h-full p-3"
-        onMouseDown={onMouseDown}
-      >
-        {!isAuthenticated && (
-          <Card className="absolute h-full z-40 w-full bg-white/80 backdrop-blur-sm top-0 left-0 rounded-xl shadow-sm border-muted/40 flex flex-col justify-center">
-            <CardHeader className="pt-4 pb-2 text-center">
-              <div className="mx-auto mb-2 h-8 w-8 rounded-xl border bg-muted/40 grid place-items-center">
-                <KeyRound className="h-3 w-3" />
-              </div>
-              <CardTitle className="text-sm font-medium">
-                Your session is invalid
-              </CardTitle>
-              <p className="text-xs text-muted-foreground mt-1">
-                Please sign in again to continue.
-              </p>
-            </CardHeader>
-            <CardContent className="pb-4">
-              <div className="flex flex-col gap-2">
-                <Button
-                  size="sm"
-                  className="h-8 pointer-events-auto text-xs"
-                  disabled={authBusy}
-                  onClick={async () => {
-                    setAuthError(null);
-                    setAuthBusy(true);
-                    try {
-                      const res = await authService.startGitLabOAuth();
-                      if (res.success) {
-                        try {
-                          window.open(res.authUrl, '_blank');
-                        } catch {}
-                      } else {
-                        setAuthError(res.error);
-                      }
-                    } catch (e: any) {
-                      setAuthError(e?.message || 'Failed to start sign-in');
-                    } finally {
-                      setAuthBusy(false);
-                    }
-                  }}
-                >
-                  {authBusy ? 'Opening…' : 'Sign in with Gitlab'}
-                </Button>
-                {authError && (
-                  <p className="text-xs text-red-600 text-center mt-1">
-                    {authError}
-                  </p>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
-        <div className="px-3 py-2 mb-1 flex items-center justify-between relative z-50">
-          <span className="text-sm font-semibold">Quick Actions</span>
-          <Button
-            variant="ghost"
-            onClick={onClose}
-            className="p-0 h-fit hover:bg-none pointer-events-auto"
-          >
-            <X className="w-3 h-3" />
-          </Button>
-        </div>
-        {/* Create Issue - prominent card */}
-        <button
-          disabled={!isAuthenticated}
-          onClick={() => onFeatureSelect('issue')}
-          className="group overflow-hidden text-nowrap w-full text-left hover:bg-neutral-100/60 rounded-lg px-3 py-2 transition-colors pointer-events-auto disabled:opacity-60 disabled:cursor-not-allowed"
-        >
-          <div className="flex items-center">
-            <FileText className="w-4 h-4 mr-3" />
-            <div className="flex-1 min-w-0">
-              <div className="text-sm font-medium text-neutral-900">
-                Create Issue
-              </div>
-            </div>
-            <div className="ml-3">
-              <ChevronRight className="w-4 h-4 opacity-60 group-hover:opacity-100" />
-            </div>
-          </div>
-        </button>
-
-        {/* Create Merge Request */}
-        <button
-          disabled={!isAuthenticated}
-          onClick={() => onFeatureSelect('merge-request')}
-          className="group w-full overflow-hidden text-nowrap text-left hover:bg-neutral-100/60 rounded-lg px-3 py-2 transition-colors pointer-events-auto disabled:opacity-60 disabled:cursor-not-allowed"
-        >
-          <div className="flex items-center">
-            <GitMerge className="w-4 h-4 mr-3" />
-            <div className="flex-1 min-w-0">
-              <div className="text-sm font-medium text-neutral-900">
-                Create Merge Request
-              </div>
-            </div>
-            <div className="ml-3">
-              <ChevronRight className="w-4 h-4 opacity-60 group-hover:opacity-100" />
-            </div>
-          </div>
-        </button>
-
-        {/* Issue List */}
-        <button
-          disabled={!isAuthenticated}
-          onClick={() => onFeatureSelect('issues')}
-          className="group w-full overflow-hidden text-nowrap text-left hover:bg-neutral-100/60 rounded-lg px-3 py-2 transition-colors pointer-events-auto disabled:opacity-60 disabled:cursor-not-allowed"
-        >
-          <div className="flex items-center">
-            <ListCheck className="w-4 h-4 mr-3 text-neutral-700" />
-            <div className="flex-1 min-w-0">
-              <div className="text-sm font-medium text-neutral-900">
-                Issue List
-              </div>
-            </div>
-            <div className="ml-3 flex items-center gap-2 text-xs text-neutral-700">
-              <ChevronRight className="w-4 h-4 opacity-60 group-hover:opacity-100" />
-            </div>
-          </div>
-        </button>
-
-        {/* Merge Requests */}
-        <button
-          disabled={!isAuthenticated}
-          onClick={() => onFeatureSelect('merge-requests')}
-          className="group w-full overflow-hidden text-nowrap text-left hover:bg-neutral-100/60 rounded-lg px-3 py-2 transition-colors pointer-events-auto disabled:opacity-60 disabled:cursor-not-allowed"
-        >
-          <div className="flex items-center">
-            <GitMerge className="w-4 h-4 mr-3 text-neutral-700" />
-            <div className="flex-1 min-w-0">
-              <div className="text-sm font-medium text-neutral-900">
-                Merge Requests
-              </div>
-            </div>
-            <div className="ml-3 flex items-center gap-2 text-xs text-neutral-700">
-              <ChevronRight className="w-4 h-4 opacity-60 group-hover:opacity-100" />
-            </div>
-          </div>
-        </button>
-
-        {/* Recording feature removed */}
-
-        {/* Pinned */}
-        <button
-          onClick={() => onFeatureSelect('pinned')}
-          className="group w-full overflow-hidden text-nowrap text-left hover:bg-neutral-100/60 rounded-lg px-3 py-2 transition-colors pointer-events-auto"
-        >
-          <div className="flex items-center">
-            <Pin className="w-4 h-4 mr-3 text-neutral-700" />
-            <div className="flex-1 min-w-0">
-              <div className="text-sm font-medium text-neutral-900">
-                Pinned Issues
-              </div>
-              <div className="text-xs text-neutral-500">
-                {pinnedCount > 0
-                  ? `${pinnedCount} item${pinnedCount === 1 ? '' : 's'}`
-                  : 'No pinned issues'}
-              </div>
-            </div>
-            <ChevronRight className="w-4 h-4 opacity-60 group-hover:opacity-100" />
-          </div>
-        </button>
-      </div>
-    );
-  };
-
-  const renderFeatureDetail = () => {
-    switch (selectedFeature) {
+  const renderContent = () => {
+    switch (feature) {
       case 'issue':
         return (
-          <div className="flex flex-col h-full">
-            <HeaderBar
-              title="Create Issue"
-              onBack={onBack}
-              onClose={onClose}
-              onMouseDown={onMouseDown}
-            />
-            <div className="flex-1">
-              <ErrorBoundary
-                fallbackRender={err => (
-                  <div className="p-3 text-xs text-red-400 bg-red-50 border border-red-200 rounded-md">
-                    Issue Creator crashed: {err.message || 'Unknown error'}.
-                  </div>
-                )}
-              >
-                <CompactIssueCreator
-                  portalContainer={portalRef.current}
-                  resetTrigger={resetTrigger}
-                />
-              </ErrorBoundary>
-            </div>
-          </div>
-        );
-      case 'merge-request':
-        return (
-          <div className="flex flex-col h-full">
-            <HeaderBar
-              title="Create Merge Request"
-              onBack={onBack}
-              onClose={onClose}
-              onMouseDown={onMouseDown}
-            />
-            <div className="flex-1">
-              <ErrorBoundary
-                fallbackRender={err => (
-                  <div className="p-3 text-xs text-red-400 bg-red-50 border border-red-200 rounded-md">
-                    Merge Request Creator crashed:{' '}
-                    {err.message || 'Unknown error'}.
-                  </div>
-                )}
-              >
-                <CompactMergeRequestCreator
-                  portalContainer={portalRef.current}
-                  resetTrigger={resetTrigger}
-                />
-              </ErrorBoundary>
-            </div>
-          </div>
+          <CompactIssueCreator
+            onClose={onClose}
+            portalContainer={portalRef.current}
+          />
         );
       case 'issues':
         return (
-          <div className="flex flex-col h-full">
-            <HeaderBar
-              title="Issues"
-              onBack={onBack}
-              onClose={onClose}
-              onMouseDown={onMouseDown}
-            />
-            <div className="flex-1 min-h-0">
-              <ErrorBoundary
-                fallbackRender={err => (
-                  <div className="p-3 text-xs text-red-400 bg-red-50 border border-red-200 rounded-md">
-                    Issue List crashed: {err.message || 'Unknown error'}. Try
-                    Refresh or adjust filters.
-                  </div>
-                )}
-              >
-                <IssueList
-                  portalContainer={portalRef.current}
-                  onSelect={issue => onIssueSelect && onIssueSelect(issue)}
-                />
-              </ErrorBoundary>
-            </div>
-          </div>
+          <CompactIssueList
+            onClose={onClose}
+            onSelect={onIssueSelect}
+            portalContainer={portalRef.current}
+          />
         );
-      case 'merge-requests':
-        return (
-          <div className="flex flex-col h-full">
-            <HeaderBar
-              title="Merge Requests"
-              onBack={onBack}
-              onClose={onClose}
-              onMouseDown={onMouseDown}
-            />
-            <div className="flex-1 min-h-0">
-              <ErrorBoundary
-                fallbackRender={err => (
-                  <div className="p-3 text-xs text-red-400 bg-red-50 border border-red-200 rounded-md">
-                    MR List crashed: {err.message || 'Unknown error'}. Try
-                    Refresh or adjust filters.
-                  </div>
-                )}
-              >
-                <MRList
-                  portalContainer={portalRef.current}
-                  onSelect={mr => onMRSelect && onMRSelect(mr)}
-                />
-              </ErrorBoundary>
-            </div>
-          </div>
-        );
-      // Recording detail removed
       case 'pinned':
         return (
-          <div className="flex flex-col h-full">
-            <HeaderBar
-              title="Pinned Issues"
-              onBack={onBack}
-              onClose={onClose}
-              onMouseDown={onMouseDown}
-            />
-            <div className="flex-1 min-h-0">
-              <PinnedIssues
-                onSelect={issue => onIssueSelect && onIssueSelect(issue)}
-                portalContainer={portalRef.current}
-              />
-            </div>
-          </div>
-        );
-      case 'issue-detail':
-        return (
-          <div className="flex flex-col h-full">
-            {selectedIssue ? (
-              <>
-                <IssueDetailHeaderBar
-                  issue={selectedIssue}
-                  onBack={onBack}
-                  onClose={onClose}
-                  onMouseDown={onMouseDown}
-                />
-                <div className="flex-1 overflow-auto">
-                  <ErrorBoundary
-                    fallbackRender={err => (
-                      <div className="p-3 text-xs text-red-400 bg-red-50 border border-red-200 rounded-md">
-                        Issue Detail crashed: {err.message || 'Unknown error'}.
-                      </div>
-                    )}
-                  >
-                    <IssueDetail
-                      issue={selectedIssue}
-                      portalContainer={portalRef.current}
-                    />
-                  </ErrorBoundary>
-                </div>
-              </>
-            ) : (
-              <>
-                <HeaderBar
-                  title="Issue Detail"
-                  onBack={onBack}
-                  onClose={onClose}
-                  onMouseDown={onMouseDown}
-                />
-                <div className="p-4 text-xs opacity-80">No issue selected.</div>
-              </>
-            )}
-          </div>
-        );
-      case 'workflows':
-        return (
-          <div className="flex flex-col h-full">
-            <HeaderBar
-              title="Workflows"
-              onBack={onBack}
-              onClose={onClose}
-              onMouseDown={onMouseDown}
-            />
-            <div className="flex-1">
-              <ErrorBoundary
-                fallbackRender={err => (
-                  <div className="p-3 text-xs text-red-400 bg-red-50 border border-red-200 rounded-md">
-                    Issue List crashed: {err.message || 'Unknown error'}. Try
-                    Refresh or adjust filters.
-                  </div>
-                )}
-              >
-                <WorkflowList className="p-2" />
-              </ErrorBoundary>
-            </div>
-          </div>
-        );
-      case 'scenario-generator':
-        return (
-          <div className="flex flex-col h-full">
-            <HeaderBar
-              title="Task Scenario Generator"
-              onBack={onBack}
-              onClose={onClose}
-              onMouseDown={onMouseDown}
-            />
-            <div className="flex-1 min-h-0 overflow-auto p-3">
-              <ScenarioGeneratorPaneV2 />
-            </div>
-          </div>
-        );
-      case 'mr-detail':
-        return (
-          <div className="flex flex-col h-full">
-            {selectedMR ? (
-              <>
-                <HeaderBar
-                  title={`!${selectedMR.iid} - ${selectedMR.title}`}
-                  onBack={onBack}
-                  onClose={onClose}
-                  onMouseDown={onMouseDown}
-                />
-                <div className="flex-1 overflow-auto">
-                  <ErrorBoundary
-                    fallbackRender={err => (
-                      <div className="p-3 text-xs text-red-400 bg-red-50 border border-red-200 rounded-md">
-                        MR Detail crashed: {err.message || 'Unknown error'}.
-                      </div>
-                    )}
-                  >
-                    <MRDetail
-                      mr={selectedMR}
-                      portalContainer={portalRef.current}
-                      onGenerateFix={handleGenerateFix}
-                    />
-                  </ErrorBoundary>
-                </div>
-              </>
-            ) : (
-              <>
-                <HeaderBar
-                  title="MR Detail"
-                  onBack={onBack}
-                  onClose={onClose}
-                  onMouseDown={onMouseDown}
-                />
-                <div className="p-4 text-xs opacity-80">No MR selected.</div>
-              </>
-            )}
-          </div>
+          <CompactPinnedIssues
+            onClose={onClose}
+            onSelect={onIssueSelect}
+            portalContainer={portalRef.current}
+          />
         );
       default:
-        return renderFeatureList();
+        return null;
     }
   };
 
   return (
     <>
-      <div
-        className="w-full h-full relative z-10 glass-panel overflow-hidden"
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95, y: 10 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.95, y: 10 }}
+        transition={{ type: 'spring', stiffness: 300, damping: 25 }}
+        className="fixed bg-white rounded-xl shadow-2xl border border-gray-200"
+        style={{
+          left: position.x,
+          top: position.y,
+          width: 360,
+          zIndex: 1000000,
+        }}
         {...keyboardIsolation}
       >
-        <AnimatePresence initial={false} mode="popLayout">
-          {viewState === 'features' && (
-            <motion.div
-              key="features"
-              className="absolute inset-0 overflow-y-auto"
-              initial={{ opacity: 0, scale: 0.98, filter: 'blur(2px)' }}
-              animate={{
-                opacity: 1,
-                scale: 1,
-                filter: 'blur(0px)',
-                originX: 0.5,
-                originY: 0.5,
-              }}
-              exit={{ opacity: 0, scale: 0.98, filter: 'blur(2px)' }}
-              transition={{ ease: 'easeInOut' }}
-            >
-              {renderFeatureList()}
-            </motion.div>
-          )}
-          {viewState === 'feature-detail' && (
-            <motion.div
-              key="feature-detail"
-              className="absolute inset-0 overflow-y-auto"
-              initial={{ opacity: 0, scale: 0.98, filter: 'blur(2px)' }}
-              animate={{
-                opacity: 1,
-                scale: 1,
-                filter: 'blur(0px)',
-                originX: 0.5,
-                originY: 0.5,
-              }}
-              exit={{ opacity: 0, scale: 0.98, filter: 'blur(2px)' }}
-              transition={{ ease: 'easeOut' }}
-            >
-              {renderFeatureDetail()}
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </div>
-      {/* Portal root inside shadow DOM but outside scroll clipping */}
+        {renderContent()}
+
+        {/* Tooltip arrow pointing down */}
+        <div
+          className="absolute left-1/2 -translate-x-1/2 w-0 h-0"
+          style={{
+            bottom: -8,
+            borderLeft: '8px solid transparent',
+            borderRight: '8px solid transparent',
+            borderTop: '8px solid white',
+          }}
+        />
+        <div
+          className="absolute left-1/2 -translate-x-1/2 w-0 h-0"
+          style={{
+            bottom: -9,
+            borderLeft: '9px solid transparent',
+            borderRight: '9px solid transparent',
+            borderTop: '9px solid #e5e7eb',
+          }}
+        />
+      </motion.div>
       <div ref={portalRef} className="pointer-events-none" />
     </>
   );
 };
 
-// V2: Modern, simplified Task Scenario Generator
-const ScenarioGeneratorPaneV2: React.FC = () => {
-  const [url, setUrl] = React.useState('');
-  const [busy, setBusy] = React.useState<'idle' | 'generating' | 'exporting'>(
-    'idle'
-  );
-  const [rows, setRows] = React.useState<any[]>([]);
-  const [sheets, setSheets] = React.useState<
-    Array<{ name: string; scenarios: any[] }>
-  >([]);
-  const [selectedSheet, setSelectedSheet] = React.useState<string>('ALL');
-  const [msg, setMsg] = React.useState<{
-    type: 'error' | 'success';
-    text: string;
-  } | null>(null);
+// Compact Issue Creator
+const CompactIssueCreator: React.FC<{
+  onClose: () => void;
+  portalContainer: HTMLElement | null;
+}> = ({ onClose }) => {
+  const [title, setTitle] = useState('');
+  const [description, setDescription] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [projects, setProjects] = useState<any[]>([]);
+  const [selectedProject, setSelectedProject] = useState('');
 
-  // Helpers for direct Google Sheet CSV export
-  // JSONL helpers removed
-
-  const isGoogleSheet = (val: string) =>
-    /docs\.google\.com\/spreadsheets/i.test(val);
-  const isValid = url.trim().length > 0 && isGoogleSheet(url.trim());
-
-  const handlePaste = async () => {
-    try {
-      const text = await navigator.clipboard.readText();
-      if (text) setUrl(text);
-    } catch {
-      setMsg({ type: 'error', text: 'Clipboard not available' });
-    }
-  };
-
-  const copyJson = () => {
-    try {
-      const payload =
-        sheets.length > 0
-          ? {
-              sheets: sheets.map(s => ({
-                name: s.name,
-                scenarios: s.scenarios,
-              })),
-            }
-          : { scenarios: rows };
-      navigator.clipboard.writeText(JSON.stringify(payload, null, 2));
-      setMsg({ type: 'success', text: 'Copied JSON to clipboard' });
-    } catch (e: any) {
-      setMsg({ type: 'error', text: e?.message || 'Copy failed' });
-    }
-  };
-
-  const generate = async () => {
-    setMsg(null);
-    if (!isValid) {
-      setMsg({ type: 'error', text: 'Enter a valid Google Sheet URL' });
-      return;
-    }
-    setBusy('generating');
-    try {
-      const res = await apiService.previewScenarios(url.trim());
-      if (res.success && (res as any).data) {
-        const data: any = (res as any).data;
-        const multi = Array.isArray(data.sheets)
-          ? (data.sheets as Array<{ name: string; scenarios: any[] }>)
-          : [];
-        setSheets(multi);
-        setSelectedSheet('ALL');
-        setRows(multi.flatMap(s => s.scenarios));
-        setMsg({ type: 'success', text: 'Generated preview' });
-      } else {
-        setMsg({
-          type: 'error',
-          text: (res as any).error || 'Generation failed',
-        });
+  React.useEffect(() => {
+    const loadProjects = async () => {
+      try {
+        const result = await apiService.getProjects();
+        if (result.success && result.data) {
+          setProjects(result.data);
+          if (result.data.length > 0) {
+            setSelectedProject(result.data[0].id.toString());
+          }
+        }
+      } catch (error) {
+        console.error('Failed to load projects:', error);
       }
-    } catch (e: any) {
-      setMsg({ type: 'error', text: e?.message || 'Failed to generate' });
-    } finally {
-      setBusy('idle');
-    }
-  };
+    };
+    loadProjects();
+  }, []);
 
-  const exportToXlsx = async () => {
-    if (!rows.length) {
-      setMsg({ type: 'error', text: 'Nothing to export' });
-      return;
-    }
-    setBusy('exporting');
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!title.trim()) return;
+
+    setLoading(true);
     try {
-      const res = await apiService.exportScenariosXlsx(
-        sheets.length > 0
-          ? {
-              sheets: sheets.map(s => ({
-                name: s.name,
-                scenarios: s.scenarios,
-              })),
-            }
-          : { scenarios: rows }
+      const projectId = parseInt(selectedProject);
+      await apiService.createGitLabIssue(
+        projectId,
+        {
+          title: title.trim(),
+          description: description.trim(),
+        },
+        undefined
       );
-      if (!res.ok || !res.blob) {
-        setMsg({ type: 'error', text: res.error || 'Export failed' });
-        setBusy('idle');
-        return;
-      }
-      const blobUrl = URL.createObjectURL(res.blob);
-      const a = document.createElement('a');
-      a.href = blobUrl;
-      a.download = `test_scenarios_${Date.now()}.xlsx`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(blobUrl);
-      setMsg({ type: 'success', text: 'Exported as XLSX' });
-    } catch (e: any) {
-      setMsg({ type: 'error', text: e?.message || 'Export failed' });
+
+      // Reset form
+      setTitle('');
+      setDescription('');
+      onClose();
+    } catch (error) {
+      console.error('Failed to create issue:', error);
     } finally {
-      setBusy('idle');
+      setLoading(false);
     }
   };
-
-  // JSONL export feature removed
-
-  const scenariosCount = sheets.length
-    ? sheets.reduce((acc, s) => acc + (s.scenarios?.length || 0), 0)
-    : rows.length;
 
   return (
-    <div className="flex flex-col gap-3">
-      <div className="text-sm font-semibold">Google Sheet source</div>
+    <div className="p-4">
+      {/* Header */}
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="text-sm font-semibold text-gray-900">Create Issue</h3>
+        <button
+          onClick={onClose}
+          className="p-1 hover:bg-gray-100 rounded-full transition-colors"
+        >
+          <X className="w-4 h-4 text-gray-500" />
+        </button>
+      </div>
 
-      <div className="relative">
-        <div className="absolute left-2 top-1/2 -translate-y-1/2 text-neutral-400">
-          <LinkIcon className="w-4 h-4" />
-        </div>
-        <Input
-          value={url}
-          onChange={e => setUrl(e.target.value)}
-          placeholder="https://docs.google.com/spreadsheets/d/..."
-          className="pl-8 pr-28 text-xs bg-white pointer-events-auto glass-input"
-        />
-        <div className="absolute right-1 top-1/2 -translate-y-1/2 flex gap-1">
-          <Button
-            size="sm"
-            variant="secondary"
-            onClick={handlePaste}
-            className="pointer-events-auto h-7 px-2 text-[11px]"
+      {/* Form */}
+      <form onSubmit={handleSubmit} className="space-y-3">
+        {/* Project Select */}
+        <div>
+          <label className="text-xs font-medium text-gray-700 mb-1 block">
+            Project
+          </label>
+          <select
+            value={selectedProject}
+            onChange={e => setSelectedProject(e.target.value)}
+            className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
           >
-            Paste
-          </Button>
-          {url && (
-            <Button
-              size="sm"
-              variant="ghost"
-              onClick={() => setUrl('')}
-              className="pointer-events-auto h-7 px-2 text-[11px]"
-            >
-              Clear
-            </Button>
-          )}
+            {projects.map(project => (
+              <option key={project.id} value={project.id}>
+                {project.name}
+              </option>
+            ))}
+          </select>
         </div>
-      </div>
 
-      {!url && (
-        <div className="text-xs text-neutral-500">
-          Tip: paste a public sharing link to preview test scenarios.
+        {/* Title */}
+        <div>
+          <label className="text-xs font-medium text-gray-700 mb-1 block">
+            Title
+          </label>
+          <Input
+            value={title}
+            onChange={e => setTitle(e.target.value)}
+            placeholder="Brief description..."
+            className="text-sm h-9"
+          />
         </div>
-      )}
 
-      <div className="flex flex-wrap items-center gap-2">
+        {/* Description */}
+        <div>
+          <label className="text-xs font-medium text-gray-700 mb-1 block">
+            Description
+          </label>
+          <Textarea
+            value={description}
+            onChange={e => setDescription(e.target.value)}
+            placeholder="Add details..."
+            className="text-sm min-h-[120px] resize-none"
+          />
+        </div>
+
+        {/* Submit */}
         <Button
-          size="sm"
-          onClick={generate}
-          disabled={busy !== 'idle' || !isValid}
-          className="pointer-events-auto text-xs glass-button text-black"
+          type="submit"
+          disabled={loading || !title.trim()}
+          className="w-full h-9 text-sm"
         >
-          {busy === 'generating' ? (
-            <span className="inline-flex items-center gap-2 text-xs">
-              <Loader2 className="w-4 h-4 animate-spin" /> Generating
-            </span>
+          {loading ? (
+            <>
+              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              Creating...
+            </>
           ) : (
-            'Generate'
+            <>
+              <Send className="w-4 h-4 mr-2" />
+              Create Issue
+            </>
           )}
         </Button>
-        <Button
-          size="sm"
-          onClick={exportToXlsx}
-          disabled={busy !== 'idle' || rows.length === 0}
-          className="pointer-events-auto glass-button text-black"
-        >
-          {busy === 'exporting' ? (
-            <span className="inline-flex items-center gap-2 text-xs">
-              <Loader2 className="w-4 h-4 animate-spin" /> Exporting
-            </span>
-          ) : (
-            <span className="inline-flex items-center gap-2 text-xs">
-              <FileDown className="w-4 h-4" /> Export XLSX
-            </span>
-          )}
-        </Button>
+      </form>
+    </div>
+  );
+};
 
-        {scenariosCount > 0 && (
-          <div className="ml-auto flex items-center gap-2 text-[10px] text-neutral-600">
-            <Badge variant="secondary">{scenariosCount} scenarios</Badge>
-            {sheets.length > 0 && (
-              <Badge variant="outline">{sheets.length} tabs</Badge>
-            )}
-          </div>
-        )}
+// Compact Issue List
+const CompactIssueList: React.FC<{
+  onClose: () => void;
+  onSelect?: (issue: any) => void;
+  portalContainer: HTMLElement | null;
+}> = ({ onClose, onSelect }) => {
+  const [issues, setIssues] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  React.useEffect(() => {
+    const loadIssues = async () => {
+      try {
+        const result = await apiService.getIssues();
+        if (result.success && result.data) {
+          setIssues(result.data.slice(0, 20)); // Get first 20 issues
+        }
+      } catch (error) {
+        console.error('Failed to load issues:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadIssues();
+  }, []);
+
+  return (
+    <div className="flex flex-col h-[500px]">
+      {/* Header */}
+      <div className="flex items-center justify-between p-4 border-b border-gray-100">
+        <h3 className="text-sm font-semibold text-gray-900">Issues</h3>
+        <button
+          onClick={onClose}
+          className="p-1 hover:bg-gray-100 rounded-full transition-colors"
+        >
+          <X className="w-4 h-4 text-gray-500" />
+        </button>
       </div>
 
-      {/* JSONL export UI removed */}
-
-      {msg && (
-        <Alert
-          className={`py-2 ${msg.type === 'error' ? 'border-red-200/80 text-red-700 bg-red-50' : 'border-green-200/80 text-green-700 bg-green-50'}`}
-        >
-          <AlertDescription className="text-[11px] leading-relaxed">
-            <span className="inline-flex items-center gap-2">
-              {msg.type === 'error' ? (
-                <AlertCircle className="w-4 h-4" />
-              ) : (
-                <CheckCircle2 className="w-4 h-4" />
-              )}
-              {msg.text}
-            </span>
-          </AlertDescription>
-        </Alert>
-      )}
-
-      {sheets.length > 0 && (
-        <div className="flex flex-col gap-2">
-          <div className="text-[11px] text-neutral-700">Preview</div>
-          <ScrollArea className="w-full">
-            <div className="flex gap-1 pb-2 min-w-max">
-              {['ALL', ...sheets.map(s => s.name)].map(name => {
-                const count =
-                  name === 'ALL'
-                    ? sheets.reduce((a, s) => a + (s.scenarios?.length || 0), 0)
-                    : sheets.find(s => s.name === name)?.scenarios?.length || 0;
-                const active = selectedSheet === name;
-                return (
-                  <button
-                    key={name}
-                    onClick={() => {
-                      setSelectedSheet(name);
-                      if (name === 'ALL') {
-                        setRows(sheets.flatMap(s => s.scenarios));
-                      } else {
-                        const found = sheets.find(s => s.name === name);
-                        setRows(found ? found.scenarios : []);
-                      }
-                    }}
-                    className={`pointer-events-auto rounded-full border px-2 py-1 text-[11px] transition-colors ${
-                      active
-                        ? 'bg-neutral-900 text-white border-neutral-900'
-                        : 'bg-white/80 hover:bg-neutral-100 border-neutral-200 text-neutral-700'
-                    }`}
-                  >
-                    {name}
-                    <span className="ml-1 inline-flex items-center">
-                      <Badge
-                        variant={active ? 'secondary' : 'outline'}
-                        className={`h-4 px-1 text-[10px] ${active ? 'bg-white/10 text-white border-white/10' : ''}`}
-                      >
-                        {count}
-                      </Badge>
-                    </span>
-                  </button>
-                );
-              })}
+      {/* List */}
+      <ScrollArea className="flex-1">
+        <div className="p-2 space-y-1">
+          {loading ? (
+            <div className="flex items-center justify-center h-32">
+              <Loader2 className="w-5 h-5 animate-spin text-gray-400" />
             </div>
-          </ScrollArea>
+          ) : issues.length === 0 ? (
+            <div className="text-center py-8 text-sm text-gray-500">
+              No issues found
+            </div>
+          ) : (
+            issues.map(issue => (
+              <button
+                key={issue.id}
+                onClick={() => onSelect?.(issue)}
+                className="w-full text-left p-3 hover:bg-gray-50 rounded-lg transition-colors group"
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-medium text-gray-900 truncate group-hover:text-blue-600">
+                      {issue.title}
+                    </div>
+                    <div className="text-xs text-gray-500 mt-1">
+                      #{issue.iid} · {issue.project?.name}
+                    </div>
+                  </div>
+                  <Badge variant="secondary" className="text-xs shrink-0">
+                    {issue.state}
+                  </Badge>
+                </div>
+              </button>
+            ))
+          )}
         </div>
-      )}
+      </ScrollArea>
+    </div>
+  );
+};
 
-      {rows.length === 0 ? (
-        <div className="rounded-md border border-dashed border-neutral-200 bg-white/60 p-4 text-xs text-neutral-600">
-          No preview yet. Paste a Google Sheet link and press Generate to see
-          the first rows.
+// Compact Pinned Issues
+const CompactPinnedIssues: React.FC<{
+  onClose: () => void;
+  onSelect?: (issue: any) => void;
+  portalContainer: HTMLElement | null;
+}> = ({ onClose, onSelect }) => {
+  const [pinnedIssues, setPinnedIssues] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  React.useEffect(() => {
+    const loadPinned = async () => {
+      try {
+        const pinned = await storageService.getPinnedIssues();
+        setPinnedIssues(pinned);
+      } catch (error) {
+        console.error('Failed to load pinned issues:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadPinned();
+  }, []);
+
+  return (
+    <div className="flex flex-col h-[400px]">
+      {/* Header */}
+      <div className="flex items-center justify-between p-4 border-b border-gray-100">
+        <h3 className="text-sm font-semibold text-gray-900">Pinned Issues</h3>
+        <button
+          onClick={onClose}
+          className="p-1 hover:bg-gray-100 rounded-full transition-colors"
+        >
+          <X className="w-4 h-4 text-gray-500" />
+        </button>
+      </div>
+
+      {/* List */}
+      <ScrollArea className="flex-1">
+        <div className="p-2 space-y-1">
+          {loading ? (
+            <div className="flex items-center justify-center h-32">
+              <Loader2 className="w-5 h-5 animate-spin text-gray-400" />
+            </div>
+          ) : pinnedIssues.length === 0 ? (
+            <div className="text-center py-8 text-sm text-gray-500">
+              No pinned issues
+            </div>
+          ) : (
+            pinnedIssues.map(issue => (
+              <button
+                key={issue.id}
+                onClick={() => onSelect?.(issue)}
+                className="w-full text-left p-3 hover:bg-gray-50 rounded-lg transition-colors group"
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-medium text-gray-900 truncate group-hover:text-blue-600">
+                      {issue.title}
+                    </div>
+                    <div className="text-xs text-gray-500 mt-1">
+                      #{issue.iid} · {issue.project?.name}
+                    </div>
+                  </div>
+                  <Badge variant="secondary" className="text-xs shrink-0">
+                    {issue.state}
+                  </Badge>
+                </div>
+              </button>
+            ))
+          )}
         </div>
-      ) : (
-        <div className="rounded-md border border-neutral-200 bg-white/80 overflow-hidden">
-          <div className="max-h-56 overflow-auto">
-            <table className="w-full text-[11px]">
-              <thead className="sticky top-0 z-[1]">
-                <tr className="bg-neutral-50 border-b">
-                  {Object.keys(rows[0])
-                    .slice(0, 6)
-                    .map(k => (
-                      <th key={k} className="text-left px-2 py-2 font-medium">
-                        {k}
-                      </th>
-                    ))}
-                </tr>
-              </thead>
-              <tbody>
-                {rows.slice(0, 6).map((r, i) => (
-                  <tr key={i} className="odd:bg-white even:bg-neutral-50/40">
-                    {Object.keys(rows[0])
-                      .slice(0, 6)
-                      .map(k => (
-                        <td key={k} className="px-2 py-2 align-top">
-                          {Array.isArray(r[k])
-                            ? (r[k] as any[]).join(' \n ')
-                            : String(r[k] ?? '')}
-                        </td>
-                      ))}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <div className="px-2 py-1 text-[10px] text-neutral-500 border-t bg-white/70">
-            Showing up to 6 rows/columns{' '}
-            {sheets.length > 0 ? `(View: ${selectedSheet})` : ''}
-          </div>
-        </div>
-      )}
+      </ScrollArea>
     </div>
   );
 };
 
 export default FloatingTriggerPopup;
-
-// Minimal pane component for generating scenarios from a Google Sheet
-const ScenarioGeneratorPane: React.FC = () => {
-  const [url, setUrl] = React.useState('');
-  const [busy, setBusy] = React.useState<'idle' | 'generating' | 'exporting'>(
-    'idle'
-  );
-  const [rows, setRows] = React.useState<any[]>([]);
-  const [sheets, setSheets] = React.useState<
-    Array<{ name: string; scenarios: any[] }>
-  >([]);
-  const [selectedSheet, setSelectedSheet] = React.useState<string>('ALL');
-  const [exportMulti, setExportMulti] = React.useState<boolean>(true);
-  const [lastExportedAt, setLastExportedAt] = React.useState<number | null>(
-    null
-  );
-  const [msg, setMsg] = React.useState<{
-    type: 'error' | 'success';
-    text: string;
-  } | null>(null);
-
-  const generate = async () => {
-    setMsg(null);
-    if (!url) {
-      setMsg({ type: 'error', text: 'Please paste a Google Sheet URL' });
-      return;
-    }
-    setBusy('generating');
-    try {
-      const res = await apiService.previewScenarios(url);
-      if (res.success && (res as any).data) {
-        const data: any = (res as any).data;
-        const multi = Array.isArray(data.sheets)
-          ? (data.sheets as Array<{ name: string; scenarios: any[] }>)
-          : [];
-        setSheets(multi);
-        setSelectedSheet('ALL');
-        setRows(multi.flatMap(s => s.scenarios));
-      } else {
-        setMsg({ type: 'error', text: res.error || 'Generation failed' });
-      }
-    } catch (e: any) {
-      setMsg({ type: 'error', text: e?.message || 'Failed to generate' });
-    } finally {
-      setBusy('idle');
-    }
-  };
-
-  const exportToXlsx = async () => {
-    if (!rows.length) {
-      setMsg({ type: 'error', text: 'Nothing to export' });
-      return;
-    }
-    setBusy('exporting');
-    try {
-      const res = await apiService.exportScenariosXlsx(
-        sheets.length > 0
-          ? {
-              sheets: sheets.map(s => ({
-                name: s.name,
-                scenarios: s.scenarios,
-              })),
-            }
-          : { scenarios: rows }
-      );
-      if (!res.ok || !res.blob) {
-        setMsg({ type: 'error', text: res.error || 'Export failed' });
-        setBusy('idle');
-        return;
-      }
-      const blobUrl = URL.createObjectURL(res.blob);
-      const a = document.createElement('a');
-      a.href = blobUrl;
-      a.download = res.filename || 'scenarios.csv';
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(blobUrl);
-      setMsg({ type: 'success', text: 'XLSX exported' });
-    } catch (e: any) {
-      setMsg({ type: 'error', text: e?.message || 'Export failed' });
-    } finally {
-      setBusy('idle');
-    }
-  };
-
-  return (
-    <div className="flex flex-col gap-3">
-      <div className="text-[11px] text-neutral-700">
-        Paste a public Google Sheet URL
-      </div>
-      <input
-        type="text"
-        className="w-full px-2 py-2 rounded-md border border-neutral-200 focus:outline-none focus:ring-2 focus:ring-neutral-300 text-xs bg-white"
-        placeholder="https://docs.google.com/spreadsheets/d/..."
-        value={url}
-        onChange={e => setUrl(e.target.value)}
-      />
-      <div className="flex flex-wrap gap-2">
-        <Button
-          size="sm"
-          onClick={generate}
-          disabled={busy !== 'idle' || !url}
-          className="pointer-events-auto"
-        >
-          {busy === 'generating' ? 'Generating…' : 'Generate'}
-        </Button>
-        <Button
-          size="sm"
-          variant="secondary"
-          onClick={generate}
-          disabled={busy !== 'idle' || !url}
-          className="pointer-events-auto"
-        >
-          Regenerate
-        </Button>
-        {sheets.length > 0 && (
-          <select
-            className="text-xs border rounded px-2 py-1 bg-white"
-            value={selectedSheet}
-            onChange={e => {
-              const val = e.target.value;
-              setSelectedSheet(val);
-              if (val === 'ALL') {
-                setRows(sheets.flatMap(s => s.scenarios));
-              } else {
-                const found = sheets.find(s => s.name === val);
-                setRows(found ? found.scenarios : []);
-              }
-            }}
-          >
-            <option value="ALL">
-              All tabs (
-              {sheets.reduce((a, s) => a + (s.scenarios?.length || 0), 0)})
-            </option>
-            {sheets.map(s => (
-              <option key={s.name} value={s.name}>
-                {s.name} ({s.scenarios?.length || 0})
-              </option>
-            ))}
-          </select>
-        )}
-        <Button
-          size="sm"
-          variant="default"
-          onClick={exportToXlsx}
-          disabled={busy !== 'idle' || rows.length === 0}
-          className="pointer-events-auto"
-        >
-          Export
-        </Button>
-        {/* Always export per tab when sheets exist */}
-      </div>
-      {lastExportedAt && (
-        <div className="text-[10px] text-neutral-500">
-          Last exported to Scenario Trigger{' '}
-          {new Date(lastExportedAt).toLocaleTimeString()}
-        </div>
-      )}
-      {msg && (
-        <div
-          className={`text-[11px] ${msg.type === 'error' ? 'text-red-600' : 'text-green-700'}`}
-        >
-          {msg.text}
-        </div>
-      )}
-      {rows.length > 0 && (
-        <div className="max-h-56 overflow-auto rounded-md border border-neutral-200 bg-white/80">
-          <table className="w-full text-[11px]">
-            <thead>
-              <tr>
-                {Object.keys(rows[0])
-                  .slice(0, 5)
-                  .map(k => (
-                    <th
-                      key={k}
-                      className="text-left px-2 py-1 border-b bg-neutral-50 sticky top-0"
-                    >
-                      {k}
-                    </th>
-                  ))}
-              </tr>
-            </thead>
-            <tbody>
-              {rows.slice(0, 5).map((r, i) => (
-                <tr key={i} className="odd:bg-white even:bg-neutral-50/40">
-                  {Object.keys(rows[0])
-                    .slice(0, 5)
-                    .map(k => (
-                      <td key={k} className="px-2 py-1 align-top">
-                        {Array.isArray(r[k])
-                          ? (r[k] as any[]).join(' \n ')
-                          : String(r[k] ?? '')}
-                      </td>
-                    ))}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          <div className="px-2 py-1 text-[10px] text-neutral-500">
-            Showing first 5 rows/columns{' '}
-            {sheets.length > 0 ? `(View: ${selectedSheet})` : ''}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-};

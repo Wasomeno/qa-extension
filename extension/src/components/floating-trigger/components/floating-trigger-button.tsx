@@ -1,357 +1,155 @@
 import React from 'react';
-import { motion } from 'framer-motion';
-
+import { motion, AnimatePresence } from 'framer-motion';
+import { PlusCircle, List, Pin } from 'lucide-react';
 import { useKeyboardIsolation } from '@/hooks/useKeyboardIsolation';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '@/src/components/ui/ui/tooltip';
-import { Portal as TooltipPortal } from '@radix-ui/react-tooltip';
-import type { ViewState } from './floating-trigger-popup';
 
 interface FloatingTriggerButtonProps {
-  onMouseDown: (e: React.MouseEvent) => void;
-  viewState: ViewState;
   position: { x: number; y: number };
-  selectedFeature?: string | null;
   children?: React.ReactNode;
   containerRef?: (el: HTMLDivElement | null) => void;
   hidden?: boolean;
   opacity?: number;
   onHoverChange?: (isHovered: boolean) => void;
+  onActionClick?: (
+    action: 'issue' | 'issues' | 'pinned',
+    iconRect: DOMRect
+  ) => void;
+  hasActivePopup?: boolean;
 }
 
 const FloatingTriggerButton: React.FC<FloatingTriggerButtonProps> = ({
-  onMouseDown,
-  viewState,
   position,
-  selectedFeature,
   children,
   containerRef,
   hidden = false,
   opacity = 1,
   onHoverChange,
+  onActionClick,
+  hasActivePopup = false,
 }) => {
   const keyboardIsolation = useKeyboardIsolation();
-
-  const open = viewState !== 'closed';
   const rootRef = React.useRef<HTMLDivElement>(null);
-  // Keep light background, but adapt text color for contrast
-  const [onDarkBackdrop, setOnDarkBackdrop] = React.useState(false);
   const [isHovered, setIsHovered] = React.useState(false);
-  const [showTooltip, setShowTooltip] = React.useState(false);
-  const [isAnimating, setIsAnimating] = React.useState(false);
-  const [isDragging, setIsDragging] = React.useState(false);
-  const [dragStartPosition, setDragStartPosition] = React.useState<{
-    x: number;
-    y: number;
-  } | null>(null);
+  const createIconRef = React.useRef<HTMLButtonElement>(null);
+  const listIconRef = React.useRef<HTMLButtonElement>(null);
+  const pinnedIconRef = React.useRef<HTMLButtonElement>(null);
 
   // Provide root element to parent if requested
   React.useEffect(() => {
     if (containerRef) containerRef(rootRef.current);
   }, [containerRef]);
 
-  // Lightweight backdrop luminance detection to choose text tone only
+  // Notify parent of hover state changes
   React.useEffect(() => {
-    if (hidden) return;
-    const getSizeForState = (state: ViewState) => {
-      if (state === 'closed') return { w: 45, h: 45 };
-      if (state === 'features') return { w: 340, h: 320 };
-      return { w: 560, h: 640 };
-    };
+    onHoverChange?.(isHovered);
+  }, [isHovered, onHoverChange]);
 
-    const parseRGBA = (bg: string) => {
-      const m = bg.match(/rgba?\(([^)]+)\)/);
-      if (!m) return { r: 255, g: 255, b: 255, a: 1 };
-      const parts = m[1].split(',').map(s => parseFloat(s.trim()));
-      const [r, g, b, a] = [
-        parts[0] || 255,
-        parts[1] || 255,
-        parts[2] || 255,
-        parts[3] ?? 1,
-      ];
-      return { r, g, b, a };
-    };
-
-    const luminance = (r: number, g: number, b: number) => {
-      const srgb = [r, g, b].map(v => {
-        v /= 255;
-        return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
-      });
-      return 0.2126 * srgb[0] + 0.7152 * srgb[1] + 0.0722 * srgb[2];
-    };
-
-    const detect = () => {
-      try {
-        const el = rootRef.current;
-        if (!el) return;
-        const { w, h } = getSizeForState(viewState);
-        const clamp = (val: number, min: number, max: number) =>
-          Math.min(Math.max(val, min), max);
-        const points = [
-          [position.x + w / 2, position.y + h / 2],
-          [position.x + w * 0.25, position.y + h * 0.25],
-          [position.x + w * 0.75, position.y + h * 0.25],
-          [position.x + w * 0.25, position.y + h * 0.75],
-          [position.x + w * 0.75, position.y + h * 0.75],
-        ].map(([x, y]) => [
-          clamp(x, 0, window.innerWidth - 1),
-          clamp(y, 0, window.innerHeight - 1),
-        ]);
-
-        const sampleAt = (x: number, y: number) => {
-          try {
-            const prevPointer = el.style.pointerEvents;
-            el.style.pointerEvents = 'none';
-            let under = document.elementFromPoint(x, y) as HTMLElement | null;
-            el.style.pointerEvents = prevPointer;
-
-            let depth = 0;
-            while (under && depth < 12) {
-              const cs = getComputedStyle(under);
-              const rgba = parseRGBA(
-                cs.backgroundColor || 'rgba(255,255,255,1)'
-              );
-              if (rgba.a && rgba.a > 0) return rgba;
-              under = under.parentElement;
-              depth += 1;
-            }
-            const bodyBG = getComputedStyle(document.body).backgroundColor;
-            const htmlBG = getComputedStyle(
-              document.documentElement
-            ).backgroundColor;
-            const rb = parseRGBA(bodyBG || 'rgba(255,255,255,1)');
-            const rh = parseRGBA(htmlBG || 'rgba(255,255,255,1)');
-            return rb.a > 0 ? rb : rh;
-          } catch (error) {
-            // If backdrop detection fails, return default light background
-            return { r: 255, g: 255, b: 255, a: 1 };
-          }
-        };
-
-        const samples = points.map(([x, y]) => sampleAt(x, y));
-        const luminances = samples.map(s => luminance(s.r, s.g, s.b));
-        const avgL = luminances.reduce((a, b) => a + b, 0) / luminances.length;
-        // If backdrop is dark, switch text to light for contrast
-        setOnDarkBackdrop(avgL < 0.6);
-      } catch (error) {
-        // If detection fails, default to light text on dark backdrop assumption
-        console.warn('Backdrop detection failed, using default:', error);
-        setOnDarkBackdrop(false);
-      }
-    };
-
-    detect();
-    const ownerWin: Window =
-      rootRef.current?.ownerDocument?.defaultView || window;
-    const t = ownerWin.setTimeout(detect, 220);
-    const onScroll = () => detect();
-    const onResize = () => detect();
-    ownerWin.addEventListener('scroll', onScroll, true);
-    ownerWin.addEventListener('resize', onResize);
-    return () => {
-      ownerWin.removeEventListener('scroll', onScroll, true);
-      ownerWin.removeEventListener('resize', onResize);
-      ownerWin.clearTimeout(t);
-    };
-  }, [position.x, position.y, viewState, hidden]);
-
-  // Track when we're transitioning to closed state
-  React.useEffect(() => {
-    if (viewState === 'closed' && open) {
-      // Just transitioned from open to closed - start animation period
-      setShowTooltip(false);
-    } else if (viewState !== 'closed') {
-      setShowTooltip(false);
+  const handleActionClick = (
+    e: React.MouseEvent<HTMLButtonElement>,
+    action: 'issue' | 'issues' | 'pinned',
+    iconRef: React.RefObject<HTMLButtonElement>
+  ) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (iconRef.current && onActionClick) {
+      const rect = iconRef.current.getBoundingClientRect();
+      onActionClick(action, rect);
     }
-  }, [viewState, open]);
+  };
 
-  // Control tooltip visibility
-  React.useEffect(() => {
-    if (viewState === 'closed' && isHovered && !isAnimating && !isDragging) {
-      setShowTooltip(true);
-    } else {
-      setShowTooltip(false);
-    }
-  }, [viewState, isHovered, isAnimating, isDragging]);
+  // Show expanded state if hovered OR if there's an active popup
+  const isExpanded = isHovered || hasActivePopup;
 
-  // Handle drag detection
-  const handleMouseDown = React.useCallback(
-    (e: React.MouseEvent) => {
-      setDragStartPosition({ x: e.clientX, y: e.clientY });
-      setIsDragging(false);
-      onMouseDown(e);
-    },
-    [onMouseDown]
-  );
-
-  React.useEffect(() => {
-    if (!dragStartPosition) return;
-
-    const ownerDoc: Document = rootRef.current?.ownerDocument || document;
-
-    const handleMouseMove = (e: MouseEvent) => {
-      if (!dragStartPosition) return;
-
-      const dx = e.clientX - dragStartPosition.x;
-      const dy = e.clientY - dragStartPosition.y;
-      const distance = Math.sqrt(dx * dx + dy * dy);
-
-      // Consider it a drag if moved more than 3 pixels
-      if (distance > 3 && !isDragging) {
-        setIsDragging(true);
-        setShowTooltip(false);
-      }
-    };
-
-    const handleMouseUp = () => {
-      setDragStartPosition(null);
-      // Keep isDragging true for a brief moment to prevent tooltip flicker
-      setTimeout(() => setIsDragging(false), 100);
-    };
-
-    ownerDoc.addEventListener('mousemove', handleMouseMove);
-    ownerDoc.addEventListener('mouseup', handleMouseUp);
-
-    return () => {
-      ownerDoc.removeEventListener('mousemove', handleMouseMove);
-      ownerDoc.removeEventListener('mouseup', handleMouseUp);
-    };
-  }, [dragStartPosition, isDragging]);
+  // Calculate position adjustment to keep capsule centered
+  const restingWidth = 100;
+  const expandedWidth = 180;
+  const widthDiff = expandedWidth - restingWidth;
+  const offsetX = isExpanded ? -widthDiff / 2 : 0;
 
   return (
-    <motion.div
-      ref={rootRef}
-      initial={false}
-      onAnimationStart={() => setIsAnimating(true)}
-      onAnimationComplete={() => setIsAnimating(false)}
-      onMouseEnter={() => onHoverChange?.(true)}
-      onMouseLeave={() => onHoverChange?.(false)}
-      className={`floating-trigger ${open ? 'ft-glass' : ''} qa-theme-light ${onDarkBackdrop ? 'qa-text-dark' : 'qa-text-light'} ${viewState === 'closed' && !isHovered ? '' : ''}`}
-      style={{
-        display: hidden ? 'none' : undefined,
-        position: 'fixed',
-        left: position.x,
-        top: position.y,
-        zIndex: 999999,
-        pointerEvents: hidden ? 'none' : 'auto',
-        backdropFilter: viewState === 'closed' ? 'blur(12px)' : 'blur(16px)',
-        boxShadow:
-          viewState === 'closed'
-            ? '0 4px 12px rgba(0,0,0,0.15)'
-            : '0 20px 40px rgba(0,0,0,0.1), 0 8px 16px rgba(0,0,0,0.08)',
-      }}
-      animate={{
-        width:
-          viewState === 'closed'
-            ? isHovered
-              ? 50
-              : 36
-            : viewState === 'features'
-              ? 260
-              : 500,
-        height:
-          viewState === 'closed'
-            ? isHovered
-              ? 50
-              : 36
-            : viewState === 'features'
-              ? 300
-              : selectedFeature === 'pinned'
-                ? 440
-                : 580,
-        borderRadius: viewState === 'closed' ? 100 : 16,
-        scale: 1,
-        opacity: opacity,
-      }}
-      transition={{
-        type: 'spring',
-        stiffness: 200,
-        damping: 15,
-        mass: 0.6,
-        ease: 'easeInOut',
-      }}
-      {...keyboardIsolation}
-    >
-      {/* Always render children to preserve state, but control visibility */}
+    <>
+      {/* Capsule at bottom center */}
       <motion.div
-        key="content"
-        initial={{ opacity: 0 }}
-        animate={{ opacity: viewState === 'closed' ? 0 : 1 }}
-        className="w-full h-full relative"
+        ref={rootRef}
+        initial={false}
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
+        className="fixed bg-white border border-gray-300 shadow-lg"
         style={{
-          display: viewState === 'closed' ? 'none' : 'block',
-          pointerEvents: viewState === 'closed' ? 'none' : 'auto',
+          display: hidden ? 'none' : undefined,
+          zIndex: 999999,
+          pointerEvents: hidden ? 'none' : 'auto',
         }}
+        animate={{
+          left: position.x + offsetX,
+          top: position.y,
+          width: isExpanded ? expandedWidth : restingWidth,
+          height: isExpanded ? 48 : 40,
+          borderRadius: isExpanded ? 24 : 20,
+          opacity: opacity,
+        }}
+        transition={{
+          type: 'spring',
+          stiffness: 300,
+          damping: 20,
+          mass: 0.5,
+        }}
+        {...keyboardIsolation}
       >
-        {children}
+        <div className="flex items-center justify-center h-full gap-3 px-3">
+          <AnimatePresence>
+            {isExpanded && (
+              <>
+                {/* Create Issue */}
+                <motion.button
+                  ref={createIconRef}
+                  initial={{ opacity: 0, scale: 0.5 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.5 }}
+                  transition={{ duration: 0.15, delay: 0.05 }}
+                  onClick={e => handleActionClick(e, 'issue', createIconRef)}
+                  className="p-1.5 rounded-full hover:bg-gray-100 transition-colors pointer-events-auto"
+                  aria-label="Create Issue"
+                >
+                  <PlusCircle className="w-5 h-5 text-gray-700 hover:text-gray-900" />
+                </motion.button>
+
+                {/* List Issues */}
+                <motion.button
+                  ref={listIconRef}
+                  initial={{ opacity: 0, scale: 0.5 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.5 }}
+                  transition={{ duration: 0.15, delay: 0.1 }}
+                  onClick={e => handleActionClick(e, 'issues', listIconRef)}
+                  className="p-1.5 rounded-full hover:bg-gray-100 transition-colors pointer-events-auto"
+                  aria-label="Issue List"
+                >
+                  <List className="w-5 h-5 text-gray-700 hover:text-gray-900" />
+                </motion.button>
+
+                {/* Pinned Issues */}
+                <motion.button
+                  ref={pinnedIconRef}
+                  initial={{ opacity: 0, scale: 0.5 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.5 }}
+                  transition={{ duration: 0.15, delay: 0.15 }}
+                  onClick={e => handleActionClick(e, 'pinned', pinnedIconRef)}
+                  className="p-1.5 rounded-full hover:bg-gray-100 transition-colors pointer-events-auto"
+                  aria-label="Pinned Issues"
+                >
+                  <Pin className="w-5 h-5 text-gray-700 hover:text-gray-900" />
+                </motion.button>
+              </>
+            )}
+          </AnimatePresence>
+        </div>
       </motion.div>
 
-      {/* Button overlay shown when closed */}
-      {viewState === 'closed' && (
-        <TooltipProvider>
-          <Tooltip open={showTooltip}>
-            <TooltipTrigger asChild>
-              <motion.div
-                key="button"
-                initial={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                className="absolute inset-0 flex items-center justify-center cursor-pointer"
-                onMouseDown={handleMouseDown}
-                onMouseEnter={() => setIsHovered(true)}
-                onMouseLeave={() => setIsHovered(false)}
-              >
-                <motion.div
-                  animate={{
-                    scale: isHovered ? 1 : 0.8,
-                    opacity: isHovered ? 1 : 0.8,
-                    rotate: isHovered && !isDragging ? 5 : 0,
-                  }}
-                  whileTap={!isDragging ? { scale: 0.8, rotate: -5 } : {}}
-                  transition={{
-                    type: 'spring',
-                    stiffness: 300,
-                    damping: 20,
-                    mass: 0.4,
-                  }}
-                  style={{ pointerEvents: 'none' }}
-                >
-                  <img
-                    src="https://harlequin-unemployed-donkey-752.mypinata.cloud/ipfs/bafkreifqjkrounrfbhp6uabalj645txqku46o7w4j5loge4esludxnt2k4"
-                    aria-label="logo"
-                    className="w-9 h-9"
-                    style={{ pointerEvents: 'none', userSelect: 'none' }}
-                  />
-                </motion.div>
-              </motion.div>
-            </TooltipTrigger>
-            <TooltipPortal container={rootRef.current ?? undefined}>
-              <TooltipContent
-                side="top"
-                sideOffset={10}
-                className="animate-in fade-in-0 zoom-in-95 slide-in-from-bottom-2 duration-200"
-              >
-                <motion.div
-                  initial={{ y: 5, opacity: 0 }}
-                  animate={{ y: 0, opacity: 1 }}
-                  transition={{
-                    type: 'spring',
-                    stiffness: 400,
-                    damping: 25,
-                    duration: 0.2,
-                  }}
-                >
-                  Hello!
-                </motion.div>
-              </TooltipContent>
-            </TooltipPortal>
-          </Tooltip>
-        </TooltipProvider>
-      )}
-    </motion.div>
+      {/* Tooltip-style popups rendered separately */}
+      {children}
+    </>
   );
 };
 

@@ -23,6 +23,10 @@ export interface DiffSnippetState {
   error?: unknown;
   request?: DiffSnippetRequestParams;
   lineType: DiffSnippetLineType;
+  diffLineTypes?: Map<
+    number,
+    { lineNumber: number; type: 'addition' | 'deletion' | 'context' }
+  >;
 }
 
 export interface DiffNoteFixUIState {

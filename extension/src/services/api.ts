@@ -1862,6 +1862,17 @@ class ApiService {
     return this.request(endpoint);
   }
 
+  /**
+   * Get changes/diffs for a merge request
+   */
+  async getMergeRequestChanges(
+    projectId: string | number,
+    mrIid: number
+  ): Promise<ApiResponse<any>> {
+    const endpoint = `/api/merge-requests/${encodeURIComponent(String(projectId))}/gitlab/merge-requests/${mrIid}/changes`;
+    return this.request(endpoint);
+  }
+
   async getMergeRequestNoteSnippet(
     projectId: string | number,
     mrIid: number,

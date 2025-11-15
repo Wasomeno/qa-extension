@@ -68,24 +68,53 @@ export const DiffNoteSnippetPreview: React.FC<DiffNoteSnippetPreviewProps> = ({
         )}
       </div>
       <div className="max-h-60 overflow-auto">
-        <div className="px-3 py-2 text-[11px] font-mono leading-5 text-neutral-800">
-          {snippet.lines.map(line => (
-            <div
-              key={line.lineNumber}
-              className={`flex gap-3 whitespace-pre ${
-                line.highlight
-                  ? 'bg-yellow-50 border-l-2 border-yellow-200'
-                  : ''
-              }`}
-            >
-              <span className="w-12 shrink-0 text-right text-neutral-400 select-none">
-                {line.lineNumber}
-              </span>
-              <span className="flex-1 whitespace-pre">
-                {line.content?.length ? line.content : ' '}
-              </span>
-            </div>
-          ))}
+        <div className="text-[11px] font-mono leading-5 text-neutral-800">
+          {snippet.lines.map(line => {
+            const isHighlighted = line.highlight;
+
+            // Determine if this line is an addition/deletion from the parsed diff
+            const diffLineInfo = state.diffLineTypes?.get(line.lineNumber);
+            const isAddition = diffLineInfo?.type === 'addition';
+            const isDeletion = diffLineInfo?.type === 'deletion';
+
+            // Highlighted line gets stronger background
+            let bgClass = '';
+            if (isAddition) {
+              bgClass = isHighlighted ? 'bg-green-100' : 'bg-green-50';
+            } else if (isDeletion) {
+              bgClass = isHighlighted ? 'bg-red-100' : 'bg-red-50';
+            }
+
+            return (
+              <div
+                key={line.lineNumber}
+                className={`flex gap-2 whitespace-pre ${bgClass}`}
+              >
+                <span className="w-4 shrink-0 text-center select-none">
+                  {isAddition && (
+                    <span
+                      className={`text-green-600 ${isHighlighted ? 'font-bold' : ''}`}
+                    >
+                      +
+                    </span>
+                  )}
+                  {isDeletion && (
+                    <span
+                      className={`text-red-600 ${isHighlighted ? 'font-bold' : ''}`}
+                    >
+                      -
+                    </span>
+                  )}
+                </span>
+                <span className="w-12 shrink-0 text-right text-neutral-400 select-none">
+                  {line.lineNumber}
+                </span>
+                <span className="flex-1 whitespace-pre px-2">
+                  {line.content?.length ? line.content : ' '}
+                </span>
+              </div>
+            );
+          })}
         </div>
       </div>
     </div>

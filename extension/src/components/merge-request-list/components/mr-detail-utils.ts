@@ -4,10 +4,13 @@ import type {
   DiffSnippetComputed,
 } from './mr-detail-types';
 
-export const hasLineValue = (value: number | null | undefined): value is number =>
-  typeof value === 'number' && Number.isFinite(value);
+export const hasLineValue = (
+  value: number | null | undefined
+): value is number => typeof value === 'number' && Number.isFinite(value);
 
-export const buildNoteSnippetInput = (note: MRNote): DiffSnippetComputed | null => {
+export const buildNoteSnippetInput = (
+  note: MRNote
+): DiffSnippetComputed | null => {
   if (!note.position) {
     return null;
   }
@@ -86,13 +89,16 @@ export const buildNoteSnippetInput = (note: MRNote): DiffSnippetComputed | null 
       ref,
       startLine: normalizedStart,
       endLine: normalizedEnd,
-      contextBefore: 2,
-      contextAfter: 2,
+      contextBefore: 15,
+      contextAfter: 5,
     },
   };
 };
 
-export const formatRangeLabel = (start?: number, end?: number): string | null => {
+export const formatRangeLabel = (
+  start?: number,
+  end?: number
+): string | null => {
   if (!start || !end) {
     return null;
   }

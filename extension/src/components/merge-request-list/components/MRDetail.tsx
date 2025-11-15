@@ -29,6 +29,7 @@ import type {
 import { buildNoteSnippetInput } from './mr-detail-utils';
 import { DiffNoteSnippetPreview } from './DiffNoteSnippetPreview';
 import { DiffNoteFixActions } from './DiffNoteFixActions';
+import { parseAllDiffs } from './diff-parser';
 import type {
   DiffSnippetState,
   DiffNoteFixUIState,
@@ -66,6 +67,27 @@ export const MRDetail: React.FC<MRDetailProps> = ({
     },
     staleTime: 60_000,
   });
+
+  // Fetch MR changes/diffs
+  const { data: mrChanges } = useQuery({
+    queryKey: ['merge-request-changes', mr.project_id, mr.iid],
+    queryFn: async () => {
+      const res = await apiService.getMergeRequestChanges(
+        mr.project_id,
+        mr.iid
+      );
+      return res.success && res.data ? res.data : null;
+    },
+    staleTime: 60_000,
+  });
+
+  // Parse diffs to get line types (addition/deletion/context)
+  const parsedDiffs = useMemo(() => {
+    if (!mrChanges || !mrChanges.changes) {
+      return new Map();
+    }
+    return parseAllDiffs(mrChanges.changes);
+  }, [mrChanges]);
 
   const diffNoteEntries = useMemo(
     () =>
@@ -114,17 +136,34 @@ export const MRDetail: React.FC<MRDetailProps> = ({
     const map = new Map<number, DiffSnippetState>();
     diffNoteEntries.forEach(({ note, computed }, index) => {
       const query = snippetQueries[index];
+      const snippet = (query?.data as MRNoteSnippet | null) ?? null;
+
+      // Get diff line types for this file
+      let diffLineTypes:
+        | Map<
+            number,
+            { lineNumber: number; type: 'addition' | 'deletion' | 'context' }
+          >
+        | undefined;
+      if (snippet && computed?.request) {
+        const fileDiff = parsedDiffs.get(computed.request.filePath);
+        if (fileDiff) {
+          diffLineTypes = fileDiff.lines;
+        }
+      }
+
       map.set(note.id, {
-        snippet: (query?.data as MRNoteSnippet | null) ?? null,
+        snippet,
         isLoading: Boolean(query?.isLoading || query?.isFetching),
         isError: Boolean(query?.isError),
         error: query?.error,
         request: computed?.request,
         lineType: computed?.lineType ?? 'unknown',
+        diffLineTypes,
       });
     });
     return map;
-  }, [diffNoteEntries, snippetQueries]);
+  }, [diffNoteEntries, snippetQueries, parsedDiffs]);
 
   const [fixStates, setFixStates] = React.useState<
     Record<number, DiffNoteFixUIState>
@@ -869,6 +908,41 @@ export const MRDetail: React.FC<MRDetailProps> = ({
                       snippetState.snippet &&
                       snippetState.request
                   );
+
+                  // Check if this is an actual AI code review (not a reply/comment on a review)
+                  // AI reviews have multiple markers - require at least 2 to be sure
+                  const hasMainFileReviewed =
+                    note.body?.includes('Main file reviewed:') || false;
+                  const hasConfidence =
+                    note.body?.includes('Confidence:') ||
+                    note.body?.includes('Confident Rate:') ||
+                    false;
+                  const hasDetailsSummary =
+                    note.body?.includes('<details><summary>') || false;
+                  const hasKenapa =
+                    note.body?.includes('Kenapa saya mengangkat ini:') || false;
+                  const hasKonteks =
+                    note.body?.includes(
+                      'Konteks yang mungkin saya tidak tahu:'
+                    ) || false;
+                  const hasPertanyaan =
+                    note.body?.includes(
+                      'Beberapa pertanyaan untuk direnungkan:'
+                    ) || false;
+
+                  const aiMarkerCount = [
+                    hasMainFileReviewed,
+                    hasConfidence,
+                    hasDetailsSummary,
+                    hasKenapa,
+                    hasKonteks,
+                    hasPertanyaan,
+                  ].filter(Boolean).length;
+
+                  const isActualCodeReview = isDiffNote && aiMarkerCount >= 2;
+
+                  const shouldShowSnippet =
+                    isActualCodeReview && canGenerateFix;
                   return (
                     <div
                       key={note.id}
@@ -881,7 +955,7 @@ export const MRDetail: React.FC<MRDetailProps> = ({
                               note.author?.username ||
                               'Unknown user'}
                           </div>
-                          {isDiffNote && (
+                          {isActualCodeReview && (
                             <Badge
                               variant="outline"
                               className="text-[10px] px-1.5 py-0"
@@ -894,15 +968,25 @@ export const MRDetail: React.FC<MRDetailProps> = ({
                           {new Date(note.created_at).toLocaleString()}
                         </div>
                       </div>
+                      {shouldShowSnippet && (
+                        <DiffNoteSnippetPreview state={snippetState} />
+                      )}
                       <div
                         className="tiptap mt-2 leading-5 space-y-2 text-[12px] text-balance"
                         dangerouslySetInnerHTML={{
-                          __html: md.render(note.body || ''),
+                          __html: md.render(
+                            (note.body || '')
+                              // Remove the <details> markdown/text before rendering
+                              .replace(
+                                /<details>\s*<summary>\s*.*?\s*<\/summary>[\s\S]*?<\/details>/gi,
+                                ''
+                              )
+                              .trim()
+                          ),
                         }}
                       />
-                      {isDiffNote && (
+                      {shouldShowSnippet && (
                         <>
-                          <DiffNoteSnippetPreview state={snippetState} />
                           <DiffNoteFixActions
                             state={fixState}
                             canGenerate={canGenerateFix}
