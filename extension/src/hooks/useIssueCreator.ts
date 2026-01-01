@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { apiService, GitLabUser } from '@/services/api';
 import { storageService } from '@/services/storage';
