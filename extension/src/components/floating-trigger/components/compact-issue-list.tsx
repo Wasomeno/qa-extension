@@ -1,28 +1,20 @@
 import React, { useState, useCallback, useMemo } from 'react';
 import { X, Loader2, AlertCircle } from 'lucide-react';
-import { ScrollArea } from '@/src/components/ui/ui/scroll-area';
-import { Badge } from '@/src/components/ui/ui/badge';
-import { Button } from '@/src/components/ui/ui/button';
-import { Input } from '@/src/components/ui/ui/input';
-import { Skeleton } from '@/src/components/ui/ui/skeleton';
-import { Checkbox } from '@/src/components/ui/ui/checkbox';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
-} from '@/src/components/ui/ui/popover';
-import { Label } from '@/src/components/ui/ui/label';
+} from '@/components/ui/popover';
+import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
 import { useDebounce } from '@/utils/useDebounce';
-import { apiService } from '@/services/api';
-import type {
-  ListIssuesParams,
-  IssueListItem,
-  GitLabLabel,
-  Project,
-  GitLabUser,
-} from '@/services/api';
-import { formatProjectName } from '@/utils/project-formatter';
+import type { IssueListItem, GitLabLabel } from '@/services/api';
 import { ChevronRight } from 'lucide-react';
 
 interface CompactIssueListProps {

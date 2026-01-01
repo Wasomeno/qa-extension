@@ -5,10 +5,6 @@ import {
   ExternalLink,
   MoreVertical,
   Pin,
-  CheckCircle,
-  XCircle,
-  UserPlus,
-  Tag,
   GitMerge,
   GitPullRequest,
   Clock,
@@ -20,19 +16,18 @@ import {
   MessageSquare,
   ChevronDown,
   ChevronUp,
-  Milestone as MilestoneIcon,
+  Milestone,
   Database,
   Globe,
   User,
-  Code,
   ListTree,
   X,
   CornerDownRight,
 } from 'lucide-react';
-import { AddChildModal } from './AddChildModal';
+import { AddChildModal } from './add-child-modal';
 import { MockIssue, IssueStatus, ChildIssue as ChildIssueType } from './types';
 import { cn } from '@/lib/utils';
-import { ScrollArea } from '@/src/components/ui/ui/scroll-area';
+import { ScrollArea } from '@/components/ui/scroll-area';
 
 interface IssueDetailPageProps {
   issue: MockIssue;

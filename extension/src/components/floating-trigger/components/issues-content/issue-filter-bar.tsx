@@ -2,7 +2,6 @@ import React from 'react';
 import { Search, ChevronDown, Filter } from 'lucide-react';
 import { IssueFilterState, IssueStatus } from './types';
 import { MOCK_PROJECTS } from './mock-data';
-import { cn } from '@/lib/utils';
 
 // Using native select for simplicity in this iteration, can be upgraded to custom Select component later
 interface IssueFilterBarProps {

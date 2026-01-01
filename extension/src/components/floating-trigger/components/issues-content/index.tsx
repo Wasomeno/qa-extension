@@ -1,11 +1,11 @@
 import React, { useState, useMemo } from 'react';
 import { AnimatePresence } from 'framer-motion';
-import { IssueFilterBar } from './IssueFilterBar';
-import { QuickFilterChips } from './QuickFilterChips';
-import { IssueList } from './IssueList';
-import { IssueDetailPage } from './IssueDetailPage';
 import { MOCK_ISSUES, CURRENT_USER } from './mock-data';
 import { IssueFilterState, MockIssue } from './types';
+import { IssueDetailPage } from './issue-detail-page';
+import { IssueFilterBar } from './issue-filter-bar';
+import { IssueList } from './issue-list';
+import { QuickFilterChips } from './quick-filter-chips';
 
 export const IssuesContent: React.FC = () => {
   const [filters, setFilters] = useState<IssueFilterState>({

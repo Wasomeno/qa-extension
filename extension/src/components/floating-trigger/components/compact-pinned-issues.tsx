@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { X, Loader2 } from 'lucide-react';
-import { ScrollArea } from '@/src/components/ui/ui/scroll-area';
-import { Badge } from '@/src/components/ui/ui/badge';
 import { storageService } from '@/services/storage';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Badge } from '@/components/ui/badge';
 
 interface CompactPinnedIssuesProps {
   onClose: () => void;

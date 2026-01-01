@@ -1,13 +1,13 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { PlusCircle, List, Pin, Menu } from 'lucide-react';
-import { useKeyboardIsolation } from '@/hooks/useKeyboardIsolation';
+import { useKeyboardIsolation } from '@/hooks/use-keyboard-isolation';
 import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
-} from '@/src/components/ui/ui/tooltip';
+} from '@/components/ui/tooltip';
 
 interface FloatingTriggerButtonProps {
   position: { x: number; y: number };
@@ -223,9 +223,7 @@ const FloatingTriggerButton: React.FC<FloatingTriggerButtonProps> = ({
                           duration: 0.2,
                           bounce: 0.3,
                         }}
-                        onClick={e =>
-                          handleActionClick(e, 'menu', menuIconRef)
-                        }
+                        onClick={e => handleActionClick(e, 'menu', menuIconRef)}
                         className="p-1.5 rounded-full hover:bg-gray-100 transition-colors pointer-events-auto"
                         aria-label="Main Menu"
                       >

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { CreateIssueContent } from './CreateIssueContent';
+import { CreateIssueContent } from './create-issue-content';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   LayoutDashboard,
@@ -13,13 +13,13 @@ import {
   ChevronRight,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { ScrollArea } from '@/src/components/ui/ui/scroll-area';
-import { useKeyboardIsolation } from '@/hooks/useKeyboardIsolation';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { useKeyboardIsolation } from '@/hooks/use-keyboard-isolation';
 import { IssuesContent } from './issues-content';
-import { IssueCard } from './issues-content/IssueCard';
+import { IssueCard } from './issues-content/issue-card';
 import { MOCK_PINNED_ISSUES } from './issues-content/mock-data';
-import { PinColorPicker } from './issues-content/PinColorPicker';
-import { PinNoteModal } from './issues-content/PinNoteModal';
+import { PinColorPicker } from './issues-content/pin-color-picker';
+import { PinNoteModal } from './issues-content/pin-note-modal';
 import { MockIssue, PinColor } from './issues-content/types';
 
 type MenuView = 'dashboard' | 'issues' | 'pinned' | 'create' | 'profile';

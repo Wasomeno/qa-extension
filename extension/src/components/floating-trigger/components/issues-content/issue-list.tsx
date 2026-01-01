@@ -1,8 +1,7 @@
 import React, { useState } from 'react';
 import { ChevronDown, ChevronRight, FolderOpen } from 'lucide-react';
 import { MockIssue } from './types';
-import { IssueCard } from './IssueCard';
-import { cn } from '@/lib/utils'; // Keep absolute import as per original
+import { IssueCard } from './issue-card';
 
 interface IssueListProps {
   issues: MockIssue[];

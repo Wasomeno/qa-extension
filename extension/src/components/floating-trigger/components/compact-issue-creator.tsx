@@ -25,14 +25,14 @@ import {
   FolderGit2,
   Tags,
 } from 'lucide-react';
-import { Button } from '@/src/components/ui/ui/button';
-import { Label } from '@/src/components/ui/ui/label';
-import { Skeleton } from '@/src/components/ui/ui/skeleton';
+import { Button } from '@/components/ui/button';
+import { Label } from '@/components/ui/label';
+import { Skeleton } from '@/components/ui/skeleton';
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
-} from '@/src/components/ui/ui/popover';
+} from '@/components/ui/popover';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -40,17 +40,17 @@ import {
   DropdownMenuTrigger,
   DropdownMenuSeparator,
   DropdownMenuLabel,
-} from '@/src/components/ui/ui/dropdown-menu';
+} from '@/components/ui/dropdown-menu';
 import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
-} from '@/src/components/ui/ui/tooltip';
+} from '@/components/ui/tooltip';
 import { Portal as TooltipPortal } from '@radix-ui/react-tooltip';
 import { apiService } from '@/services/api';
 import api from '@/services/api';
-import { useKeyboardIsolation } from '@/hooks/useKeyboardIsolation';
+import { useKeyboardIsolation } from '@/hooks/use-keyboard-isolation';
 import { formatProjectName } from '@/utils/project-formatter';
 import { cn } from '@/lib/utils';
 import MarkdownIt from 'markdown-it';

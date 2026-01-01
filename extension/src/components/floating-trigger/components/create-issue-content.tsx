@@ -59,13 +59,13 @@ As a [user], I want to [action] so that [benefit].
 };
 import api from '@/services/api';
 
-import { ScrollArea } from '@/src/components/ui/ui/scroll-area';
-import { Button } from '@/src/components/ui/ui/button';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Button } from '@/components/ui/button';
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
-} from '@/src/components/ui/ui/popover';
+} from '@/components/ui/popover';
 
 export const CreateIssueContent: React.FC = () => {
   const [aiLoading, setAiLoading] = useState(false);

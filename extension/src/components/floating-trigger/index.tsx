@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import FloatingTriggerButton from './components/floating-trigger-button';
-import PopupWrapper from './components/PopupWrapper';
-import CompactIssueCreator from './components/CompactIssueCreator';
-import CompactIssueList from './components/CompactIssueList';
-import CompactPinnedIssues from './components/CompactPinnedIssues';
-import MainMenuModal from './components/MainMenuModal';
+import PopupWrapper from './components/popup-wrapper';
+import CompactIssueCreator from './components/compact-issue-creator';
+import CompactIssueList from './components/compact-issue-list';
+import CompactPinnedIssues from './components/compact-pinned-issues';
+import MainMenuModal from './components/main-menu-modal';
 import { storageService, type ExtensionSettings } from '@/services/storage';
 
 interface FloatingTriggerProps {

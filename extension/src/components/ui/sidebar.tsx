@@ -3,23 +3,23 @@ import { Slot } from '@radix-ui/react-slot';
 import { VariantProps, cva } from 'class-variance-authority';
 import { PanelLeft } from 'lucide-react';
 
-import { Button } from 'src/components/ui/ui/button';
-import { Input } from 'src/components/ui/ui/input';
-import { Separator } from 'src/components/ui/ui/separator';
+import { Button } from './button';
+import { Input } from './input';
+import { Separator } from './separator';
 import {
   Sheet,
   SheetContent,
   SheetDescription,
   SheetHeader,
   SheetTitle,
-} from 'src/components/ui/ui/sheet';
-import { Skeleton } from 'src/components/ui/ui/skeleton';
+} from './sheet';
+import { Skeleton } from './skeleton';
 import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
-} from 'src/components/ui/ui/tooltip';
+} from './tooltip';
 import { cn } from '@/lib/utils';
 import { useIsMobile } from '../../hooks/use-mobile';
 

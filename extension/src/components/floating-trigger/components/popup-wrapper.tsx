@@ -1,6 +1,6 @@
 import React, { useRef } from 'react';
 import { motion } from 'framer-motion';
-import { useKeyboardIsolation } from '@/hooks/useKeyboardIsolation';
+import { useKeyboardIsolation } from '@/hooks/use-keyboard-isolation';
 
 interface PopupWrapperProps {
   position: { x: number; y: number };
