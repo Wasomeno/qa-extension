@@ -222,10 +222,35 @@ storageService.initialize().catch(console.error);
 
 // Hot reload (Development only)
 if (process.env.NODE_ENV === 'development') {
-  try {
-    const ws = new WebSocket('ws://localhost:8080');
-    ws.onmessage = e => {
-      if (JSON.parse(e.data).type === 'reload') chrome.runtime.reload();
-    };
-  } catch {}
+  const connect = () => {
+    try {
+      console.log('🔌 [Hot Reload] Connecting to server...');
+      const ws = new WebSocket('ws://localhost:8080');
+      
+      ws.onopen = () => {
+        console.log('✅ [Hot Reload] Connected');
+      };
+
+      ws.onmessage = e => {
+        if (JSON.parse(e.data).type === 'reload') {
+          console.log('🔄 [Hot Reload] Reloading extension...');
+          chrome.runtime.reload();
+        }
+      };
+
+      ws.onclose = () => {
+        console.log('❌ [Hot Reload] Disconnected. Retrying in 2s...');
+        setTimeout(connect, 2000);
+      };
+
+      ws.onerror = (err) => {
+        console.error('⚠️ [Hot Reload] Error:', err);
+        ws.close();
+      };
+    } catch (e) {
+      console.error('⚠️ [Hot Reload] Connection failed:', e);
+      setTimeout(connect, 2000);
+    }
+  };
+  connect();
 }

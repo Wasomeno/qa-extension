@@ -135,7 +135,7 @@ export const IssuesContent: React.FC = () => {
       {/* Header & Filters */}
       <div className="flex-none space-y-4 px-8 pt-8 pb-4 border-b border-gray-100 bg-white z-10">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Issues</h1>
+          <h1 className="text-2xl font-bold text-gray-900">Issues Updated</h1>
           <p className="text-sm text-gray-500 mt-1">
             Manage issues across your projects
           </p>
