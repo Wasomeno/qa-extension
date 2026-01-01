@@ -15,7 +15,6 @@ import {
 import { cn } from '@/lib/utils';
 import { ScrollArea } from '@/src/components/ui/ui/scroll-area';
 import { useKeyboardIsolation } from '@/hooks/useKeyboardIsolation';
-import useAuth from '@/hooks/useAuth';
 import { IssuesContent } from './issues-content';
 import { IssueCard } from './issues-content/IssueCard';
 import { MOCK_PINNED_ISSUES } from './issues-content/mock-data';
@@ -46,7 +45,6 @@ interface MainMenuModalProps {
 const MainMenuModal: React.FC<MainMenuModalProps> = ({ isOpen, onClose }) => {
   const [activeView, setActiveView] = useState<MenuView>('dashboard');
   const keyboardIsolation = useKeyboardIsolation();
-  const { user, logout } = useAuth();
 
   const renderContent = () => {
     switch (activeView) {
@@ -59,7 +57,7 @@ const MainMenuModal: React.FC<MainMenuModalProps> = ({ isOpen, onClose }) => {
       case 'create':
         return <CreateIssueContent />;
       case 'profile':
-        return <ProfileContent user={user} onLogout={logout} />;
+        return <ProfileContent />;
       default:
         return <DashboardContent />;
     }
@@ -164,7 +162,7 @@ const MainMenuModal: React.FC<MainMenuModalProps> = ({ isOpen, onClose }) => {
                           : 'hover:bg-gray-100'
                       )}
                     >
-                      {user?.avatarUrl ? (
+                      {/*{user?.avatarUrl ? (
                         <img
                           src={user.avatarUrl}
                           alt={user.fullName || user.username}
@@ -187,7 +185,7 @@ const MainMenuModal: React.FC<MainMenuModalProps> = ({ isOpen, onClose }) => {
                           {user?.email || 'Not signed in'}
                         </p>
                       </div>
-                      <ChevronRight className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                      <ChevronRight className="w-4 h-4 text-gray-400 flex-shrink-0" />*/}
                     </button>
                     <p className="text-[10px] text-gray-400 mt-2 px-2">
                       v1.0.0
@@ -381,7 +379,7 @@ const PinnedContent: React.FC = () => {
 };
 
 interface ProfileContentProps {
-  user: {
+  user?: {
     id: string;
     email: string;
     username: string;
@@ -397,7 +395,7 @@ interface ProfileContentProps {
       };
     };
   } | null;
-  onLogout: () => void;
+  onLogout?: () => void;
 }
 
 const ProfileContent: React.FC<ProfileContentProps> = ({ user, onLogout }) => (

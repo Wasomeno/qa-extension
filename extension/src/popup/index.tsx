@@ -20,7 +20,6 @@ import { Loader } from 'lucide-react';
 
 import { apiService } from '@/services/api';
 import { storageService } from '@/services/storage';
-import useOAuth from '@/hooks/useOAuth';
 import { UserData, MessageType } from '@/types/messages';
 import SettingsPage from '@/popup/components/SettingsPage';
 
@@ -61,7 +60,6 @@ const PopupApp: React.FC = () => {
 
   const [isLoading, setIsLoading] = useState(false);
   const initializationCompleted = useRef(false);
-  const { startGitLab, loading: oAuthLoading, error: oAuthError } = useOAuth();
   const keepaliveRef = useRef<chrome.runtime.Port | null>(null);
 
   // Removed eager keepalive port from popup to avoid MV3 race
@@ -756,34 +754,34 @@ const PopupApp: React.FC = () => {
                 <motion.button
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
-                  onClick={async () => {
-                    setIsLoading(true);
-                    const r = await startGitLab();
-                    if (!r.success) {
-                      setState(prev => ({
-                        ...prev,
-                        error: oAuthError || 'Failed to initiate GitLab OAuth',
-                      }));
-                    } else {
-                      setState(prev => ({
-                        ...prev,
-                        success:
-                          'OAuth window opened. Please complete authentication...',
-                      }));
-                    }
-                    setIsLoading(false);
-                  }}
-                  disabled={isLoading || oAuthLoading}
+                  // onClick={async () => {
+                  //   setIsLoading(true);
+                  //   const r = await startGitLab();
+                  //   if (!r.success) {
+                  //     setState(prev => ({
+                  //       ...prev,
+                  //       error: oAuthError || 'Failed to initiate GitLab OAuth',
+                  //     }));
+                  //   } else {
+                  //     setState(prev => ({
+                  //       ...prev,
+                  //       success:
+                  //         'OAuth window opened. Please complete authentication...',
+                  //     }));
+                  //   }
+                  //   setIsLoading(false);
+                  // }}
+                  // disabled={isLoading || oAuthLoading}
                   className="w-full glass-button glass-glow-blue p-4 flex items-center justify-center gap-3 font-medium"
                 >
-                  {isLoading || oAuthLoading ? (
+                  {/*{isLoading || oAuthLoading ? (
                     <FiRefreshCw className="animate-spin text-lg" />
                   ) : (
                     <FiGitlab className="text-lg text-orange-400" />
                   )}
                   {isLoading || oAuthLoading
                     ? 'Connecting...'
-                    : 'Sign in with GitLab'}
+                    : 'Sign in with GitLab'}*/}
                 </motion.button>
               </div>
 

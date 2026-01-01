@@ -1,5 +1,4 @@
-import React, { useState, useCallback, useMemo, useRef } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import React, { useState, useCallback, useMemo } from 'react';
 import { X, Loader2, AlertCircle } from 'lucide-react';
 import { ScrollArea } from '@/src/components/ui/ui/scroll-area';
 import { Badge } from '@/src/components/ui/ui/badge';
@@ -23,7 +22,6 @@ import type {
   Project,
   GitLabUser,
 } from '@/services/api';
-import useAuth from '@/hooks/useAuth';
 import { formatProjectName } from '@/utils/project-formatter';
 import { ChevronRight } from 'lucide-react';
 
@@ -54,9 +52,6 @@ const CompactIssueList: React.FC<CompactIssueListProps> = ({
   onSelect,
   portalContainer,
 }) => {
-  const { user } = useAuth();
-  const queryClient = useQueryClient();
-
   // Filter state
   const [filters, setFilters] = useState<FilterState>(INITIAL_FILTERS);
   const debouncedSearch = useDebounce(filters.search, 500);
@@ -64,47 +59,6 @@ const CompactIssueList: React.FC<CompactIssueListProps> = ({
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
   const ITEMS_PER_PAGE = 20;
-
-  // Build query params
-  const queryParams = useMemo<ListIssuesParams>(
-    () => ({
-      search: debouncedSearch || undefined,
-      projectId:
-        filters.projectIds.length === 1 ? filters.projectIds[0] : undefined,
-      assigneeId:
-        filters.assigneeIds.length === 1 ? filters.assigneeIds[0] : undefined,
-      labels: filters.labels.length > 0 ? filters.labels : undefined,
-      status: getStatusFilter(filters.statuses),
-      cursor: String(currentPage),
-      limit: ITEMS_PER_PAGE,
-      sort: 'newest',
-    }),
-    [debouncedSearch, filters, currentPage]
-  );
-
-  // Fetch issues
-  const {
-    data: issuesData,
-    isLoading,
-    isError,
-    error,
-    isFetching,
-  } = useQuery({
-    queryKey: ['compact-issues', queryParams],
-    queryFn: async () => {
-      const result = await apiService.listGitLabIssuesGlobal(queryParams);
-      if (!result.success) {
-        throw new Error(result.error || 'Failed to load issues');
-      }
-      return result.data;
-    },
-    staleTime: 60_000, // 1 minute
-    enabled: !!user,
-  });
-
-  const issues = issuesData?.items || [];
-  const hasNextPage = !!issuesData?.nextCursor;
-  const projectLabels = issuesData?.projectLabels || {};
 
   // Filter update handlers
   const updateFilter = useCallback(
@@ -129,12 +83,6 @@ const CompactIssueList: React.FC<CompactIssueListProps> = ({
     []
   );
 
-  const handleLoadMore = useCallback(() => {
-    if (hasNextPage && !isFetching) {
-      setCurrentPage(prev => prev + 1);
-    }
-  }, [hasNextPage, isFetching]);
-
   return (
     <div className="flex flex-col h-[380px] bg-white">
       {/* Filters */}
@@ -145,48 +93,15 @@ const CompactIssueList: React.FC<CompactIssueListProps> = ({
         onToggleAssignee={id => toggleArrayFilter('assigneeIds', id)}
         onToggleLabel={name => toggleArrayFilter('labels', name)}
         onToggleStatus={status => toggleArrayFilter('statuses', status)}
-        projectLabels={projectLabels}
+        projectLabels={{}}
         portalContainer={portalContainer}
-        isLoading={isLoading}
+        isLoading={false}
       />
 
       {/* Issue List */}
       <ScrollArea className="flex-1">
         <div className="p-2 space-y-1">
-          {isLoading && <LoadingState />}
-
-          {isError && (
-            <ErrorState
-              message={
-                error instanceof Error ? error.message : 'Failed to load issues'
-              }
-            />
-          )}
-
-          {!isLoading && !isError && issues.length === 0 && <EmptyState />}
-
-          {!isLoading && !isError && issues.length > 0 && (
-            <>
-              {issues.map(issue => (
-                <IssueCard key={issue.id} issue={issue} onSelect={onSelect} />
-              ))}
-
-              {isFetching && <LoadingMoreState />}
-
-              {hasNextPage && !isFetching && (
-                <div className="flex justify-center pt-2">
-                  <Button
-                    onClick={handleLoadMore}
-                    variant="ghost"
-                    size="sm"
-                    className="text-xs"
-                  >
-                    Load More
-                  </Button>
-                </div>
-              )}
-            </>
-          )}
+          <EmptyState />
         </div>
       </ScrollArea>
     </div>
@@ -275,40 +190,9 @@ const ProjectFilter: React.FC<ProjectFilterProps> = ({
   portalContainer,
   isLoading,
 }) => {
-  const { user } = useAuth();
   const [open, setOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const debouncedQuery = useDebounce(searchQuery, 300);
-
-  const { data: projects = [], isLoading: projectsLoading } = useQuery({
-    queryKey: ['projects', user?.id],
-    queryFn: async () => {
-      const result = await apiService.getProjects();
-      return result.success ? result.data || [] : [];
-    },
-    enabled: !!user,
-    staleTime: 300_000,
-  });
-
-  const filteredProjects = useMemo(() => {
-    if (!debouncedQuery) return projects.slice(0, 5);
-    return projects
-      .filter(p =>
-        formatProjectName(p)
-          .toLowerCase()
-          .includes(debouncedQuery.toLowerCase())
-      )
-      .slice(0, 5);
-  }, [projects, debouncedQuery]);
-
-  const displayLabel = useMemo(() => {
-    if (selectedIds.length === 0) return 'All projects';
-    if (selectedIds.length === 1) {
-      const project = projects.find(p => String(p.id) === selectedIds[0]);
-      return project ? formatProjectName(project) : '1 selected';
-    }
-    return `${selectedIds.length} selected`;
-  }, [selectedIds, projects]);
 
   return (
     <div className="space-y-1">
@@ -320,7 +204,7 @@ const ProjectFilter: React.FC<ProjectFilterProps> = ({
             className="text-xs h-8 w-full justify-between"
             disabled={isLoading}
           >
-            <span className="truncate">{displayLabel}</span>
+            <span className="truncate">MOOO</span>
             <ChevronRight
               className={cn(
                 'h-3.5 w-3.5 text-gray-400 transition-transform',
@@ -342,30 +226,7 @@ const ProjectFilter: React.FC<ProjectFilterProps> = ({
               placeholder="Search projects"
               className="text-xs h-8"
             />
-            <div className="max-h-56 overflow-auto space-y-1">
-              {projectsLoading ? (
-                <LoadingSkeleton count={3} />
-              ) : filteredProjects.length === 0 ? (
-                <p className="text-xs text-gray-500 p-2">No projects found</p>
-              ) : (
-                filteredProjects.map(project => {
-                  const id = String(project.id);
-                  const checked = selectedIds.includes(id);
-                  return (
-                    <button
-                      key={id}
-                      onClick={() => onToggle(id)}
-                      className="w-full text-left px-2 py-1.5 rounded hover:bg-gray-100 flex items-center gap-2"
-                    >
-                      <Checkbox checked={checked} />
-                      <span className="text-xs truncate">
-                        {formatProjectName(project)}
-                      </span>
-                    </button>
-                  );
-                })
-              )}
-            </div>
+            <div className="max-h-56 overflow-auto space-y-1"></div>
           </div>
         </PopoverContent>
       </Popover>
@@ -540,33 +401,6 @@ const AssigneeFilter: React.FC<AssigneeFilterProps> = ({
 }) => {
   const [open, setOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const debouncedQuery = useDebounce(searchQuery, 300);
-
-  const projectId =
-    selectedProjectIds.length === 1 ? selectedProjectIds[0] : '';
-
-  const { data: users = [], isLoading: usersLoading } = useQuery({
-    queryKey: ['users', projectId, debouncedQuery],
-    queryFn: async () => {
-      const result = await apiService.searchUsersInProject(projectId, {
-        search: debouncedQuery || undefined,
-        limit: 5,
-      });
-      return result.success ? result.data || [] : [];
-    },
-    enabled: !!projectId,
-    staleTime: 300_000,
-  });
-
-  const displayLabel = useMemo(() => {
-    if (selectedIds.length === 0) return 'Anyone';
-    if (selectedIds.includes('unassigned')) return 'Unassigned';
-    if (selectedIds.length === 1) {
-      const user = users.find(u => String(u.id) === selectedIds[0]);
-      return user ? user.name : '1 selected';
-    }
-    return `${selectedIds.length} selected`;
-  }, [selectedIds, users]);
 
   return (
     <div className="space-y-1">
@@ -578,7 +412,7 @@ const AssigneeFilter: React.FC<AssigneeFilterProps> = ({
             className="text-xs h-8 w-full justify-between"
             disabled={isLoading}
           >
-            <span className="truncate">{displayLabel}</span>
+            <span className="truncate">MOOO</span>
             <ChevronRight
               className={cn(
                 'h-3.5 w-3.5 text-gray-400 transition-transform',
@@ -600,38 +434,7 @@ const AssigneeFilter: React.FC<AssigneeFilterProps> = ({
               placeholder="Search assignees"
               className="text-xs h-8"
             />
-            <div className="max-h-56 overflow-auto space-y-1">
-              {usersLoading ? (
-                <LoadingSkeleton count={3} />
-              ) : (
-                <>
-                  <button
-                    onClick={() => onToggle('unassigned')}
-                    className="w-full text-left px-2 py-1.5 rounded hover:bg-gray-100 flex items-center gap-2"
-                  >
-                    <Checkbox checked={selectedIds.includes('unassigned')} />
-                    <span className="text-xs">Unassigned</span>
-                  </button>
-
-                  {users.map(user => {
-                    const id = String(user.id);
-                    const checked = selectedIds.includes(id);
-                    return (
-                      <button
-                        key={id}
-                        onClick={() => onToggle(id)}
-                        className="w-full text-left px-2 py-1.5 rounded hover:bg-gray-100 flex items-center gap-2"
-                      >
-                        <Checkbox checked={checked} />
-                        <span className="text-xs truncate">
-                          {user.name} {user.username && `@${user.username}`}
-                        </span>
-                      </button>
-                    );
-                  })}
-                </>
-              )}
-            </div>
+            <div className="max-h-56 overflow-auto space-y-1"></div>
           </div>
         </PopoverContent>
       </Popover>
