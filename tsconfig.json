@@ -27,17 +27,11 @@
     "baseUrl": ".",
     "paths": {
       "@/*": ["./src/*"],
-      "@backend/*": ["./backend/src/*"],
       "@extension/*": ["./extension/src/*"],
       "@shared/*": ["./shared/*"]
     }
   },
-  "include": [
-    "backend/src/**/*",
-    "extension/src/**/*",
-    "shared/**/*",
-    "types/**/*"
-  ],
+  "include": ["extension/src/**/*", "shared/**/*", "types/**/*"],
   "exclude": [
     "node_modules",
     "dist",

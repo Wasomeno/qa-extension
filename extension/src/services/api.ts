@@ -1,16 +1,10 @@
 /**
- * API service for backend communication
+ * API service for direct GitLab communication (No Backend)
  */
 
 import { storageService } from './storage';
 import bridgeFetch from './fetch-bridge';
-import { MessageType } from '@/types/messages';
-import {
-  UserData,
-  AuthData,
-  IssueData,
-  InteractionEvent,
-} from '@/types/messages';
+import { UserData, AuthData, IssueData } from '@/types/messages';
 import type {
   MRNote,
   MRNoteSnippet,
@@ -36,62 +30,17 @@ export interface GitLabLabel {
   description?: string;
 }
 
-export interface LoginRequest {
-  email: string;
-  password: string;
-}
-
-export interface RegisterRequest {
-  email: string;
-  password: string;
-  fullName: string;
-  username: string;
-}
-
-export interface CreateIssueRequest {
-  title: string;
-  description: string;
-  severity: 'critical' | 'high' | 'medium' | 'low';
-  projectId: string;
-  assigneeId?: string;
-  attachments?: string[];
-  acceptanceCriteria?: string[];
-  labels?: string[];
-  // AI and context extras supported by backend
-  useAI?: boolean;
-  checkDuplicates?: boolean;
-  browserInfo?: {
-    url: string;
-    title: string;
-    userAgent: string;
-    viewport: { width: number; height: number };
-  };
-  errorDetails?: {
-    message: string;
-    stack?: string;
-    type: string;
-  };
-  reproductionSteps?: string[];
-  expectedBehavior?: string;
-  actualBehavior?: string;
-  // Optional Slack notification fields
-  slackChannelId?: string;
-  slackUserIds?: string[];
-}
-
 export interface Project {
   id: string;
   name: string;
   description?: string;
   gitlabProjectId?: string;
-  // May be present when listing GitLab projects merged with local records
   gitlab_project_id?: number;
-  path_with_namespace?: string; // GitLab group/project path (e.g., "group/project-name")
+  path_with_namespace?: string;
   hasLocalData?: boolean;
-  slackChannelId?: string;
   isActive: boolean;
   createdAt: string;
-  last_activity_at?: string; // GitLab last activity timestamp
+  last_activity_at?: string;
 }
 
 export interface GitLabUser {
@@ -105,7 +54,7 @@ export interface GitLabUser {
 
 export interface GitLabIssueDetail {
   id: number;
-  iid: number; // issue number within project
+  iid: number;
   title: string;
   description?: string;
   state: string;
@@ -130,25 +79,6 @@ export interface GitLabIssueNote {
   author?: { id: number; name: string; username?: string; avatar_url?: string };
 }
 
-export interface Issue {
-  id: string;
-  title: string;
-  description: string;
-  severity: 'critical' | 'high' | 'medium' | 'low';
-  status: 'open' | 'in_progress' | 'resolved' | 'closed';
-  projectId: string;
-  assigneeId?: string;
-  recordingId?: string;
-  gitlabIssueId?: string;
-  slackThreadId?: string;
-  attachments: string[];
-  acceptanceCriteria: string[];
-  labels: string[];
-  createdAt: string;
-  updatedAt: string;
-}
-
-// Issue list item with denormalized fields for display
 export interface IssueListItem {
   id: string;
   number?: number;
@@ -156,7 +86,7 @@ export interface IssueListItem {
   project: {
     id: string;
     name: string;
-    labels?: GitLabLabel[]; // Project labels from backend optimization
+    labels?: GitLabLabel[];
   };
   labels: string[];
   assignee?: {
@@ -176,1802 +106,692 @@ export interface ListIssuesParams {
   assigneeId?: string | 'unassigned';
   createdBy?: 'me' | string | 'any';
   status?: 'draft' | 'submitted' | 'in_progress' | 'resolved' | 'closed';
-  cursor?: string | null; // used as page number for backend
-  limit?: number; // default 5 for extension
+  cursor?: string | null;
+  limit?: number;
   sort?: 'newest' | 'oldest';
 }
 
 export interface ListIssuesResponse {
   items: IssueListItem[];
   nextCursor?: string | null;
-  projectLabels?: Record<string, GitLabLabel[]>; // Project labels from backend optimization
-}
-
-export interface VoiceTranscriptionRequest {
-  audioBlob: Blob;
-  language?: string;
+  projectLabels?: Record<string, GitLabLabel[]>;
 }
 
 class ApiService {
-  private baseUrl: string | undefined = process.env.BASE_API_URL;
-  private wsConnection: WebSocket | null = null;
+  private gitlabBaseUrl = 'https://gitlab.com/api/v4';
 
-  constructor() {
-    this.initializeBaseUrl().catch(error => {
-      console.error('Failed to initialize API base URL:', error);
-      // Keep default baseUrl on error
-    });
-    // React to settings changes to avoid stale base URLs
-    try {
-      storageService.onChanged('settings', v => {
-        const ep = (v as any)?.apiEndpoint;
-        if (typeof ep === 'string' && ep && ep !== this.baseUrl) {
-          this.baseUrl = ep;
-          try {
-            console.log('API base URL updated via settings change:', ep);
-          } catch {}
-        }
-      });
-    } catch {}
-  }
-
-  private async initializeBaseUrl(): Promise<void> {
-    try {
-      const settings = await storageService.getSettings();
-      this.baseUrl = settings.apiEndpoint;
-      console.log('API base URL initialized:', this.baseUrl);
-    } catch (error) {
-      console.error('Error getting settings for API URL:', error);
-      // baseUrl remains the env-configured default
-    }
-  }
-
-  private async getAuthHeaders(): Promise<HeadersInit> {
+  private async getGitLabHeaders(): Promise<Record<string, string>> {
     const auth = await storageService.getAuth();
-    const headers: HeadersInit = {
+    // Use gitlabToken if available, otherwise fallback to jwtToken (though it's usually for backend)
+    // After backend removal, users should ideally provide a GitLab Personal Access Token
+    const token = auth?.gitlabToken || auth?.jwtToken;
+    return {
       'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
     };
-
-    if (auth?.jwtToken) {
-      headers['Authorization'] = `Bearer ${auth.jwtToken}`;
-    }
-
-    return headers;
   }
 
   private async request<T>(
     endpoint: string,
-    options: RequestInit = {},
-    timeoutOverrideMs?: number
+    options: RequestInit = {}
   ): Promise<ApiResponse<T>> {
     try {
-      // Check if we're in background/service worker context (not popup/content/options)
-      // In Chrome MV3: service worker (no document)
-      // In Firefox MV2: background page (has document but is background context)
-      // Check multiple indicators:
-      // 1. No document (service worker)
-      // 2. URL contains 'background' (Firefox MV2 background page)
-      // 3. Check if chrome.extension.getBackgroundPage() === window (Firefox/Chrome background)
-      let inServiceWorker = typeof document === 'undefined';
-      if (!inServiceWorker && typeof window !== 'undefined') {
-        try {
-          // Check if current window is the background page
-          const bgPage = chrome.extension.getBackgroundPage?.();
-          inServiceWorker = bgPage === window;
-        } catch (e) {
-          // Fallback to URL check
-          const loc = (window as any).location;
-          inServiceWorker =
-            loc &&
-            (loc.pathname?.includes('background') ||
-              loc.href?.includes('background'));
-        }
-      }
+      const headers = await this.getGitLabHeaders();
+      const url = endpoint.startsWith('http')
+        ? endpoint
+        : `${this.gitlabBaseUrl}${endpoint}`;
 
-      console.log('[API] Context detection:', {
-        endpoint,
-        inServiceWorker,
-        hasDocument: typeof document !== 'undefined',
-        location:
-          typeof window !== 'undefined'
-            ? (window as any).location?.href
-            : 'N/A',
-      });
-
-      const rawHeaders = await this.getAuthHeaders();
-      const headers: Record<string, string> = {} as any;
-      if ((rawHeaders as any) instanceof Headers) {
-        (rawHeaders as any as Headers).forEach((v, k) => {
-          headers[k] = v;
-        });
-      } else if (Array.isArray(rawHeaders as any)) {
-        for (const [k, v] of rawHeaders as any as Array<[string, string]>)
-          headers[k] = String(v);
-      } else {
-        Object.assign(headers, rawHeaders as any);
-      }
-      const method = (options.method || 'GET').toUpperCase();
-      const timeoutMs =
-        timeoutOverrideMs ??
-        (['POST', 'PUT', 'PATCH', 'DELETE'].includes(method) ? 20000 : 10000);
-
-      // Service worker can fetch directly; UI contexts use background bridge
-      if (inServiceWorker) {
-        const response = await this.httpRequestDirect(
-          `${this.baseUrl}${endpoint}`,
-          {
-            ...options,
-            headers: { ...headers, ...(options.headers as any) },
-          },
-          timeoutMs
-        );
-
-        if (!response.ok) {
-          if (response.status === 401 && !endpoint.includes('/auth/refresh')) {
-            const refreshResult = await this.refreshToken();
-            if (refreshResult.success) {
-              const newHeaders = await this.getAuthHeaders();
-              const retry = await this.httpRequestDirect(
-                `${this.baseUrl}${endpoint}`,
-                {
-                  ...options,
-                  headers: { ...newHeaders, ...(options.headers as any) },
-                },
-                timeoutMs
-              );
-              if (retry.ok) {
-                const body = retry.body;
-                return {
-                  success: true,
-                  data: body && body.data !== undefined ? body.data : body,
-                  message: body?.message,
-                  meta: (body as any)?.meta,
-                } as ApiResponse<T>;
-              }
-            }
-          }
-          const body = response.body;
-          return {
-            success: false,
-            error:
-              (body && (body.error || body.message)) ||
-              `HTTP ${response.status}: ${response.statusText}`,
-            message: body?.message,
-            meta: (body as any)?.meta,
-          } as ApiResponse<T>;
-        }
-
-        const body = response.body;
-        return {
-          success: true,
-          data: body && body.data !== undefined ? body.data : body,
-          message: body?.message,
-          meta: (body as any)?.meta,
-        } as ApiResponse<T>;
-      }
-
-      const resp = await bridgeFetch<any>({
-        url: `${this.baseUrl}${endpoint}`,
+      const resp = await bridgeFetch<T>({
+        url,
         init: {
           ...options,
           headers: {
             ...headers,
             ...(options.headers as any),
-          } as Record<string, string>,
+          },
         },
         responseType: 'json',
-        timeoutMs,
       });
 
       if (!resp.ok) {
-        // Handle 401 Unauthorized - try to refresh token once
-        if (resp.status === 401 && !endpoint.includes('/auth/refresh')) {
-          console.log('🔐 Got 401, attempting token refresh...');
-          const refreshResult = await this.refreshToken();
-          if (refreshResult.success) {
-            console.log('🔐 Token refreshed, retrying original request...');
-            const newHeaders = await this.getAuthHeaders();
-            const retry = await bridgeFetch<any>({
-              url: `${this.baseUrl}${endpoint}`,
-              init: {
-                ...options,
-                headers: {
-                  ...newHeaders,
-                  ...(options.headers as any),
-                } as Record<string, string>,
-              },
-              responseType: 'json',
-              timeoutMs,
-            });
-            if (retry.ok) {
-              const body = retry.body;
-              return {
-                success: true,
-                data: body && body.data !== undefined ? body.data : body,
-                message: body?.message,
-                meta: (body as any)?.meta,
-              } as ApiResponse<T>;
-            }
-          }
-        }
-
-        const body = resp.body;
         return {
           success: false,
-          error:
-            (body && (body.error || body.message)) ||
-            `HTTP ${resp.status}: ${resp.statusText}`,
-          message: body?.message,
-          meta: (body as any)?.meta,
-        } as ApiResponse<T>;
+          error: `GitLab API Error: ${resp.status} ${resp.statusText}`,
+          message: resp.body as any,
+        };
       }
 
-      const body = resp.body;
       return {
         success: true,
-        data: body && body.data !== undefined ? body.data : body,
-        message: body?.message,
-        meta: (body as any)?.meta,
-      } as ApiResponse<T>;
-    } catch (error) {
-      console.error('API request failed (bridge):', error);
-      console.error('Request details:', {
-        endpoint,
-        baseUrl: this.baseUrl,
-        error: error instanceof Error ? error.message : 'Unknown error',
-        stack: error instanceof Error ? error.stack : 'No stack trace',
-      });
-      const isAbort =
-        (error as any)?.name === 'AbortError' ||
-        /aborted/i.test(String((error as any)?.message));
+        data: resp.body,
+      };
+    } catch (error: any) {
       return {
         success: false,
-        error: isAbort
-          ? `Request timed out after ${Math.round((['POST', 'PUT', 'PATCH', 'DELETE'].includes((options.method || 'GET').toUpperCase()) ? 20000 : 10000) / 1000)}s`
-          : error instanceof Error
-            ? error.message
-            : 'Network error',
+        error: error?.message || 'Network error calling GitLab API',
       };
     }
   }
 
-  // Scenario Generation APIs
-  async getScenarioTemplate() {
-    return this.request<any>('/api/scenarios/template');
-  }
-
-  async previewScenarios(url: string) {
-    const q = new URLSearchParams({ url });
-    // Allow long-running previews: disable timeout by passing 0
-    return this.request<{ scenarios: any[]; meta: any }>(
-      `/api/scenarios/preview?${q.toString()}`,
-      {},
-      0
-    );
-  }
-
-  // workbook-raw endpoint removed
-
-  async generateScenarios(payload: {
-    url: string;
-    template?: any;
-    options?: any;
-  }) {
-    return this.request<any[]>('/api/scenarios/generate', {
-      method: 'POST',
-      body: JSON.stringify(payload),
-    });
-  }
-
-  async exportScenariosXlsx(payload: {
-    scenarios?: any[];
-    sheets?: Array<{ name?: string; scenarios: any[] }>;
-    template?: any;
-    title?: string;
-  }): Promise<{ ok: boolean; filename?: string; blob?: Blob; error?: string }> {
-    try {
-      const rawHeaders = await this.getAuthHeaders();
-      const headers: Record<string, string> = {} as any;
-      if ((rawHeaders as any) instanceof Headers) {
-        (rawHeaders as any as Headers).forEach((v, k) => {
-          headers[k] = v;
-        });
-      } else if (Array.isArray(rawHeaders as any)) {
-        for (const [k, v] of rawHeaders as any as Array<[string, string]>)
-          headers[k] = String(v);
-      } else {
-        Object.assign(headers, rawHeaders as any);
-      }
-      const resp = await bridgeFetch<{ dummy?: string }>({
-        url: `${this.baseUrl}/api/scenarios/export`,
-        init: {
-          method: 'POST',
-          headers: { ...headers, 'Content-Type': 'application/json' },
-          // Backend now always returns XLSX. Support multi-sheet payload.
-          body: JSON.stringify(
-            payload.sheets
-              ? { sheets: payload.sheets }
-              : { scenarios: payload.scenarios || [] }
-          ),
-        },
-        responseType: 'arrayBuffer',
-        timeoutMs: 20000,
-      });
-      if (!resp.ok) {
-        // Try to parse JSON body if present
-        try {
-          const txt = atob(String(resp.body || ''));
-          const parsed = JSON.parse(txt);
-          return { ok: false, error: parsed?.error || `HTTP ${resp.status}` };
-        } catch {
-          return { ok: false, error: resp.statusText || 'Export failed' };
-        }
-      }
-      const disp =
-        (resp.headers &&
-          (resp.headers['content-disposition'] ||
-            resp.headers['Content-Disposition'])) ||
-        '';
-      const match = /filename="?([^";]+)"?/i.exec(disp || '');
-      const filename = match ? match[1] : 'scenarios.xlsx';
-      // body is base64 of bytes per bridge
-      const b64 = String(resp.body || '');
-      const bin = atob(b64);
-      const bytes = new Uint8Array(bin.length);
-      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-      const blob = new Blob([bytes.buffer], {
-        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-      });
-      return { ok: true, filename, blob };
-    } catch (e: any) {
-      return { ok: false, error: e?.message || 'Export failed' };
-    }
-  }
-
-  private async httpRequestDirect(
-    url: string,
-    init: RequestInit,
-    timeoutMs: number
-  ): Promise<{ ok: boolean; status: number; statusText: string; body: any }> {
-    try {
-      // No timeout: never abort direct fetches
-      const resp = await fetch(url, { ...init });
-      let body: any = undefined;
-      try {
-        body = await resp.json();
-      } catch {}
-      return {
-        ok: resp.ok,
-        status: resp.status,
-        statusText: resp.statusText,
-        body,
-      };
-    } catch (e) {
-      throw e;
-    }
-  }
-
-  /**
-   * Authentication endpoints
-   */
-  async login(
-    credentials: LoginRequest
-  ): Promise<ApiResponse<{ user: UserData; auth: AuthData }>> {
-    const response = await this.request<{
-      user: UserData;
-      token: string;
-      refreshToken: string;
-      expiresIn: number;
-    }>('/api/auth/login', {
-      method: 'POST',
-      body: JSON.stringify(credentials),
-    });
-
-    console.log('RESPONSE', response);
-
-    if (response.success && response.data) {
-      const authData: AuthData = {
-        jwtToken: response.data.token,
-        refreshToken: response.data.refreshToken,
-        expiresAt: Date.now() + response.data.expiresIn * 1000,
-      };
-
-      console.log('🔐 API Service: Storing auth data...', {
-        hasToken: !!authData.jwtToken,
-        hasRefresh: !!authData.refreshToken,
-        expiresAt: authData.expiresAt
-          ? new Date(authData.expiresAt).toISOString()
-          : 'none',
-      });
-
-      // Store auth data
-      try {
-        await storageService.setAuth(authData);
-        await storageService.setUser(response.data.user);
-        // Write unified session
-        await storageService.setSession({
-          user: response.data.user,
-          accessToken: authData.jwtToken || null,
-          refreshToken: authData.refreshToken || null,
-          expiresAt: authData.expiresAt || null,
-        } as any);
-
-        // Verify storage worked
-        const storedAuth = await storageService.getAuth();
-        const storedUser = await storageService.getUser();
-        console.log('🔐 API Service: Verification after storage:', {
-          authStored: !!storedAuth?.jwtToken,
-          userStored: !!storedUser,
-        });
-      } catch (storageError) {
-        console.error('🔐 API Service: Storage failed:', storageError);
-      }
-
-      return {
-        success: true,
-        data: {
-          user: response.data.user,
-          auth: authData,
-        },
-      };
-    }
-
-    return response as any;
-  }
-
-  async register(
-    userData: RegisterRequest
-  ): Promise<ApiResponse<{ user: UserData; auth: AuthData }>> {
-    const response = await this.request<{
-      user: UserData;
-      token: string;
-      refreshToken: string;
-      expiresIn: number;
-    }>('/api/auth/register', {
-      method: 'POST',
-      body: JSON.stringify(userData),
-    });
-
-    if (response.success && response.data) {
-      const authData: AuthData = {
-        jwtToken: response.data.token,
-        refreshToken: response.data.refreshToken,
-        expiresAt: Date.now() + response.data.expiresIn * 1000,
-      };
-
-      // Store auth data
-      await storageService.setAuth(authData);
-      await storageService.setUser(response.data.user);
-      await storageService.setSession({
-        user: response.data.user,
-        accessToken: authData.jwtToken || null,
-        refreshToken: authData.refreshToken || null,
-        expiresAt: authData.expiresAt || null,
-      } as any);
-
-      return {
-        success: true,
-        data: {
-          user: response.data.user,
-          auth: authData,
-        },
-      };
-    }
-
-    return response as any;
-  }
-
-  async refreshToken(): Promise<ApiResponse<AuthData>> {
-    const auth = await storageService.getAuth();
-    if (!auth?.refreshToken) {
-      return { success: false, error: 'No refresh token available' };
-    }
-
-    const response = await this.request<{
-      token: string;
-      refreshToken: string;
-      expiresIn: number;
-    }>('/api/auth/refresh', {
-      method: 'POST',
-      body: JSON.stringify({ refreshToken: auth.refreshToken }),
-    });
-
-    if (response.success && response.data) {
-      const newAuthData: AuthData = {
-        ...auth,
-        jwtToken: response.data.token,
-        refreshToken: response.data.refreshToken,
-        expiresAt: Date.now() + response.data.expiresIn * 1000,
-      };
-
-      await storageService.setAuth(newAuthData);
-      return { success: true, data: newAuthData };
-    }
-
-    return response as ApiResponse<AuthData>;
-  }
-
-  async logout(): Promise<ApiResponse<void>> {
-    try {
-      await this.request('/api/auth/logout', { method: 'POST' });
-    } catch (error) {
-      // Continue with logout even if API call fails
-    }
-
-    // Clear local storage
-    await storageService.remove('auth');
-    await storageService.remove('user');
-    try {
-      await storageService.remove('session' as any);
-    } catch {}
-
-    return { success: true };
-  }
-
-  /**
-   * User profile endpoints
-   */
-  async getProfile(): Promise<ApiResponse<UserData>> {
-    return this.request<UserData>('/api/users/profile');
-  }
-
-  async updateProfile(
-    updates: Partial<UserData>
-  ): Promise<ApiResponse<UserData>> {
-    const response = await this.request<UserData>('/api/users/profile', {
-      method: 'PUT',
-      body: JSON.stringify(updates),
-    });
-
-    if (response.success && response.data) {
-      await storageService.setUser(response.data);
-    }
-
-    return response;
-  }
-
-  /**
-   * Project endpoints
-   */
+  // Projects
   async getProjects(): Promise<ApiResponse<Project[]>> {
-    const response = await this.request<Project[]>('/api/projects');
-
-    if (response.success && response.data) {
-      // Cache projects
-      await storageService.updateCache({
-        projects: response.data,
-        lastSync: Date.now(),
-      });
-    }
-
-    return response;
-  }
-
-  /**
-   * Search GitLab projects (server-side search via backend proxy)
-   */
-  async searchProjects(
-    params: {
-      search?: string;
-      limit?: number;
-      page?: number;
-    } = {}
-  ): Promise<ApiResponse<Project[]>> {
-    const q = new URLSearchParams();
-    if (params.search) q.set('search', params.search);
-    if (params.limit) q.set('limit', String(params.limit));
-    if (params.page) q.set('page', String(params.page));
-    return this.request<Project[]>(`/api/projects?${q.toString()}`);
-  }
-
-  /**
-   * Get user's recent projects based on GitLab Events API
-   */
-  async getRecentProjects(userId: string): Promise<ApiResponse<Project[]>> {
-    return this.request<Project[]>(`/api/users/${userId}/recent-projects`);
-  }
-
-  /**
-   * Get user's recent projects based on GitLab issue activity events
-   */
-  async getRecentIssueProjects(
-    userId: string
-  ): Promise<ApiResponse<Project[]>> {
-    return this.request<Project[]>(
-      `/api/users/${userId}/recent-issue-projects`
+    const res = await this.request<any[]>(
+      '/projects?membership=true&simple=true&per_page=100'
     );
+    if (res.success && res.data) {
+      const projects = res.data.map(
+        p =>
+          ({
+            id: String(p.id),
+            name: p.name_with_namespace || p.name,
+            gitlabProjectId: String(p.id),
+            gitlab_project_id: p.id,
+            path_with_namespace: p.path_with_namespace,
+            isActive: true,
+            createdAt: p.created_at,
+          }) as Project
+      );
+      return { success: true, data: projects };
+    }
+    return res as any;
   }
 
-  async createProject(
-    project: Omit<Project, 'id' | 'createdAt'>
-  ): Promise<ApiResponse<Project>> {
-    return this.request<Project>('/api/projects', {
-      method: 'POST',
-      body: JSON.stringify(project),
-    });
+  async getGitLabProjectLabels(
+    projectId: string | number
+  ): Promise<ApiResponse<{ items: GitLabLabel[] }>> {
+    const res = await this.request<any[]>(`/projects/${projectId}/labels`);
+    if (res.success && res.data) {
+      return { success: true, data: { items: res.data } };
+    }
+    return res as any;
   }
 
-  async updateProject(
-    id: string,
-    updates: Partial<Project>
-  ): Promise<ApiResponse<Project>> {
-    return this.request<Project>(`/api/projects/${id}`, {
-      method: 'PUT',
-      body: JSON.stringify(updates),
-    });
-  }
-
-  async deleteProject(id: string): Promise<ApiResponse<void>> {
-    return this.request<void>(`/api/projects/${id}`, {
-      method: 'DELETE',
-    });
-  }
-
-  /**
-   * User endpoints
-   */
   async getUsersInProject(
-    projectId: string
+    projectId: string | number
   ): Promise<ApiResponse<GitLabUser[]>> {
-    return this.request<GitLabUser[]>(`/api/projects/${projectId}/users`);
+    const res = await this.request<any[]>(`/projects/${projectId}/members/all`);
+    if (res.success && res.data) {
+      const users = res.data.map(
+        u =>
+          ({
+            id: String(u.id),
+            username: u.username,
+            name: u.name,
+            avatarUrl: u.avatar_url,
+            webUrl: u.web_url,
+          }) as GitLabUser
+      );
+      return { success: true, data: users };
+    }
+    return res as any;
   }
 
-  /**
-   * Search users in a project. Backend may not support query params yet,
-   * so this method fetches and lets callers filter if needed.
-   */
   async searchUsersInProject(
-    projectId: string,
+    projectId: string | number,
     params: { search?: string; limit?: number } = {}
   ): Promise<ApiResponse<GitLabUser[]>> {
     const q = new URLSearchParams();
-    if (params.search) q.set('search', params.search);
-    if (params.limit) q.set('limit', String(params.limit));
-    return this.request<GitLabUser[]>(
-      `/api/projects/${projectId}/users${q.toString() ? `?${q.toString()}` : ''}`
+    if (params.search) q.append('query', params.search);
+    if (params.limit) q.append('per_page', String(params.limit));
+    const res = await this.request<any[]>(
+      `/projects/${projectId}/members/all?${q.toString()}`
     );
-  }
-
-  async getGitLabUsers(): Promise<ApiResponse<GitLabUser[]>> {
-    return this.request<GitLabUser[]>('/api/integrations/gitlab/users');
-  }
-
-  /**
-   * Issue endpoints
-   */
-  async createIssue(
-    issueData: CreateIssueRequest
-  ): Promise<ApiResponse<Issue>> {
-    return this.request<Issue>('/api/issues', {
-      method: 'POST',
-      body: JSON.stringify(issueData),
-    });
-  }
-
-  /**
-   * Slack integrations
-   */
-  async getSlackChannels(): Promise<
-    ApiResponse<{ id: string; name: string }[]>
-  > {
-    const res = await this.request<{ items: { id: string; name: string }[] }>(
-      '/api/integrations/slack/channels'
-    );
-    if (res.success) {
-      return { success: true, data: res.data?.items || [] } as any;
+    if (res.success && res.data) {
+      const users = res.data.map(
+        u =>
+          ({
+            id: String(u.id),
+            username: u.username,
+            name: u.name,
+            avatarUrl: u.avatar_url,
+            webUrl: u.web_url,
+          }) as GitLabUser
+      );
+      return { success: true, data: users };
     }
     return res as any;
   }
 
-  async getSlackUsers(): Promise<ApiResponse<{ id: string; name: string }[]>> {
-    const res = await this.request<{ items: { id: string; name: string }[] }>(
-      '/api/integrations/slack/users'
-    );
-    if (res.success) {
-      return { success: true, data: res.data?.items || [] } as any;
-    }
-    return res as any;
-  }
-
-  async postSlackMessage(params: {
-    channelId: string;
-    text?: string;
-    slackUserIds?: string[];
-    threadTs?: string;
-    blocks?: any[];
-  }): Promise<ApiResponse<{ ts: string; channel: string }>> {
-    return this.request<{ ts: string; channel: string }>(
-      '/api/integrations/slack/post',
-      {
-        method: 'POST',
-        body: JSON.stringify(params),
-      }
-    );
-  }
-
-  /**
-   * Create GitLab issue directly
-   */
-  async createGitLabIssue(
-    projectId: string | number,
-    data: {
-      title: string;
-      description: string;
-      childDescriptions?: string[];
-      labels?: string[];
-      assigneeIds?: number[];
-      milestone_id?: number;
-      due_date?: string;
-      issueFormat?: string;
-      weight?: number;
-    },
-    options?: { slackChannelId?: string; slackUserIds?: string[] }
-  ): Promise<ApiResponse<{ issue: GitLabIssueDetail }>> {
-    const res = await this.request<{ issue: GitLabIssueDetail }>(
-      `/api/projects/${encodeURIComponent(String(projectId))}/gitlab/issues`,
-      {
-        method: 'POST',
-        body: JSON.stringify(data),
-      }
-    );
-
-    // Optional Slack notify as a side-effect on success
-    if (res.success && options?.slackChannelId) {
-      try {
-        const created = res.data?.issue as any;
-        const title = created?.title || data.title;
-        const webUrl: string | undefined = created?.web_url;
-        const baseText = `Hey: ${title}${webUrl ? ' ' + webUrl : ''}`;
-        await this.postSlackMessage({
-          channelId: options.slackChannelId,
-          text: baseText,
-          slackUserIds: Array.isArray(options.slackUserIds)
-            ? options.slackUserIds
-            : [],
-        });
-      } catch (e) {
-        console.warn('Slack notify (GitLab-direct) failed:', e);
-      }
-    }
-
-    return res;
-  }
-
-  /**
-   * GitLab issue checklist (parsed from description)
-   */
-  async getGitLabIssueChecklist(
-    projectId: string | number,
-    issueIid: number
-  ): Promise<
-    ApiResponse<{
-      items: { text: string; checked: boolean; raw: string; line: number }[];
-    }>
-  > {
-    return this.request<{
-      items: { text: string; checked: boolean; raw: string; line: number }[];
-    }>(`/api/projects/${projectId}/gitlab/issues/${issueIid}/checklist`);
-  }
-
-  async getIssues(projectId?: string): Promise<ApiResponse<Issue[]>> {
-    const endpoint = projectId
-      ? `/api/issues?projectId=${projectId}`
-      : '/api/issues';
-    return this.request<Issue[]>(endpoint);
-  }
-
-  async getIssue(id: string): Promise<ApiResponse<Issue>> {
-    return this.request<Issue>(`/api/issues/${id}`);
-  }
-
-  /**
-   * Optional batch fetch. Falls back to sequential getIssue on failure.
-   */
-  async getIssuesByIds(ids: string[]): Promise<ApiResponse<Issue[]>> {
-    if (!ids || ids.length === 0) return { success: true, data: [] };
-    // Try batch endpoint (two variants), then fallback
-    const qs = encodeURIComponent(ids.join(','));
-    const candidates = [`/api/issues?ids=${qs}`, `/api/issues/batch?ids=${qs}`];
-    for (const endpoint of candidates) {
-      try {
-        const res = await this.request<any>(endpoint);
-        if (res.success && res.data) {
-          const items = (res.data.issues ||
-            res.data.items ||
-            res.data) as Issue[];
-          if (Array.isArray(items)) return { success: true, data: items };
-        }
-      } catch (e) {
-        // ignore and fallback
-      }
-    }
-    // Fallback: sequential fetches
-    const results: Issue[] = [];
-    for (const id of ids) {
-      const r = await this.getIssue(id);
-      if (r.success && r.data) results.push(r.data);
-    }
-    return { success: true, data: results };
-  }
-
-  async updateIssue(
-    id: string,
-    updates: Partial<Issue>
-  ): Promise<ApiResponse<Issue>> {
-    return this.request<Issue>(`/api/issues/${id}`, {
-      method: 'PUT',
-      body: JSON.stringify(updates),
-    });
-  }
-
-  async deleteIssue(id: string): Promise<ApiResponse<void>> {
-    return this.request<void>(`/api/issues/${id}`, {
-      method: 'DELETE',
-    });
-  }
-
-  /**
-   * List issues with filters and cursor-based pagination for infinite scroll
-   */
-  async listIssues(
-    params: ListIssuesParams = {}
-  ): Promise<ApiResponse<ListIssuesResponse>> {
-    // Map extension params to backend expectations
-    const user = await storageService.getUser();
-
-    const page = params.cursor ? parseInt(params.cursor as string, 10) || 1 : 1;
-    const limit = params.limit ?? 5;
-
-    const query = new URLSearchParams();
-    if (params.search) query.set('query', params.search);
-    if (params.projectId) query.set('projectId', params.projectId);
-    if (params.assigneeId && params.assigneeId !== 'unassigned')
-      query.set('assigneeId', params.assigneeId);
-    if (params.createdBy && params.createdBy !== 'any') {
-      const createdBy = params.createdBy === 'me' ? user?.id : params.createdBy;
-      if (createdBy) query.set('createdBy', createdBy as string);
-    }
-    // Only pass status if it matches backend allowed values
-    if (params.status) query.set('status', params.status);
-    // Sorting
-    const sortBy = 'created_at';
-    const sortOrder = params.sort === 'oldest' ? 'asc' : 'desc';
-    query.set('sortBy', sortBy);
-    query.set('sortOrder', sortOrder);
-    // Pagination
-    query.set('page', String(page));
-    query.set('limit', String(limit));
-
-    const endpoint = `/api/issues?${query.toString()}`;
-    const res = await this.request<any>(endpoint);
-    if (!res.success || !res.data)
-      return res as ApiResponse<ListIssuesResponse>;
-
-    // Backend returns { issues, pagination }
-    if (res.data.issues && res.data.pagination) {
-      const issues = res.data.issues as any[];
-      const mapped: IssueListItem[] = issues.map(it => ({
-        id: it.id,
-        number: it.gitlab_issue_iid || it.gitlabIssueIid || undefined,
-        title: it.title,
-        project: { id: it.project_id, name: it.project_name || 'Project' },
-        labels: Array.isArray(it.labels) ? it.labels : [],
-        assignee: it.assignee
-          ? {
-              id: it.assignee.id,
-              name: it.assignee.full_name || it.assignee.username || 'Assignee',
-              avatarUrl: it.assignee.avatar_url,
-              username: it.assignee.username,
-            }
-          : null,
-        author: it.creator
-          ? {
-              id: it.creator.id,
-              name: it.creator.full_name || it.creator.username || 'Author',
-              username: it.creator.username,
-            }
-          : { id: it.user_id, name: 'Author' },
-        createdAt: it.created_at || it.createdAt,
-      }));
-
-      const p = res.data.pagination;
-      const hasMore = p.page * p.limit < p.total;
-      const nextCursor = hasMore ? String(p.page + 1) : null;
-      return { success: true, data: { items: mapped, nextCursor } };
-    }
-
-    // Legacy array response fallback
-    const raw = res.data;
-    const normalized: ListIssuesResponse = Array.isArray(raw)
-      ? { items: raw, nextCursor: null }
-      : raw;
-    return { success: true, data: normalized };
-  }
-
-  /**
-   * List GitLab issues for a specific project (proxy endpoint)
-   */
+  // Issues
   async listGitLabIssues(
     projectId: string,
-    params: ListIssuesParams = {}
+    params: ListIssuesParams & { limit?: number } = {}
   ): Promise<ApiResponse<ListIssuesResponse>> {
-    const query = new URLSearchParams();
-    if (params.search) query.set('search', params.search);
-    if (params.labels && params.labels.length)
-      query.set('labels', params.labels.join(','));
-    if (params.assigneeId) query.set('assigneeId', params.assigneeId);
-    if (params.createdBy) query.set('createdBy', params.createdBy);
-    if (params.cursor)
-      query.set('page', String(parseInt(String(params.cursor)) || 1));
-    if (params.limit) query.set('limit', String(params.limit));
-    // Map sort to state if needed; default 'opened'
-    const endpoint = `/api/projects/${encodeURIComponent(projectId)}/gitlab/issues?${query.toString()}`;
-    const res = await this.request<ListIssuesResponse>(endpoint);
-    if (!res.success || !res.data)
-      return res as ApiResponse<ListIssuesResponse>;
-    return res;
+    const q = new URLSearchParams();
+    if (params.search) q.append('search', params.search);
+    if (params.assigneeId)
+      q.append(
+        'assignee_id',
+        params.assigneeId === 'unassigned' ? 'None' : params.assigneeId
+      );
+    q.append('per_page', String(params.limit || 20));
+    const page = params.cursor ? parseInt(params.cursor) : 1;
+    q.append('page', String(page));
+
+    const res = await this.request<any[]>(
+      `/projects/${projectId}/issues?${q.toString()}`
+    );
+    if (res.success && res.data) {
+      const items = res.data.map(
+        it =>
+          ({
+            id: String(it.id),
+            number: it.iid,
+            title: it.title,
+            project: {
+              id: String(it.project_id),
+              name: it.references?.full || 'Project',
+            },
+            labels: it.labels || [],
+            assignee: it.assignees?.[0]
+              ? {
+                  id: String(it.assignees[0].id),
+                  name: it.assignees[0].name,
+                  avatarUrl: it.assignees[0].avatar_url,
+                  username: it.assignees[0].username,
+                }
+              : null,
+            author: {
+              id: String(it.author.id),
+              name: it.author.name,
+              username: it.author.username,
+            },
+            createdAt: it.created_at,
+          }) as IssueListItem
+      );
+
+      const nextCursor =
+        res.data.length === (params.limit || 20) ? String(page + 1) : null;
+      return { success: true, data: { items, nextCursor } };
+    }
+    return res as any;
   }
 
   async listGitLabIssuesGlobal(
-    params: ListIssuesParams = {}
+    params: ListIssuesParams & { limit?: number } = {}
   ): Promise<ApiResponse<ListIssuesResponse>> {
-    const query = new URLSearchParams();
-    if (params.search) query.set('search', params.search);
-    if (params.projectId) query.set('projectId', params.projectId);
-    if (params.labels && params.labels.length)
-      query.set('labels', params.labels.join(','));
-    if (params.status) query.set('status', params.status);
-    if (params.cursor)
-      query.set('page', String(parseInt(String(params.cursor)) || 1));
-    if (params.limit) query.set('limit', String(params.limit));
-    const endpoint = `/api/projects/gitlab/issues?${query.toString()}`;
-    const res = await this.request<ListIssuesResponse>(endpoint);
-    return res as ApiResponse<ListIssuesResponse>;
+    const q = new URLSearchParams();
+    if (params.search) q.append('search', params.search);
+    if (params.projectId) q.append('project_id', params.projectId);
+    q.append('per_page', String(params.limit || 20));
+    const page = params.cursor ? parseInt(params.cursor) : 1;
+    q.append('page', String(page));
+
+    const res = await this.request<any[]>(`/issues?${q.toString()}`);
+    if (res.success && res.data) {
+      const items = res.data.map(
+        it =>
+          ({
+            id: String(it.id),
+            number: it.iid,
+            title: it.title,
+            project: {
+              id: String(it.project_id),
+              name: it.references?.full || 'Project',
+            },
+            labels: it.labels || [],
+            assignee: it.assignees?.[0]
+              ? {
+                  id: String(it.assignees[0].id),
+                  name: it.assignees[0].name,
+                  avatarUrl: it.assignees[0].avatar_url,
+                  username: it.assignees[0].username,
+                }
+              : null,
+            author: {
+              id: String(it.author.id),
+              name: it.author.name,
+              username: it.author.username,
+            },
+            createdAt: it.created_at,
+          }) as IssueListItem
+      );
+
+      const nextCursor =
+        res.data.length === (params.limit || 20) ? String(page + 1) : null;
+      return { success: true, data: { items, nextCursor } };
+    }
+    return res as any;
   }
 
   async getGitLabIssue(
     projectId: string | number,
     issueIid: number
   ): Promise<ApiResponse<GitLabIssueDetail>> {
-    const endpoint = `/api/projects/${encodeURIComponent(String(projectId))}/gitlab/issues/${issueIid}`;
-    return this.request<GitLabIssueDetail>(endpoint);
+    return this.request<GitLabIssueDetail>(
+      `/projects/${projectId}/issues/${issueIid}`
+    );
+  }
+
+  async createGitLabIssue(
+    projectId: string | number,
+    data: any,
+    _options?: any
+  ): Promise<ApiResponse<{ issue: GitLabIssueDetail }>> {
+    const res = await this.request<GitLabIssueDetail>(
+      `/projects/${projectId}/issues`,
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          title: data.title,
+          description: data.description,
+          labels: data.labels?.join(','),
+          assignee_ids: data.assigneeIds,
+        }),
+      }
+    );
+    if (res.success && res.data) {
+      return { success: true, data: { issue: res.data } };
+    }
+    return res as any;
   }
 
   async updateGitLabIssue(
     projectId: string | number,
     issueIid: number,
-    payload: {
-      state?: 'close' | 'reopen';
-      assigneeId?: number | 'me' | null;
-      labels?: string[];
-      addLabels?: string[];
-      removeLabels?: string[];
-      description?: string;
-    }
+    payload: any
   ): Promise<ApiResponse<GitLabIssueDetail>> {
-    const endpoint = `/api/projects/${encodeURIComponent(String(projectId))}/gitlab/issues/${issueIid}`;
-    return this.request<GitLabIssueDetail>(endpoint, {
-      method: 'PATCH',
-      body: JSON.stringify(payload),
-    });
-  }
-
-  async getGitLabProjectLabels(projectId: string | number): Promise<
-    ApiResponse<{
-      items: {
-        id: number;
-        name: string;
-        color: string;
-        text_color?: string;
-        description?: string;
-      }[];
-    }>
-  > {
-    const endpoint = `/api/projects/${encodeURIComponent(String(projectId))}/gitlab/labels`;
-    const res = await this.request<any>(endpoint);
-    if (!res.success) return res as any;
-    // Unwrap sendResponse payload shape if present
-    const payload =
-      res.data && (res.data as any).data ? (res.data as any).data : res.data;
-    return { success: true, data: payload };
+    const res = await this.request<GitLabIssueDetail>(
+      `/projects/${projectId}/issues/${issueIid}`,
+      {
+        method: 'PUT',
+        body: JSON.stringify(payload),
+      }
+    );
+    return res;
   }
 
   async getGitLabIssueNotes(
     projectId: string | number,
     issueIid: number
   ): Promise<ApiResponse<{ items: GitLabIssueNote[] }>> {
-    const endpoint = `/api/projects/${encodeURIComponent(String(projectId))}/gitlab/issues/${issueIid}/notes`;
-    return this.request<{ items: GitLabIssueNote[] }>(endpoint);
+    const res = await this.request<any[]>(
+      `/projects/${projectId}/issues/${issueIid}/notes`
+    );
+    if (res.success && res.data) {
+      return { success: true, data: { items: res.data } };
+    }
+    return res as any;
   }
 
   async addGitLabIssueNote(
     projectId: string | number,
     issueIid: number,
-    body: string
+    body: string,
+    _options?: any
   ): Promise<ApiResponse<{ note: any }>> {
-    const endpoint = `/api/projects/${encodeURIComponent(String(projectId))}/gitlab/issues/${issueIid}/notes`;
-    return this.request<{ note: any }>(endpoint, {
-      method: 'POST',
-      body: JSON.stringify({ body }),
-    });
-  }
-
-  /**
-   * AI-powered issue creation
-   */
-  async generateIssueFromContext(context: {
-    url: string;
-    title: string;
-    userAgent?: string;
-    viewport?: { width: number; height: number };
-    errorDetails?: {
-      message: string;
-      stack?: string;
-      type: string;
-    };
-    userDescription?: string;
-    reproductionSteps?: string[];
-    screenshots?: string[];
-    consoleErrors?: string[];
-    networkErrors?: string[];
-    expectedBehavior?: string;
-    actualBehavior?: string;
-    elementInfo?: any;
-  }): Promise<
-    ApiResponse<{
-      title: string;
-      description: string;
-      acceptanceCriteria: string[];
-      severity: 'critical' | 'high' | 'medium' | 'low';
-      priority: 'urgent' | 'high' | 'normal' | 'low';
-      labels: string[];
-      estimatedEffort?: string;
-      affectedComponents?: string[];
-    }>
-  > {
-    const raw = await this.request<any>('/api/issues/generate-from-context', {
-      method: 'POST',
-      body: JSON.stringify(context),
-    });
-    if (raw.success && raw.data && raw.data.issue) {
-      return { success: true, data: raw.data.issue };
-    }
-    return raw as any;
-  }
-
-  /**
-   * Get AI suggestions for an issue
-   */
-  async getAISuggestions(issueId: string): Promise<
-    ApiResponse<{
-      improvedDescription: string;
-      acceptanceCriteria: string[];
-      classification?: {
-        severity: 'critical' | 'high' | 'medium' | 'low';
-        priority: 'urgent' | 'high' | 'normal' | 'low';
-        confidence: number;
-        reasoning: string;
-      };
-    }>
-  > {
-    return this.request(`/api/issues/${issueId}/ai-suggestions`, {
-      method: 'POST',
-    });
-  }
-
-  /**
-   * Legacy transcription method for backward compatibility
-   */
-  async _legacyTranscribeVoice(
-    request: VoiceTranscriptionRequest
-  ): Promise<ApiResponse<{ text: string }>> {
-    const formData = new FormData();
-    formData.append('audio', request.audioBlob);
-    if (request.language) {
-      formData.append('language', request.language);
-    }
-
-    try {
-      const headers = await this.getAuthHeaders();
-      delete (headers as any)['Content-Type']; // Let browser set content-type for FormData
-
-      const response = await fetch(`${this.baseUrl}/api/ai/transcribe`, {
-        method: 'POST',
-        headers,
-        body: formData,
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        return {
-          success: false,
-          error:
-            data.error || `HTTP ${response.status}: ${response.statusText}`,
-        };
-      }
-
-      return {
-        success: true,
-        data: data.data !== undefined ? data.data : data,
-      };
-    } catch (error) {
-      console.error('Voice transcription failed:', error);
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : 'Network error',
-      };
-    }
-  }
-
-  /**
-   * Integration endpoints
-   */
-  async getSlackConnectUrl(): Promise<ApiResponse<{ url: string }>> {
-    return this.request<{ url: string }>('/api/integrations/slack/connect');
-  }
-
-  async connectGitLab(token: string): Promise<ApiResponse<void>> {
-    const response = await this.request<void>(
-      '/api/integrations/gitlab/connect',
+    const res = await this.request<any>(
+      `/projects/${projectId}/issues/${issueIid}/notes`,
       {
         method: 'POST',
-        body: JSON.stringify({ token }),
+        body: JSON.stringify({ body }),
       }
     );
-
-    if (response.success) {
-      // Update stored auth data
-      const auth = await storageService.getAuth();
-      if (auth) {
-        auth.gitlabToken = token;
-        await storageService.setAuth(auth);
-      }
+    if (res.success && res.data) {
+      return { success: true, data: { note: res.data } };
     }
-
-    return response;
+    return res as any;
   }
 
-  async connectSlack(token: string): Promise<ApiResponse<void>> {
-    const response = await this.request<void>(
-      '/api/integrations/slack/connect',
-      {
-        method: 'POST',
-        body: JSON.stringify({ token }),
-      }
-    );
-
-    if (response.success) {
-      // Update stored auth data
-      const auth = await storageService.getAuth();
-      if (auth) {
-        auth.slackToken = token;
-        await storageService.setAuth(auth);
-      }
-    }
-
-    return response;
-  }
-
-  async disconnectGitLab(): Promise<ApiResponse<void>> {
-    const response = await this.request<void>(
-      '/api/integrations/gitlab/disconnect',
-      {
-        method: 'POST',
-      }
-    );
-
-    if (response.success) {
-      const auth = await storageService.getAuth();
-      if (auth) {
-        delete auth.gitlabToken;
-        await storageService.setAuth(auth);
-      }
-    }
-
-    return response;
-  }
-
-  async disconnectSlack(): Promise<ApiResponse<void>> {
-    const response = await this.request<void>(
-      '/api/integrations/slack/disconnect',
-      {
-        method: 'POST',
-      }
-    );
-
-    if (response.success) {
-      const auth = await storageService.getAuth();
-      if (auth) {
-        delete auth.slackToken;
-        await storageService.setAuth(auth);
-      }
-    }
-
-    return response;
-  }
-
-  /**
-   * File upload
-   */
-  async uploadFile(
-    file: File,
-    purpose: 'screenshot' | 'attachment'
-  ): Promise<ApiResponse<{ url: string; id: string }>> {
-    try {
-      // Route via background to avoid CORS and let SW attach Authorization
-      // To avoid structured clone issues across runtime messaging, send as data URL
-      const fileAsDataUrl = await (async () => {
-        try {
-          if (!file) return null;
-          const buf = await file.arrayBuffer();
-          // Convert to base64 data URL
-          const bytes = new Uint8Array(buf);
-          let bin = '';
-          for (let i = 0; i < bytes.length; i++)
-            bin += String.fromCharCode(bytes[i]);
-          const b64 = btoa(bin);
-          const mime = file.type || 'application/octet-stream';
-          return `data:${mime};base64,${b64}`;
-        } catch {
-          return null;
-        }
-      })();
-      const result = await new Promise<
-        ApiResponse<{ url: string; id: string }>
-      >(resolve => {
-        try {
-          chrome.runtime.sendMessage(
-            {
-              type: MessageType.FILE_UPLOAD,
-              data: {
-                url: `${this.baseUrl}/api/files/upload`,
-                file: (fileAsDataUrl || file) as any,
-                purpose,
-                filename: (file && (file as any).name) || undefined,
-              },
-            },
-            reply => {
-              const err = chrome.runtime.lastError;
-              if (err)
-                return resolve({
-                  success: false,
-                  error: String(err.message || err),
-                });
-              resolve(
-                (reply as any) || { success: false, error: 'No response' }
-              );
-            }
-          );
-        } catch (e: any) {
-          resolve({
-            success: false,
-            error: e?.message || 'Background not reachable',
-          });
-        }
-      });
-      return result;
-    } catch (error) {
-      console.error('File upload failed:', error);
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : 'Network error',
-      };
-    }
-  }
-
-  /**
-   * Voice transcription (background, avoids CORS)
-   */
-  async transcribeVoice(
-    req: VoiceTranscriptionRequest
-  ): Promise<ApiResponse<any>> {
-    if (!req?.audioBlob) return { success: false, error: 'Missing audio blob' };
-    try {
-      const result = await new Promise<ApiResponse<any>>(resolve => {
-        try {
-          chrome.runtime.sendMessage(
-            {
-              type: MessageType.AI_TRANSCRIBE,
-              data: {
-                url: `${this.baseUrl}/api/ai/transcribe`,
-                audioBlob: req.audioBlob,
-                language: req.language,
-              },
-            },
-            reply => {
-              const err = chrome.runtime.lastError;
-              if (err)
-                return resolve({
-                  success: false,
-                  error: String(err.message || err),
-                });
-              resolve(
-                (reply as any) || { success: false, error: 'No response' }
-              );
-            }
-          );
-        } catch (e: any) {
-          resolve({
-            success: false,
-            error: e?.message || 'Background not reachable',
-          });
-        }
-      });
-      return result;
-    } catch (error) {
-      console.error('Voice transcription failed:', error);
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : 'Network error',
-      };
-    }
-  }
-
-  /**
-   * WebSocket connection for real-time updates
-   */
-  connectWebSocket(): Promise<WebSocket> {
-    return new Promise((resolve, reject) => {
-      if (
-        this.wsConnection &&
-        this.wsConnection.readyState === WebSocket.OPEN
-      ) {
-        resolve(this.wsConnection);
-        return;
-      }
-
-      if (!this.baseUrl) {
-        reject(new Error('Base URL is not configured'));
-        return;
-      }
-
-      const wsUrl = this.baseUrl.replace(/^http/, 'ws') + '/ws';
-      this.wsConnection = new WebSocket(wsUrl);
-
-      this.wsConnection.onopen = () => {
-        console.log('WebSocket connected');
-        resolve(this.wsConnection!);
-      };
-
-      this.wsConnection.onerror = error => {
-        console.error('WebSocket error:', error);
-        reject(error);
-      };
-
-      this.wsConnection.onclose = () => {
-        console.log('WebSocket disconnected');
-        this.wsConnection = null;
-      };
-
-      // Set up automatic reconnection
-      this.wsConnection.onclose = () => {
-        setTimeout(() => {
-          console.log('Attempting to reconnect WebSocket...');
-          this.connectWebSocket().catch(console.error);
-        }, 5000);
-      };
-    });
-  }
-
-  disconnectWebSocket(): void {
-    if (this.wsConnection) {
-      this.wsConnection.close();
-      this.wsConnection = null;
-    }
-  }
-
-  /**
-   * GitLab OAuth URL
-   */
-  async getGitLabOAuthUrl(): Promise<ApiResponse<{ authUrl: string }>> {
-    return this.request<{ authUrl: string }>('/api/auth/gitlab');
-  }
-
-  /**
-   * GitLab OAuth URL with session ID
-   */
-  async getGitLabOAuthUrlWithSession(
-    sessionId: string
-  ): Promise<ApiResponse<{ authUrl: string; sessionId: string }>> {
-    return this.request<{ authUrl: string; sessionId: string }>(
-      `/api/auth/gitlab?sessionId=${encodeURIComponent(sessionId)}`
-    );
-  }
-
-  /**
-   * Get OAuth session data
-   */
-  async getOAuthSession(sessionId: string): Promise<ApiResponse<any>> {
-    return this.request<any>(`/api/auth/oauth/session/${sessionId}`);
-  }
-
-  /**
-   * Generate an issue description using the server-side template + AI
-   */
-  async generateDescriptionFromTemplate({
-    userDescription,
-    issueFormat,
-  }: {
-    userDescription: string;
-    issueFormat: string;
-  }): Promise<ApiResponse<{ description: string }>> {
-    return this.request<{ description: string }>(
-      `/api/issues/generate-from-template`,
-      {
-        method: 'POST',
-        body: JSON.stringify({ userDescription, issueFormat }),
-      }
-    );
-  }
-
-  /**
-   * Health check
-   */
-  async healthCheck(): Promise<
-    ApiResponse<{ status: string; version: string }>
-  > {
-    try {
-      return this.request<{ status: string; version: string }>('/health');
-    } catch (error) {
-      // If health check fails, still allow the extension to work
-      console.warn('Health check failed, continuing anyway:', error);
-      return {
-        success: true,
-        data: { status: 'unknown', version: '1.0.0' },
-      };
-    }
-  }
-
-  // ==================== Merge Request Methods ====================
-
-  /**
-   * Get branches for a project
-   */
-  async getProjectBranches(
-    projectId: string | number,
-    options?: {
-      search?: string;
-      per_page?: number;
-      page?: number;
-    }
-  ): Promise<
-    ApiResponse<{
-      items: Array<{
-        name: string;
-        merged: boolean;
-        protected: boolean;
-        default: boolean;
-        web_url: string;
-        commit?: {
-          id: string;
-          short_id: string;
-          title: string;
-          author_name: string;
-          created_at: string;
-        };
-      }>;
-      total: number;
-    }>
-  > {
-    const params = new URLSearchParams();
-    if (options?.search) params.append('search', options.search);
-    if (options?.per_page) params.append('per_page', String(options.per_page));
-    if (options?.page) params.append('page', String(options.page));
-
-    const query = params.toString();
-    const endpoint = `/api/merge-requests/${encodeURIComponent(String(projectId))}/branches${query ? `?${query}` : ''}`;
-    return this.request(endpoint);
-  }
-
-  /**
-   * Create a merge request
-   */
-  async createMergeRequest(
-    projectId: string | number,
-    data: {
-      source_branch: string;
-      target_branch: string;
-      title: string;
-      description?: string;
-      assignee_ids?: number[];
-      reviewer_ids?: number[];
-      labels?: string;
-      remove_source_branch?: boolean;
-      squash?: boolean;
-      slack_channel_id?: string;
-      slack_user_ids?: string[];
-    }
-  ): Promise<
-    ApiResponse<{
-      mergeRequest: any;
-      slackNotification?: {
-        status: 'sent' | 'failed';
-        channel: string;
-        ts?: string;
-        error?: string;
-      } | null;
-    }>
-  > {
-    const endpoint = `/api/merge-requests/${encodeURIComponent(String(projectId))}/gitlab/merge-requests`;
-    return this.request(endpoint, {
-      method: 'POST',
-      body: JSON.stringify(data),
-    });
-  }
-
-  /**
-   * Get merge requests for a project
-   */
+  // Merge Requests
   async getMergeRequests(
     projectId: string | number,
-    options?: {
-      state?: 'opened' | 'closed' | 'locked' | 'merged' | 'all';
-      order_by?: 'created_at' | 'updated_at';
-      sort?: 'asc' | 'desc';
-      search?: string;
-      per_page?: number;
-      page?: number;
-      milestone?: string;
-      author_id?: number | 'me';
-      assignee_id?: number | 'me';
-      reviewer_id?: number | 'me';
-      source_branch?: string;
-      target_branch?: string;
-      scope?: 'all' | 'created_by_me' | 'assigned_to_me';
+    options: any = {}
+  ): Promise<ApiResponse<{ items: any[]; total: number }>> {
+    const q = new URLSearchParams(options);
+    const res = await this.request<any[]>(
+      `/projects/${projectId}/merge_requests?${q.toString()}`
+    );
+    if (res.success && res.data) {
+      return {
+        success: true,
+        data: { items: res.data, total: res.data.length },
+      };
     }
-  ): Promise<
-    ApiResponse<{
-      items: Array<any>;
-      total: number;
-    }>
-  > {
-    const params = new URLSearchParams();
-    if (options?.state) params.append('state', options.state);
-    if (options?.order_by) params.append('order_by', options.order_by);
-    if (options?.sort) params.append('sort', options.sort);
-    if (options?.search) params.append('search', options.search);
-    if (options?.per_page) params.append('per_page', String(options.per_page));
-    if (options?.page) params.append('page', String(options.page));
-    if (options?.milestone) params.append('milestone', options.milestone);
-    if (options?.scope) params.append('scope', options.scope);
-    if (options?.scope) params.append('scope', options.scope);
-    if (options?.author_id !== undefined) {
-      params.append('author_id', String(options.author_id));
-    }
-    if (options?.assignee_id !== undefined) {
-      params.append('assignee_id', String(options.assignee_id));
-    }
-    if (options?.reviewer_id !== undefined) {
-      params.append('reviewer_id', String(options.reviewer_id));
-    }
-    if (options?.source_branch) {
-      params.append('source_branch', options.source_branch);
-    }
-    if (options?.target_branch) {
-      params.append('target_branch', options.target_branch);
-    }
-
-    const query = params.toString();
-    const endpoint = `/api/merge-requests/${encodeURIComponent(String(projectId))}/gitlab/merge-requests${query ? `?${query}` : ''}`;
-    return this.request(endpoint);
+    return res as any;
   }
 
-  /**
-   * Get merge requests across multiple projects
-   */
   async getMergeRequestsForProjects(
     projectIds: Array<string | number>,
-    options?: {
-      state?: 'opened' | 'closed' | 'locked' | 'merged' | 'all';
-      order_by?: 'created_at' | 'updated_at';
-      sort?: 'asc' | 'desc';
-      search?: string;
-      per_page?: number;
-      page?: number;
-      milestone?: string;
-      author_id?: number | 'me';
-      assignee_id?: number | 'me';
-      reviewer_id?: number | 'me';
-      source_branch?: string;
-      target_branch?: string;
-      scope?: 'all' | 'created_by_me' | 'assigned_to_me';
-    }
+    options: any = {}
   ): Promise<ApiResponse<ListMRsResponse>> {
-    const params = new URLSearchParams();
-
-    projectIds.forEach(id => {
-      params.append('projectIds', String(id));
-    });
-
-    if (options?.state) params.append('state', options.state);
-    if (options?.order_by) params.append('order_by', options.order_by);
-    if (options?.sort) params.append('sort', options.sort);
-    if (options?.search) params.append('search', options.search);
-    if (options?.per_page) params.append('per_page', String(options.per_page));
-    if (options?.page) params.append('page', String(options.page));
-    if (options?.milestone) params.append('milestone', options.milestone);
-    if (options?.scope) params.append('scope', options.scope);
-    if (options?.source_branch) {
-      params.append('source_branch', options.source_branch);
+    // GitLab global MR endpoint (across all projects membership)
+    const q = new URLSearchParams(options);
+    if (projectIds.length > 0) {
+      // GitLab doesn't support multiple project_ids in query directly easily for merge_requests
+      // Usually you'd use /merge_requests?scope=all or loop.
+      // For now, we'll use the user-wide search if no projectIds, or just use the first if provided (simplified)
     }
-    if (options?.target_branch) {
-      params.append('target_branch', options.target_branch);
+    const res = await this.request<any[]>(`/merge_requests?${q.toString()}`);
+    if (res.success && res.data) {
+      return {
+        success: true,
+        data: { items: res.data, total: res.data.length } as any,
+      };
     }
-    if (typeof options?.author_id === 'number') {
-      params.append('author_id', String(options.author_id));
-    }
-    if (typeof options?.assignee_id === 'number') {
-      params.append('assignee_id', String(options.assignee_id));
-    }
-    if (typeof options?.reviewer_id === 'number') {
-      params.append('reviewer_id', String(options.reviewer_id));
-    }
-
-    const query = params.toString();
-    const endpoint = `/api/merge-requests/gitlab/merge-requests${query ? `?${query}` : ''}`;
-    return this.request(endpoint);
+    return res as any;
   }
 
-  /**
-   * Get a single merge request
-   */
   async getMergeRequest(
     projectId: string | number,
     mrIid: number
   ): Promise<ApiResponse<any>> {
-    const endpoint = `/api/merge-requests/${encodeURIComponent(String(projectId))}/gitlab/merge-requests/${mrIid}`;
-    return this.request(endpoint);
+    return this.request(`/projects/${projectId}/merge_requests/${mrIid}`);
   }
 
-  /**
-   * Generate AI description for a merge request
-   */
-  async generateMergeRequestDescription(
-    projectId: string | number,
-    data: {
-      source_branch: string;
-      target_branch: string;
-      template?: string;
-    }
-  ): Promise<
-    ApiResponse<{
-      description: string;
-      commits: Array<{
-        title: string;
-        author: string;
-        date: string;
-      }>;
-    }>
-  > {
-    const endpoint = `/api/merge-requests/${encodeURIComponent(String(projectId))}/generate-description`;
-    return this.request(endpoint, {
-      method: 'POST',
-      body: JSON.stringify(data),
-    });
-  }
-
-  /**
-   * Get notes (comments) for a merge request
-   */
   async getMergeRequestNotes(
     projectId: string | number,
     mrIid: number
   ): Promise<ApiResponse<{ items: MRNote[] }>> {
-    const endpoint = `/api/merge-requests/${encodeURIComponent(String(projectId))}/gitlab/merge-requests/${mrIid}/notes`;
-    return this.request(endpoint);
+    const res = await this.request<any[]>(
+      `/projects/${projectId}/merge_requests/${mrIid}/notes`
+    );
+    if (res.success && res.data) {
+      return { success: true, data: { items: res.data as any } };
+    }
+    return res as any;
   }
 
-  /**
-   * Get changes/diffs for a merge request
-   */
   async getMergeRequestChanges(
     projectId: string | number,
     mrIid: number
   ): Promise<ApiResponse<any>> {
-    const endpoint = `/api/merge-requests/${encodeURIComponent(String(projectId))}/gitlab/merge-requests/${mrIid}/changes`;
-    return this.request(endpoint);
+    return this.request(
+      `/projects/${projectId}/merge_requests/${mrIid}/changes`
+    );
   }
 
   async getMergeRequestNoteSnippet(
     projectId: string | number,
     mrIid: number,
-    params: {
-      filePath: string;
-      ref: string;
-      startLine: number;
-      endLine: number;
-      contextBefore?: number;
-      contextAfter?: number;
-    }
-  ): Promise<ApiResponse<{ snippet: MRNoteSnippet }>> {
-    const searchParams = new URLSearchParams({
-      filePath: params.filePath,
-      ref: params.ref,
-      startLine: String(params.startLine),
-      endLine: String(params.endLine),
-    });
-
-    if (params.contextBefore !== undefined) {
-      searchParams.append('contextBefore', String(params.contextBefore));
-    }
-
-    if (params.contextAfter !== undefined) {
-      searchParams.append('contextAfter', String(params.contextAfter));
-    }
-
-    const endpoint = `/api/merge-requests/${encodeURIComponent(String(projectId))}/gitlab/merge-requests/${mrIid}/note-snippet?${searchParams.toString()}`;
-    return this.request(endpoint);
+    params: any
+  ): Promise<ApiResponse<any>> {
+    // This was a backend-heavy feature. Returning stub.
+    return {
+      success: false,
+      error: 'Note snippets requires backend processing',
+    };
   }
 
-  async generateMergeRequestNoteFix(
+  async getProjectBranches(
     projectId: string | number,
-    mrIid: number,
-    payload: {
-      filePath: string;
-      ref: string;
-      startLine: number;
-      endLine: number;
-      comment: string;
-      contextBefore?: number;
-      contextAfter?: number;
-      languageHint?: string;
-      additionalInstructions?: string;
+    options: any = {}
+  ): Promise<ApiResponse<{ items: any[]; total: number }>> {
+    const q = new URLSearchParams(options);
+    const res = await this.request<any[]>(
+      `/projects/${projectId}/repository/branches?${q.toString()}`
+    );
+    if (res.success && res.data) {
+      return {
+        success: true,
+        data: { items: res.data, total: res.data.length },
+      };
     }
-  ): Promise<
-    ApiResponse<{ snippet: MRNoteSnippet; fix: MRNoteFixSuggestion }>
-  > {
-    const endpoint = `/api/merge-requests/${encodeURIComponent(String(projectId))}/gitlab/merge-requests/${mrIid}/note-fix`;
-    return this.request(
-      endpoint,
+    return res as any;
+  }
+
+  // Mocked/Disabled methods (formerly backend endpoints)
+  async uploadFile(
+    file: File,
+    purpose: string
+  ): Promise<ApiResponse<{ url: string; id: string }>> {
+    console.warn('File upload disabled: requires backend storage.');
+    return {
+      success: false,
+      error:
+        'File upload requires backend infrastructure which has been removed.',
+    };
+  }
+
+  async getSlackChannels(): Promise<ApiResponse<any[]>> {
+    return { success: true, data: [] };
+  }
+  async getSlackUsers(): Promise<ApiResponse<any[]>> {
+    return { success: true, data: [] };
+  }
+  async generateDescriptionFromTemplate(
+    _params?: any
+  ): Promise<ApiResponse<any>> {
+    return { success: false, error: 'AI features disabled.' };
+  }
+  async generateGitLabIssueTitle(
+    _projectId: any,
+    _params: any
+  ): Promise<ApiResponse<any>> {
+    return { success: false, error: 'AI features disabled.' };
+  }
+  async generateMergeRequestDescription(
+    _projectId: any,
+    _params: any
+  ): Promise<ApiResponse<any>> {
+    return { success: false, error: 'AI features disabled.' };
+  }
+  async generateMergeRequestNoteFix(
+    _projectId: any,
+    _mrIid: any,
+    _params: any
+  ): Promise<ApiResponse<any>> {
+    return { success: false, error: 'AI features disabled.' };
+  }
+  async applyMergeRequestNoteFix(
+    _projectId: any,
+    _mrIid: any,
+    _payload: any
+  ): Promise<ApiResponse<any>> {
+    return { success: false, error: 'AI features disabled.' };
+  }
+  async undoMergeRequestNoteFix(
+    _projectId: any,
+    _mrIid: any,
+    _token: any
+  ): Promise<ApiResponse<any>> {
+    return { success: false, error: 'AI features disabled.' };
+  }
+
+  async createMergeRequest(
+    data: any,
+    _options?: any
+  ): Promise<ApiResponse<any>> {
+    const res = await this.request<any>(
+      `/projects/${data.projectId || data.project_id}/merge_requests`,
       {
         method: 'POST',
-        body: JSON.stringify(payload),
-      },
-      40000
+        body: JSON.stringify({
+          source_branch: data.sourceBranch,
+          target_branch: data.targetBranch,
+          title: data.title,
+          description: data.description,
+          labels: data.labels?.join(','),
+          assignee_ids: data.assigneeIds,
+          remove_source_branch: data.removeSourceBranch,
+          squash: data.squash,
+        }),
+      }
     );
+    return res;
   }
 
-  async applyMergeRequestNoteFix(
-    projectId: string | number,
-    mrIid: number,
-    payload: {
-      filePath: string;
-      ref: string;
-      startLine: number;
-      endLine: number;
-      originalCode: string;
-      updatedCode: string;
-      commitMessage?: string;
-      dryRun?: boolean;
+  // Auth (Disabled backend flows)
+  async logout(): Promise<ApiResponse<void>> {
+    await storageService.remove('auth');
+    await storageService.remove('user');
+    return { success: true };
+  }
+
+  // Compatibility stubs
+  async healthCheck(): Promise<ApiResponse<any>> {
+    return { success: true, data: { status: 'standalone' } };
+  }
+  async getGitLabUsers(): Promise<ApiResponse<GitLabUser[]>> {
+    const res = await this.request<any[]>('/users?per_page=100');
+    if (res.success && res.data) {
+      const users = res.data.map(
+        u =>
+          ({
+            id: String(u.id),
+            username: u.username,
+            name: u.name,
+            avatarUrl: u.avatar_url,
+            webUrl: u.web_url,
+          }) as GitLabUser
+      );
+      return { success: true, data: users };
     }
-  ): Promise<
-    ApiResponse<
-      MRNoteFixPreview | (MRNoteFixApplyResult & { undoToken?: string | null })
-    >
-  > {
-    const endpoint = `/api/merge-requests/${encodeURIComponent(String(projectId))}/gitlab/merge-requests/${mrIid}/note-fix/apply`;
-    return this.request(endpoint, {
-      method: 'POST',
-      body: JSON.stringify(payload),
+    return res as any;
+  }
+
+  async createIssue(
+    data: any,
+    _options?: any,
+    _extra?: any
+  ): Promise<ApiResponse<any>> {
+    return this.createGitLabIssue(data.projectId || data.project_id, data);
+  }
+
+  async getIssues(
+    params: ListIssuesParams & { limit?: number } = {}
+  ): Promise<ApiResponse<ListIssuesResponse>> {
+    return this.listGitLabIssuesGlobal(params);
+  }
+
+  async getIssue(
+    projectId: string | number,
+    issueIid: number
+  ): Promise<ApiResponse<GitLabIssueDetail>> {
+    return this.getGitLabIssue(projectId, issueIid);
+  }
+
+  async updateIssue(
+    projectId: string | number,
+    issueIid: number,
+    payload: any
+  ): Promise<ApiResponse<GitLabIssueDetail>> {
+    return this.updateGitLabIssue(projectId, issueIid, payload);
+  }
+
+  async deleteIssue(
+    projectId: string | number,
+    issueIid: number
+  ): Promise<ApiResponse<void>> {
+    // Delete is dangerous, usually not exposed in the same way, but let's provide the GitLab call
+    return this.request(`/projects/${projectId}/issues/${issueIid}`, {
+      method: 'DELETE',
     });
   }
 
-  async undoMergeRequestNoteFix(
-    projectId: string | number,
-    mrIid: number,
-    undoToken: string
-  ): Promise<
-    ApiResponse<{ diff: string; commitSha: string; snippet: MRNoteSnippet }>
-  > {
-    const endpoint = `/api/merge-requests/${encodeURIComponent(String(projectId))}/gitlab/merge-requests/${mrIid}/note-fix/undo`;
-    return this.request(endpoint, {
-      method: 'POST',
-      body: JSON.stringify({ undoToken }),
-    });
+  async listIssues(
+    params: ListIssuesParams & { limit?: number } = {}
+  ): Promise<ApiResponse<ListIssuesResponse>> {
+    return this.listGitLabIssuesGlobal(params);
+  }
+
+  async getIssuesByIds(ids: string[]): Promise<ApiResponse<IssueListItem[]>> {
+    // GitLab doesn't have a batch get by global ID easily.
+    // This usually implies backend-side filtering of its own DB.
+    // For now returning empty or we'd have to loop many calls.
+    return { success: true, data: [] };
+  }
+
+  // Projects stubs
+  async createProject(data: any): Promise<ApiResponse<Project>> {
+    return {
+      success: false,
+      error: 'Project creation via extension is disabled.',
+    };
+  }
+  async updateProject(id: string, data: any): Promise<ApiResponse<Project>> {
+    return {
+      success: false,
+      error: 'Project update via extension is disabled.',
+    };
+  }
+  async deleteProject(id: string): Promise<ApiResponse<void>> {
+    return {
+      success: false,
+      error: 'Project deletion via extension is disabled.',
+    };
+  }
+  async searchProjects(query: string): Promise<ApiResponse<Project[]>> {
+    const res = await this.request<any[]>(
+      `/projects?search=${encodeURIComponent(query)}&simple=true&membership=true`
+    );
+    if (res.success && res.data) {
+      const projects = res.data.map(
+        p =>
+          ({
+            id: String(p.id),
+            name: p.name_with_namespace || p.name,
+            isActive: true,
+            createdAt: p.created_at,
+          }) as Project
+      );
+      return { success: true, data: projects };
+    }
+    return res as any;
+  }
+  async getRecentProjects(_userId?: any): Promise<ApiResponse<Project[]>> {
+    return this.getProjects();
+  }
+  async getRecentIssueProjects(_userId?: any): Promise<ApiResponse<Project[]>> {
+    return this.getProjects();
+  }
+
+  // Slack stubs
+  async connectSlack(_token?: any): Promise<ApiResponse<any>> {
+    return { success: false, error: 'Slack integration requires backend' };
+  }
+  async disconnectSlack(): Promise<ApiResponse<any>> {
+    return { success: false, error: 'Slack integration requires backend' };
+  }
+  async getSlackConnectUrl(): Promise<ApiResponse<{ url: string }>> {
+    return { success: false, error: 'Slack integration requires backend' };
+  }
+  async postSlackMessage(): Promise<ApiResponse<any>> {
+    return { success: false, error: 'Slack integration requires backend' };
+  }
+
+  // Auth stubs/mock
+  async login(_data: any): Promise<ApiResponse<AuthData>> {
+    return {
+      success: false,
+      error: 'Direct login disabled. Please use GitLab Token.',
+    };
+  }
+  async register(_data: any): Promise<ApiResponse<AuthData>> {
+    return { success: false, error: 'Registration disabled.' };
+  }
+  async refreshToken(): Promise<ApiResponse<AuthData>> {
+    return { success: false, error: 'Token refresh disabled.' };
+  }
+  async getProfile(): Promise<ApiResponse<UserData>> {
+    const res = await this.request<any>('/user');
+    if (res.success && res.data) {
+      return {
+        success: true,
+        data: {
+          id: String(res.data.id),
+          email: res.data.email,
+          name: res.data.name,
+        } as any,
+      };
+    }
+    return res as any;
+  }
+  async updateProfile(_data: any): Promise<ApiResponse<UserData>> {
+    return { success: false, error: 'Profile update disabled.' };
+  }
+  async connectGitLab(_token?: any): Promise<ApiResponse<any>> {
+    return { success: false, error: 'GitLab linking requires backend OAuth' };
+  }
+  async disconnectGitLab(): Promise<ApiResponse<any>> {
+    return { success: false, error: 'GitLab linking requires backend OAuth' };
+  }
+
+  // Voice stubs
+  async transcribeVoice(_blob: Blob): Promise<ApiResponse<{ text: string }>> {
+    return { success: false, error: 'Voice transcription requires backend' };
   }
 }
 
-// Export singleton instance
 export const apiService = new ApiService();
 export default apiService;

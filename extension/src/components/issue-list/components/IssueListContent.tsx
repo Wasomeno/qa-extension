@@ -15,7 +15,7 @@ interface IssueListContentProps {
   isError: boolean;
   error: any;
   isFetching: boolean;
-  hasNextPage: boolean;
+hasNextPage: boolean;
   onLoadMore: () => void;
   onSelect?: (item: any) => void;
   onIssueOpen: (item: any) => void;

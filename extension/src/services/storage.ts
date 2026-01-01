@@ -73,7 +73,6 @@ export interface ExtensionSettings {
     createIssue: string;
   };
   defaultProject?: string;
-  apiEndpoint: string | undefined;
   floatingTrigger: FloatingTriggerSettings;
 }
 
@@ -118,7 +117,6 @@ export const DEFAULT_SETTINGS: ExtensionSettings = {
   shortcuts: {
     createIssue: 'Ctrl+Shift+I',
   },
-  apiEndpoint: process.env.BASE_API_URL,
   floatingTrigger: {
     autoHideOnBlur: true,
     manualHideDurationMs: 10_000,

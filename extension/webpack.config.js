@@ -8,13 +8,6 @@ module.exports = (env, argv) => {
   const targetBrowser = (env && env.browser) || process.env.BROWSER || 'chrome';
   const isFirefox = targetBrowser === 'firefox';
   const isDevelopment = argv.mode === 'development';
-  const baseApiUrl = process.env.BASE_API_URL;
-
-  if (!baseApiUrl) {
-    throw new Error(
-      'BASE_API_URL environment variable is required for the extension build'
-    );
-  }
 
   const outputPath = path.resolve(__dirname, 'dist', targetBrowser);
 
@@ -91,7 +84,6 @@ module.exports = (env, argv) => {
         'process.env.NODE_ENV': JSON.stringify(
           isDevelopment ? 'development' : 'production'
         ),
-        'process.env.BASE_API_URL': JSON.stringify(baseApiUrl),
         'process.env.TARGET_BROWSER': JSON.stringify(targetBrowser),
       }),
       new MiniCssExtractPlugin({

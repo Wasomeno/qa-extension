@@ -186,7 +186,7 @@ export const useInfiniteMergeRequests = (params: UseInfiniteMRsParams) => {
     refetchOnWindowFocus: false,
     staleTime: 300_000, // 5 minutes
     gcTime: 300_000,
-    enabled: true, // Always enabled - backend will use default projects if none provided
+    enabled: true, // Always enabled - service will use default projects if none provided
   });
 
   const loadMore = useCallback(async () => {

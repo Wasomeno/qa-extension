@@ -1,7 +1,13 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { PlusCircle, List, Pin } from 'lucide-react';
+import { PlusCircle, List, Pin, Menu } from 'lucide-react';
 import { useKeyboardIsolation } from '@/hooks/useKeyboardIsolation';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/src/components/ui/ui/tooltip';
 
 interface FloatingTriggerButtonProps {
   position: { x: number; y: number };
@@ -11,8 +17,9 @@ interface FloatingTriggerButtonProps {
   opacity?: number;
   onHoverChange?: (isHovered: boolean) => void;
   onActionClick?: (
-    action: 'issue' | 'issues' | 'pinned',
-    iconRect: DOMRect
+    action: 'issue' | 'issues' | 'pinned' | 'menu',
+    iconRect: DOMRect,
+    capsuleRect: DOMRect
   ) => void;
   hasActivePopup?: boolean;
 }
@@ -33,6 +40,7 @@ const FloatingTriggerButton: React.FC<FloatingTriggerButtonProps> = ({
   const createIconRef = React.useRef<HTMLButtonElement>(null);
   const listIconRef = React.useRef<HTMLButtonElement>(null);
   const pinnedIconRef = React.useRef<HTMLButtonElement>(null);
+  const menuIconRef = React.useRef<HTMLButtonElement>(null);
 
   // Provide root element to parent if requested
   React.useEffect(() => {
@@ -46,25 +54,31 @@ const FloatingTriggerButton: React.FC<FloatingTriggerButtonProps> = ({
 
   const handleActionClick = (
     e: React.MouseEvent<HTMLButtonElement>,
-    action: 'issue' | 'issues' | 'pinned',
+    action: 'issue' | 'issues' | 'pinned' | 'menu',
     iconRef: React.RefObject<HTMLButtonElement>
   ) => {
     e.preventDefault();
     e.stopPropagation();
-    if (iconRef.current && onActionClick) {
-      const rect = iconRef.current.getBoundingClientRect();
-      onActionClick(action, rect);
+    if (iconRef.current && rootRef.current && onActionClick) {
+      const iconRect = iconRef.current.getBoundingClientRect();
+      const capsuleRect = rootRef.current.getBoundingClientRect();
+      onActionClick(action, iconRect, capsuleRect);
     }
   };
 
   // Show expanded state if hovered OR if there's an active popup
   const isExpanded = isHovered || hasActivePopup;
 
-  // Calculate position adjustment to keep capsule centered
+  // Calculate position adjustment to keep capsule centered horizontally
+  // and grow from bottom to top vertically
   const restingWidth = 100;
   const expandedWidth = 180;
+  const restingHeight = 24;
+  const expandedHeight = 48;
   const widthDiff = expandedWidth - restingWidth;
+  const heightDiff = expandedHeight - restingHeight;
   const offsetX = isExpanded ? -widthDiff / 2 : 0;
+  const offsetY = isExpanded ? -heightDiff : 0; // Move up when expanding
 
   return (
     <>
@@ -82,72 +96,152 @@ const FloatingTriggerButton: React.FC<FloatingTriggerButtonProps> = ({
         }}
         animate={{
           left: position.x + offsetX,
-          top: position.y,
+          top: position.y + offsetY,
           width: isExpanded ? expandedWidth : restingWidth,
-          height: isExpanded ? 48 : 40,
+          height: isExpanded ? expandedHeight : restingHeight,
           borderRadius: isExpanded ? 24 : 20,
           opacity: opacity,
         }}
         transition={{
           type: 'spring',
-          stiffness: 300,
-          damping: 20,
-          mass: 0.5,
+          duration: 0.5,
+          bounce: 0.3,
         }}
         {...keyboardIsolation}
       >
-        <div className="flex items-center justify-center h-full gap-3 px-3">
-          <AnimatePresence>
-            {isExpanded && (
-              <>
-                {/* Create Issue */}
-                <motion.button
-                  ref={createIconRef}
-                  initial={{ opacity: 0, scale: 0.5 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  exit={{ opacity: 0, scale: 0.5 }}
-                  transition={{ duration: 0.15, delay: 0.05 }}
-                  onClick={e => handleActionClick(e, 'issue', createIconRef)}
-                  className="p-1.5 rounded-full hover:bg-gray-100 transition-colors pointer-events-auto"
-                  aria-label="Create Issue"
-                >
-                  <PlusCircle className="w-5 h-5 text-gray-700 hover:text-gray-900" />
-                </motion.button>
-
-                {/* List Issues */}
-                <motion.button
-                  ref={listIconRef}
-                  initial={{ opacity: 0, scale: 0.5 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  exit={{ opacity: 0, scale: 0.5 }}
-                  transition={{ duration: 0.15, delay: 0.1 }}
-                  onClick={e => handleActionClick(e, 'issues', listIconRef)}
-                  className="p-1.5 rounded-full hover:bg-gray-100 transition-colors pointer-events-auto"
-                  aria-label="Issue List"
-                >
-                  <List className="w-5 h-5 text-gray-700 hover:text-gray-900" />
-                </motion.button>
-
-                {/* Pinned Issues */}
-                <motion.button
-                  ref={pinnedIconRef}
-                  initial={{ opacity: 0, scale: 0.5 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  exit={{ opacity: 0, scale: 0.5 }}
-                  transition={{ duration: 0.15, delay: 0.15 }}
-                  onClick={e => handleActionClick(e, 'pinned', pinnedIconRef)}
-                  className="p-1.5 rounded-full hover:bg-gray-100 transition-colors pointer-events-auto"
-                  aria-label="Pinned Issues"
-                >
-                  <Pin className="w-5 h-5 text-gray-700 hover:text-gray-900" />
-                </motion.button>
-              </>
-            )}
-          </AnimatePresence>
-        </div>
+        <TooltipProvider delayDuration={300}>
+          <div className="flex items-center justify-evenly h-full px-2">
+            <AnimatePresence>
+              {isExpanded && (
+                <>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <motion.button
+                        ref={createIconRef}
+                        initial={{
+                          opacity: 0,
+                          scale: 0.5,
+                          filter: 'blur(5px)',
+                        }}
+                        animate={{ opacity: 1, scale: 1, filter: 'blur(0)' }}
+                        exit={{ opacity: 0, scale: 0.5, filter: 'blur(5px)' }}
+                        transition={{
+                          type: 'spring',
+                          duration: 0.2,
+                          bounce: 0.3,
+                        }}
+                        onClick={e =>
+                          handleActionClick(e, 'issue', createIconRef)
+                        }
+                        className="p-1.5 rounded-full hover:bg-gray-100 transition-colors pointer-events-auto"
+                        aria-label="Create Issue"
+                      >
+                        <PlusCircle className="w-5 h-5 text-gray-700 hover:text-gray-900" />
+                      </motion.button>
+                    </TooltipTrigger>
+                    <TooltipContent side="top">
+                      <p>Create Issue</p>
+                    </TooltipContent>
+                  </Tooltip>
+                  <hr className="w-px h-5 bg-neutral-200" />
+                  {/* List Issues */}
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <motion.button
+                        ref={listIconRef}
+                        initial={{
+                          opacity: 0,
+                          scale: 0.5,
+                          filter: 'blur(5px)',
+                        }}
+                        animate={{ opacity: 1, scale: 1, filter: 'blur(0)' }}
+                        exit={{ opacity: 0, scale: 0.5, filter: 'blur(5px)' }}
+                        transition={{
+                          type: 'spring',
+                          duration: 0.2,
+                          bounce: 0.3,
+                        }}
+                        onClick={e =>
+                          handleActionClick(e, 'issues', listIconRef)
+                        }
+                        className="p-1.5 rounded-full hover:bg-gray-100 transition-colors pointer-events-auto"
+                        aria-label="Issue List"
+                      >
+                        <List className="w-5 h-5 text-gray-700 hover:text-gray-900" />
+                      </motion.button>
+                    </TooltipTrigger>
+                    <TooltipContent side="top">
+                      <p>Issue List</p>
+                    </TooltipContent>
+                  </Tooltip>
+                  <hr className="w-px h-5 bg-neutral-200" />
+                  {/* Pinned Issues */}
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <motion.button
+                        ref={pinnedIconRef}
+                        initial={{
+                          opacity: 0,
+                          scale: 0.5,
+                          filter: 'blur(5px)',
+                        }}
+                        animate={{ opacity: 1, scale: 1, filter: 'blur(0)' }}
+                        exit={{ opacity: 0, scale: 0.5, filter: 'blur(5px)' }}
+                        transition={{
+                          type: 'spring',
+                          duration: 0.2,
+                          bounce: 0.3,
+                        }}
+                        onClick={e =>
+                          handleActionClick(e, 'pinned', pinnedIconRef)
+                        }
+                        className="p-1.5 rounded-full hover:bg-gray-100 transition-colors pointer-events-auto"
+                        aria-label="Pinned Issues"
+                      >
+                        <Pin className="w-5 h-5 text-gray-700 hover:text-gray-900" />
+                      </motion.button>
+                    </TooltipTrigger>
+                    <TooltipContent side="top">
+                      <p>Pinned Issues</p>
+                    </TooltipContent>
+                  </Tooltip>
+                  <hr className="w-px h-5 bg-neutral-200" />
+                  {/* Main Menu */}
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <motion.button
+                        ref={menuIconRef}
+                        initial={{
+                          opacity: 0,
+                          scale: 0.5,
+                          filter: 'blur(5px)',
+                        }}
+                        animate={{ opacity: 1, scale: 1, filter: 'blur(0)' }}
+                        exit={{ opacity: 0, scale: 0.5, filter: 'blur(5px)' }}
+                        transition={{
+                          type: 'spring',
+                          duration: 0.2,
+                          bounce: 0.3,
+                        }}
+                        onClick={e =>
+                          handleActionClick(e, 'menu', menuIconRef)
+                        }
+                        className="p-1.5 rounded-full hover:bg-gray-100 transition-colors pointer-events-auto"
+                        aria-label="Main Menu"
+                      >
+                        <Menu className="w-5 h-5 text-gray-700 hover:text-gray-900" />
+                      </motion.button>
+                    </TooltipTrigger>
+                    <TooltipContent side="top">
+                      <p>Main Menu</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </>
+              )}
+            </AnimatePresence>
+          </div>
+        </TooltipProvider>
       </motion.div>
-
-      {/* Tooltip-style popups rendered separately */}
       {children}
     </>
   );

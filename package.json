@@ -1,35 +1,28 @@
 {
   "name": "qa-command-center",
   "version": "1.0.0",
-  "description": "A unified browser extension solution that combines AI-powered issue creation and seamless GitLab-Slack integration",
+  "description": "Seamless GitLab integration for browser-based QA and dev workflows",
   "main": "index.js",
   "scripts": {
-    "dev": "concurrently \"npm run dev:backend\" \"npm run dev:extension\"",
-    "dev:backend": "cd backend && npm run dev",
+    "dev": "cd extension && npm run dev",
     "dev:extension": "cd extension && npm run dev",
-    "build": "npm run build:backend && npm run build:extension",
-    "build:backend": "cd backend && npm run build",
+    "build": "cd extension && npm run build",
     "build:extension": "cd extension && npm run build",
-    "test": "npm run test:backend && npm run test:extension",
-    "test:backend": "cd backend && npm run test",
+    "test": "cd extension && npm run test",
     "test:extension": "cd extension && npm run test",
-    "lint": "npm run lint:backend && npm run lint:extension",
-    "lint:backend": "cd backend && npm run lint",
+    "lint": "cd extension && npm run lint",
     "lint:extension": "cd extension && npm run lint",
     "format": "prettier --write \"**/*.{js,ts,tsx,json,css,md}\"",
-    "typecheck": "npm run typecheck:backend && npm run typecheck:extension",
-    "typecheck:backend": "cd backend && npm run typecheck",
+    "typecheck": "cd extension && npm run typecheck",
     "typecheck:extension": "cd extension && npm run typecheck",
-    "clean": "rm -rf backend/dist extension/dist backend/node_modules extension/node_modules node_modules",
+    "clean": "rm -rf extension/dist extension/node_modules node_modules",
     "postinstall": "echo 'Postinstall: workspaces handled at root; no nested installs'"
   },
   "workspaces": [
-    "backend",
     "extension"
   ],
   "devDependencies": {
     "@types/node": "^20.0.0",
-    "concurrently": "^8.2.0",
     "prettier": "^3.0.0",
     "typescript": "^5.0.0"
   },
@@ -46,9 +39,6 @@
     "qa",
     "testing",
     "gitlab",
-    "slack",
-    "automation",
-    "ai",
     "issue-tracking"
   ],
   "author": "Your Organization",

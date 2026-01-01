@@ -2,13 +2,12 @@
   "manifest_version": 3,
   "name": "Gitlab Companion",
   "version": "1.0.0",
-  "description": "AI-powered issue creation with seamless GitLab-Slack integration",
+  "description": "Seamless GitLab integration for fast issue management and QA workflows",
   "permissions": [
     "activeTab",
     "storage",
     "scripting",
     "webNavigation",
-    
     "tabs",
     "cookies",
     "contextMenus",
@@ -16,12 +15,8 @@
   ],
   "host_permissions": [
     "<all_urls>",
-    "http://localhost:3000/*",
     "https://gitlab.com/*",
-    "https://*.gitlab.io/*",
-    "https://slack.com/*",
-    "https://*.slack.com/*",
-    "https://api.openai.com/*"
+    "https://*.gitlab.io/*"
   ],
   "content_scripts": [
     {
@@ -47,12 +42,7 @@
   "options_page": "options.html",
   "web_accessible_resources": [
     {
-      "resources": [
-        "assets/*",
-        "styles/*",
-        "*.js",
-        "*.css"
-      ],
+      "resources": ["assets/*", "styles/*", "*.js", "*.css"],
       "matches": ["<all_urls>"]
     }
   ],
@@ -72,12 +62,6 @@
       },
       "description": "Create issue from current context"
     }
-  },
-  "externally_connectable": {
-    "matches": [
-      "http://localhost:3000/*",
-      "https://your-domain.com/*"
-    ]
   },
   "minimum_chrome_version": "88"
 }

@@ -1,7 +1,11 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import FloatingTriggerButton from './components/floating-trigger-button';
-import FloatingTriggerPopup from './components/floating-trigger-popup';
+import PopupWrapper from './components/PopupWrapper';
+import CompactIssueCreator from './components/CompactIssueCreator';
+import CompactIssueList from './components/CompactIssueList';
+import CompactPinnedIssues from './components/CompactPinnedIssues';
+import MainMenuModal from './components/MainMenuModal';
 import { storageService, type ExtensionSettings } from '@/services/storage';
 
 interface FloatingTriggerProps {
@@ -21,7 +25,7 @@ const queryClient = new QueryClient({
 
 const FloatingTriggerInner: React.FC<FloatingTriggerProps> = ({ onClose }) => {
   const [activeFeature, setActiveFeature] = useState<
-    'issue' | 'issues' | 'pinned' | null
+    'issue' | 'issues' | 'pinned' | 'menu' | null
   >(null);
   const [popupPosition, setPopupPosition] = useState<{
     x: number;
@@ -34,11 +38,12 @@ const FloatingTriggerInner: React.FC<FloatingTriggerProps> = ({ onClose }) => {
   );
   const [opacity, setOpacity] = useState<number>(1);
   const [isHovered, setIsHovered] = useState<boolean>(false);
+  const popupContainerRef = useRef<HTMLDivElement>(null);
 
   // Calculate fixed bottom-center position for capsule
   const getCapsulePosition = useCallback(() => {
     const capsuleWidth = 100; // Resting size
-    const capsuleHeight = 40;
+    const capsuleHeight = 24;
     const bottomGap = 24; // 24px from bottom
 
     return {
@@ -115,21 +120,33 @@ const FloatingTriggerInner: React.FC<FloatingTriggerProps> = ({ onClose }) => {
       );
   }, [hiddenReason]);
 
-  // Handle action click - calculate popup position above the clicked icon
+  // Handle action click - calculate popup position above the capsule
   const handleActionClick = (
-    action: 'issue' | 'issues' | 'pinned',
-    iconRect: DOMRect
+    action: 'issue' | 'issues' | 'pinned' | 'menu',
+    iconRect: DOMRect,
+    capsuleRect: DOMRect
   ) => {
-    const popupWidth = 360;
-    const popupHeight =
-      action === 'issue' ? 480 : action === 'pinned' ? 400 : 500;
-    const arrowHeight = 8; // Height of the tooltip arrow
+    // If clicking the same feature that's already open, don't re-trigger
+    if (activeFeature === action) {
+      return;
+    }
 
-    // Center popup horizontally relative to icon
+    // Menu modal is wider than other popups
+    const popupWidth = action === 'menu' ? 600 : 420;
+    const arrowHeight = 8; // Height of the tooltip arrow
+    const gap = 8; // Gap between popup and capsule
+
+    // We need to position the popup so its BOTTOM is above the capsule
+    // This means: capsule.top - gap - arrowHeight = popup bottom
+    // So popup top = capsule.top - gap - arrowHeight - popup.height
+    // BUT we don't know popup height until it renders!
+    // Solution: Position at the bottom and let CSS handle it
+
+    // Center popup horizontally relative to the clicked icon
     const popupX = iconRect.left + iconRect.width / 2 - popupWidth / 2;
-    // Position popup right above the capsule (accounting for arrow)
-    const capsulePos = getCapsulePosition();
-    const popupY = capsulePos.y - popupHeight - arrowHeight;
+    // Position popup with bottom edge just above the capsule
+    // We'll use bottom positioning instead
+    const popupY = capsuleRect.top - arrowHeight - gap;
 
     setPopupPosition({ x: popupX, y: popupY });
     setActiveFeature(action);
@@ -145,6 +162,36 @@ const FloatingTriggerInner: React.FC<FloatingTriggerProps> = ({ onClose }) => {
     setSelectedIssue(issue);
   };
 
+  const renderPopupContent = () => {
+    switch (activeFeature) {
+      case 'issue':
+        return (
+          <CompactIssueCreator
+            onClose={handleClose}
+            portalContainer={popupContainerRef.current}
+          />
+        );
+      case 'issues':
+        return (
+          <CompactIssueList
+            onClose={handleClose}
+            onSelect={handleIssueSelect}
+            portalContainer={popupContainerRef.current}
+          />
+        );
+      case 'pinned':
+        return (
+          <CompactPinnedIssues
+            onClose={handleClose}
+            onSelect={handleIssueSelect}
+            portalContainer={popupContainerRef.current}
+          />
+        );
+      default:
+        return null;
+    }
+  };
+
   return (
     <>
       <FloatingTriggerButton
@@ -156,16 +203,19 @@ const FloatingTriggerInner: React.FC<FloatingTriggerProps> = ({ onClose }) => {
         hasActivePopup={!!activeFeature}
       />
 
-      {/* Tooltip-style popup */}
-      {activeFeature && popupPosition && (
-        <FloatingTriggerPopup
-          feature={activeFeature}
+      {activeFeature && activeFeature !== 'menu' && popupPosition && (
+        <PopupWrapper
           position={popupPosition}
-          selectedIssue={selectedIssue}
           onClose={handleClose}
-          onIssueSelect={handleIssueSelect}
-        />
+          containerRef={popupContainerRef}
+          width={420}
+        >
+          {renderPopupContent()}
+        </PopupWrapper>
       )}
+
+      {/* Main Menu Modal - rendered separately with its own backdrop */}
+      <MainMenuModal isOpen={activeFeature === 'menu'} onClose={handleClose} />
     </>
   );
 };
