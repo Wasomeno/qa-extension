@@ -1,7 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { FiX, FiPlus, FiTrash2, FiAlertCircle, FiCheckCircle } from 'react-icons/fi';
-import { storageService } from '@/services/storage';
+import {
+  FiX,
+  FiPlus,
+  FiTrash2,
+  FiAlertCircle,
+  FiCheckCircle,
+} from 'react-icons/fi';
 import { normalizeDomainInput, isValidDomain } from '@/utils/domain-matcher';
 
 interface SettingsPageProps {
@@ -14,39 +19,6 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ onClose }) => {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-
-  // Load existing domains on mount
-  useEffect(() => {
-    loadDomains();
-  }, []);
-
-  const loadDomains = async () => {
-    try {
-      setIsLoading(true);
-      const settings = await storageService.getSettings();
-      setWhitelistedDomains(settings.floatingTrigger.whitelistedDomains || []);
-    } catch (err) {
-      console.error('Failed to load whitelisted domains:', err);
-      setError('Failed to load settings');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const saveDomains = async (domains: string[]) => {
-    try {
-      await storageService.updateSettings({
-        floatingTrigger: {
-          whitelistedDomains: domains,
-        } as any,
-      });
-      setWhitelistedDomains(domains);
-      showSuccess('Settings saved successfully');
-    } catch (err) {
-      console.error('Failed to save whitelisted domains:', err);
-      showError('Failed to save settings');
-    }
-  };
 
   const handleAddDomain = async () => {
     const trimmed = newDomain.trim();
@@ -69,13 +41,11 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ onClose }) => {
     }
 
     const updated = [...whitelistedDomains, normalized];
-    await saveDomains(updated);
     setNewDomain('');
   };
 
   const handleRemoveDomain = async (domain: string) => {
     const updated = whitelistedDomains.filter(d => d !== domain);
-    await saveDomains(updated);
   };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
@@ -144,7 +114,8 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ onClose }) => {
           <div>
             <h3 className="font-medium text-gray-900 mb-2">Allowed Domains</h3>
             <p className="text-sm text-gray-600 mb-4">
-              Manage domains where the floating trigger will be injected. Leave empty to enable on all sites.
+              Manage domains where the floating trigger will be injected. Leave
+              empty to enable on all sites.
             </p>
 
             {/* Add Domain Input */}
@@ -152,7 +123,7 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ onClose }) => {
               <input
                 type="text"
                 value={newDomain}
-                onChange={(e) => setNewDomain(e.target.value)}
+                onChange={e => setNewDomain(e.target.value)}
                 onKeyPress={handleKeyPress}
                 placeholder="example.com"
                 className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
@@ -174,11 +145,13 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ onClose }) => {
             ) : whitelistedDomains.length === 0 ? (
               <div className="text-center py-8 text-gray-500 text-sm">
                 <p className="mb-2">No domains configured</p>
-                <p className="text-xs">Floating trigger is enabled on all sites</p>
+                <p className="text-xs">
+                  Floating trigger is enabled on all sites
+                </p>
               </div>
             ) : (
               <div className="space-y-2">
-                {whitelistedDomains.map((domain) => (
+                {whitelistedDomains.map(domain => (
                   <motion.div
                     key={domain}
                     initial={{ opacity: 0, y: -10 }}
@@ -186,7 +159,9 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ onClose }) => {
                     exit={{ opacity: 0, y: -10 }}
                     className="flex items-center justify-between p-3 glass-panel rounded-lg"
                   >
-                    <span className="text-sm text-gray-900 font-mono">{domain}</span>
+                    <span className="text-sm text-gray-900 font-mono">
+                      {domain}
+                    </span>
                     <button
                       onClick={() => handleRemoveDomain(domain)}
                       className="p-1.5 text-red-600 hover:bg-red-50 rounded transition-colors"
@@ -202,11 +177,15 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ onClose }) => {
 
           {/* Info Section */}
           <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-            <h4 className="text-sm font-medium text-blue-900 mb-2">How it works</h4>
+            <h4 className="text-sm font-medium text-blue-900 mb-2">
+              How it works
+            </h4>
             <ul className="text-xs text-blue-800 space-y-1">
               <li>• Empty list = trigger enabled on all websites</li>
               <li>• Add domains to restrict where the trigger appears</li>
-              <li>• Domain matching includes subdomains (e.g., app.example.com)</li>
+              <li>
+                • Domain matching includes subdomains (e.g., app.example.com)
+              </li>
               <li>• Changes take effect immediately on page reload</li>
             </ul>
           </div>

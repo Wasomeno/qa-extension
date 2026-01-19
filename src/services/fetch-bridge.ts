@@ -1,20 +1,43 @@
-import { BackgroundFetchRequest, BackgroundFetchResponse, MessageResponse, MessageType } from '@/types/messages';
+import {
+  BackgroundFetchRequest,
+  BackgroundFetchResponse,
+  MessageResponse,
+  MessageType,
+} from '@/types/messages';
 
 function isExtensionPage(): boolean {
-  try { return typeof window !== 'undefined' && String(window.location?.protocol) === 'chrome-extension:'; } catch { return false; }
+  try {
+    return (
+      typeof window !== 'undefined' &&
+      String(window.location?.protocol) === 'chrome-extension:'
+    );
+  } catch {
+    return false;
+  }
 }
 
-async function sendMessageWithRetry(payload: any, attempts = 6, delayMs = 200): Promise<MessageResponse> {
+async function sendMessageWithRetry(
+  payload: any,
+  attempts = 6,
+  delayMs = 200
+): Promise<MessageResponse> {
   let lastErr: any = null;
   for (let i = 0; i < attempts; i++) {
-    const res = await new Promise<MessageResponse | null>((resolve) => {
+    const res = await new Promise<MessageResponse | null>(resolve => {
       try {
-        chrome.runtime.sendMessage(payload, (reply) => {
+        chrome.runtime.sendMessage(payload, reply => {
           const err = chrome.runtime.lastError;
-          if (err) { lastErr = err; resolve(null); return; }
+          if (err) {
+            lastErr = err;
+            resolve(null);
+            return;
+          }
           resolve(reply as MessageResponse);
         });
-      } catch (e) { lastErr = e; resolve(null); }
+      } catch (e) {
+        lastErr = e;
+        resolve(null);
+      }
     });
     if (res) return res;
     await new Promise(r => setTimeout(r, delayMs));
@@ -24,12 +47,18 @@ async function sendMessageWithRetry(payload: any, attempts = 6, delayMs = 200): 
 }
 
 // Simple direct fetch with timeout and response-type handling.
-export async function bridgeFetch<T = any>(req: BackgroundFetchRequest): Promise<BackgroundFetchResponse<T>> {
+export async function bridgeFetch<T = any>(
+  req: BackgroundFetchRequest
+): Promise<BackgroundFetchResponse<T>> {
   // Content scripts run under the page origin and are subject to CORS.
   // Route their requests through the background via message.
   if (!isExtensionPage()) {
     try {
-      const reply = await sendMessageWithRetry({ type: MessageType.BACKGROUND_FETCH, data: req }, 8, 200);
+      const reply = await sendMessageWithRetry(
+        { type: MessageType.BACKGROUND_FETCH, data: req },
+        8,
+        200
+      );
       if (reply && (reply as any).success && (reply as any).data) {
         return (reply as any).data as BackgroundFetchResponse<T>;
       }
@@ -49,8 +78,15 @@ export async function bridgeFetch<T = any>(req: BackgroundFetchRequest): Promise
   // No client-side timeout: never abort requests here.
   try {
     const resp = await fetch(req.url, { ...(req.init as RequestInit) });
+
     const ct = resp.headers.get('content-type') || '';
-    const want = req.responseType || (ct.includes('application/json') ? 'json' : (ct.startsWith('text/') ? 'text' : 'arrayBuffer'));
+    const want =
+      req.responseType ||
+      (ct.includes('application/json')
+        ? 'json'
+        : ct.startsWith('text/')
+        ? 'text'
+        : 'arrayBuffer');
     let body: any = undefined;
     try {
       if (want === 'json') body = await resp.json();
@@ -59,12 +95,17 @@ export async function bridgeFetch<T = any>(req: BackgroundFetchRequest): Promise
         const buf = await resp.arrayBuffer();
         const bytes = new Uint8Array(buf);
         let bin = '';
-        for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+        for (let i = 0; i < bytes.length; i++)
+          bin += String.fromCharCode(bytes[i]);
         body = btoa(bin);
       }
     } catch {}
     const headers: Record<string, string> = {};
-    try { resp.headers.forEach((v, k) => { headers[k] = v; }); } catch {}
+    try {
+      resp.headers.forEach((v, k) => {
+        headers[k] = v;
+      });
+    } catch {}
     return {
       ok: resp.ok,
       status: resp.status,

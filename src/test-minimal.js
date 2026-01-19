@@ -1,26 +1,22 @@
 // MINIMAL TEST CONTENT SCRIPT
-console.log('🚀 MINIMAL TEST: Content script loaded!');
-console.log('🚀 MINIMAL TEST: URL:', window.location.href);
-console.log('🚀 MINIMAL TEST: Document ready state:', document.readyState);
 
 // Wait for DOM to be ready
 function injectTestButton() {
-    console.log('🚀 MINIMAL TEST: Injecting test button...');
-    
-    // Skip on extension pages
-    if (window.location.href.startsWith('chrome://') || 
-        window.location.href.startsWith('chrome-extension://') ||
-        window.location.href.startsWith('edge://') ||
-        window.location.href.startsWith('moz-extension://')) {
-        console.log('🚫 MINIMAL TEST: Skipping on browser internal page');
-        return;
-    }
+  // Skip on extension pages
+  if (
+    window.location.href.startsWith('chrome://') ||
+    window.location.href.startsWith('chrome-extension://') ||
+    window.location.href.startsWith('edge://') ||
+    window.location.href.startsWith('moz-extension://')
+  ) {
+    return;
+  }
 
-    // Create a simple test button
-    const testButton = document.createElement('div');
-    testButton.id = 'qa-test-button';
-    testButton.textContent = 'QA TEST';
-    testButton.style.cssText = `
+  // Create a simple test button
+  const testButton = document.createElement('div');
+  testButton.id = 'qa-test-button';
+  testButton.textContent = 'QA TEST';
+  testButton.style.cssText = `
         position: fixed !important;
         top: 20px !important;
         right: 20px !important;
@@ -39,26 +35,22 @@ function injectTestButton() {
         cursor: pointer !important;
         font-family: Arial, sans-serif !important;
     `;
-    
-    testButton.addEventListener('click', () => {
-        alert('QA Test Button Clicked!');
-        console.log('🚀 MINIMAL TEST: Button clicked!');
-    });
-    
-    // Ensure document.body exists
-    if (document.body) {
-        document.body.appendChild(testButton);
-        console.log('✅ MINIMAL TEST: Test button injected successfully');
-    } else {
-        console.log('❌ MINIMAL TEST: document.body not found');
-    }
+
+  testButton.addEventListener('click', () => {
+    alert('QA Test Button Clicked!');
+  });
+
+  // Ensure document.body exists
+  if (document.body) {
+    document.body.appendChild(testButton);
+  }
 }
 
 // Try multiple injection strategies
 if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', injectTestButton);
+  document.addEventListener('DOMContentLoaded', injectTestButton);
 } else {
-    injectTestButton();
+  injectTestButton();
 }
 
 // Also try after a delay

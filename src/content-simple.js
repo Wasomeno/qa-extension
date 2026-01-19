@@ -1,11 +1,9 @@
 // ULTRA SIMPLE CONTENT SCRIPT TEST
-console.log('🚀🚀🚀 SIMPLE CONTENT SCRIPT LOADED!');
-console.log('🚀🚀🚀 URL:', window.location.href);
-console.log('🚀🚀🚀 DOCUMENT STATE:', document.readyState);
+
 
 // Simple button injection that should work everywhere
 function createSimpleButton() {
-    console.log('🚀🚀🚀 Creating simple button...');
+
     
     // Remove any existing button first
     const existing = document.getElementById('qa-simple-test');
@@ -37,15 +35,12 @@ function createSimpleButton() {
     button.style.border = 'none';
     
     button.onclick = function() {
-        console.log('🚀🚀🚀 Button clicked!');
+
         alert('Simple QA Button Clicked!');
     };
     
     if (document.body) {
         document.body.appendChild(button);
-        console.log('🚀🚀🚀 Button injected successfully!');
-    } else {
-        console.log('🚀🚀🚀 No document.body found!');
     }
 }
 
@@ -60,5 +55,3 @@ if (document.readyState === 'loading') {
 setTimeout(createSimpleButton, 500);
 setTimeout(createSimpleButton, 1000);
 setTimeout(createSimpleButton, 2000);
-
-console.log('🚀🚀🚀 Content script setup complete!');

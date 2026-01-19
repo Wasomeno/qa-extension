@@ -1,0 +1,5 @@
+- [ ] Analyze `src/services/api.ts` for side effects.
+- [ ] Modify `src/components/floating-trigger/components/login-popup.tsx`:
+  - [ ] Add `e.preventDefault()` and `e.stopPropagation()`.
+  - [ ] Add console logs for debugging state flow.
+- [ ] Verify `src/components/floating-trigger/components/popup-wrapper.tsx` click-outside logic.

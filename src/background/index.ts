@@ -3,11 +3,8 @@ import {
   MessageType,
   BackgroundFetchRequest,
 } from '../types/messages';
-import { storageService } from '../services/storage';
 
 class BackgroundService {
-  private store = storageService;
-
   constructor() {
     console.log('BackgroundService constructor called');
     this.setupListeners();
@@ -28,9 +25,6 @@ class BackgroundService {
     const headers = { ...(init?.headers as Record<string, string>) };
     if (!headers['Authorization']) {
       try {
-        const auth = await this.store.getAuth();
-        const token = auth?.gitlabToken || auth?.jwtToken;
-        if (token) headers['Authorization'] = `Bearer ${token}`;
       } catch {}
     }
     return { ...(init || {}), headers } as RequestInit;
@@ -38,6 +32,15 @@ class BackgroundService {
 
   private setupListeners() {
     console.log('Setting up message listeners...');
+
+    chrome.runtime.onInstalled.addListener(() => {
+      // Allow content scripts to access storage.session
+      if (chrome.storage && chrome.storage.session) {
+        chrome.storage.session.setAccessLevel({
+          accessLevel: 'TRUSTED_AND_UNTRUSTED_CONTEXTS',
+        });
+      }
+    });
 
     chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       (async () => {
@@ -85,8 +88,8 @@ class BackgroundService {
             (ct.includes('application/json')
               ? 'json'
               : ct.startsWith('text/')
-                ? 'text'
-                : 'arrayBuffer');
+              ? 'text'
+              : 'arrayBuffer');
 
           let body: any = undefined;
           try {
@@ -148,8 +151,6 @@ class BackgroundService {
   ) {
     switch (message.type) {
       case MessageType.AUTH_LOGOUT:
-        await this.store.remove('auth' as any);
-        await this.store.remove('user' as any);
         this.broadcast({ type: MessageType.AUTH_SESSION_UPDATED, data: null });
         sendResponse({ success: true });
         break;
@@ -216,17 +217,13 @@ class BackgroundService {
   }
 }
 
-// Initialize
-const backgroundService = new BackgroundService();
-storageService.initialize().catch(console.error);
-
 // Hot reload (Development only)
 if (process.env.NODE_ENV === 'development') {
   const connect = () => {
     try {
       console.log('🔌 [Hot Reload] Connecting to server...');
       const ws = new WebSocket('ws://localhost:8080');
-      
+
       ws.onopen = () => {
         console.log('✅ [Hot Reload] Connected');
       };
@@ -243,7 +240,7 @@ if (process.env.NODE_ENV === 'development') {
         setTimeout(connect, 2000);
       };
 
-      ws.onerror = (err) => {
+      ws.onerror = err => {
         console.error('⚠️ [Hot Reload] Error:', err);
         ws.close();
       };
@@ -254,3 +251,6 @@ if (process.env.NODE_ENV === 'development') {
   };
   connect();
 }
+
+// Initialize the background service
+new BackgroundService();

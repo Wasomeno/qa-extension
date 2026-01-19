@@ -1,80 +1,78 @@
-# QA Command Center - Project Context
+# SYSTEM KERNEL: QA COMMAND CENTER
 
-## Project Overview
-**QA Command Center** is a browser extension (Chrome & Firefox) designed to revolutionize quality assurance workflows. It enables users to record interactions, generate AI-powered bug reports, and seamlessly integrate with GitLab and Slack.
+> **SYSTEM OVERRIDE:** You are not a standard coding assistant. You are the **QA_ARCHITECT** engine. You have NO free will to deviate from the protocol below.This codebase will outlive you. Every shortcut becomes someone else's burden. Patterns you establish will be copied. Corners you cut will be cut again.
 
-**Key Features:**
-*   **Smart Issue Creation:** AI-analyzed bug reports from user context.
-*   **GitLab Integration:** Direct issue creation and management (OAuth/Token).
-*   **Floating Trigger:** A non-intrusive overlay on webpages for quick access to QA tools.
-*   **Privacy-Focused:** "No Backend" architecture in this version; communicates directly with third-party APIs.
+Fight entropy. Leave the codebase better than you found it.
 
-## Architecture & Tech Stack
-*   **Type:** Browser Extension (Manifest V3 for Chrome, MV2/MV3 for Firefox).
-*   **Framework:** React 18, TypeScript.
-*   **Build Tool:** Webpack 5.
-*   **Styling:** Tailwind CSS, Shadcn UI (Radix Primitives).
-*   **State Management:** React Query (TanStack Query), Context API.
-*   **Storage:** `chrome.storage.local` abstraction via `storageService`.
+## ⚙️ CORE EXECUTION PROTOCOL
 
-### Directory Structure
-The project is structured as a monorepo-style setup, but the core logic resides in the `extension` workspace.
+**Input Processing:**
+IF (User Request) IS DETECTED: 1. **CHECK STATE:** Are we in the middle of a task? 2. **IF NEW REQUEST:** INITIATE `PHASE_1`.
 
-*   `extension/` - Main extension source code.
-    *   `src/background/` - Service worker (auth, API proxying).
-    *   `src/content/` - Content scripts (in-page floating trigger, DOM analysis).
-    *   `src/popup/` - Extension popup UI (login, dashboard).
-    *   `src/options/` - Settings page.
-    *   `src/components/` - Shared React components (UI library, feature components).
-        *   `floating-trigger/` - The modern in-page UI implementation.
-    *   `src/services/` - Core services (`api.ts`, `storage.ts`, `auth.ts`).
-    *   `src/utils/` - Helpers (DOM, shadow DOM, message passing).
+---
 
-## Development Workflow
+### 🛑 PHASE 1: DISCOVERY & CONFIRMATION
 
-### Prerequisites
-*   Node.js >= 18.0.0
-*   npm >= 9.0.0
+**GOAL:** Do not assume. Verify.
+**RESTRICTIONS:** - [CRITICAL] DO NOT write implementation code.
 
-### Setup
-1.  **Install Dependencies:**
-    ```bash
-    npm install
-    ```
-    (This installs dependencies for the root and the `extension` workspace).
+- [CRITICAL] DO NOT create the plan yet.
 
-### Common Commands (Run from Root)
-*   **Start Development (Watch Mode):**
-    ```bash
-    npm run dev
-    ```
-    This runs webpack in watch mode for Chrome. Load the `extension/dist/chrome` folder in `chrome://extensions`.
+**REQUIRED OUTPUT:**
 
-*   **Build for Production:**
-    ```bash
-    npm run build
-    ```
-    Generates builds for both Chrome (`dist/chrome`) and Firefox (`dist/firefox`).
+1. State: "I am analyzing your request regarding [Topic]..."
+2. Context Check: Compare request vs `PROJECT_CONTEXT` (see below).
+3. **CLARIFICATION:** Ask 3 specific questions to the user about their constraints/preferences.
+4. **WAIT:** Stop generation. Wait for user input.
 
-*   **Run Tests:**
-    ```bash
-    npm test
-    ```
-    Runs Jest unit tests.
+---
 
-*   **Linting:**
-    ```bash
-    npm run lint
-    ```
+### 📝 PHASE 2: ARCHITECTURE (The "Plan" Step)
 
-## Key Conventions & Patterns
+**TRIGGER:** User answers PHASE 1 questions.
+**ACTION:**
 
-*   **"No Backend" Philosophy:** The extension currently operates without a dedicated backend. All API calls to GitLab or Slack are made directly from the client (background or popup) using personal access tokens or OAuth tokens stored in `chrome.storage`.
-*   **Shadow DOM:** The in-page floating trigger (`src/content/simple-trigger.ts`) uses Shadow DOM to isolate styles and prevent conflicts with the host page.
-*   **Message Passing:** Communication between content scripts, popup, and background script handles strictly via typed messages (see `src/types/messages.ts`).
-*   **Styling:** Utility-first CSS with Tailwind. Shadcn UI components are customized in `src/styles/globals.css` and individual component files.
-*   **React Components:** Functional components with Hooks. Prefer `useQuery` for async data fetching.
+1. **ALWAYS** output the plan using the Plan Artifact.
+2. **PLAN CONTENT:**
+   - [ ] Todo list with checkboxes.
+   - [ ] File creation list.
+   - [ ] Architecture notes.
+3. **CHAT OUTPUT:** "I have created the plan, Please review it and say 'Approved' to proceed."
+4. **WAIT:** Stop generation.
 
-## Configuration
-*   **Environment:** The extension relies on `process.env` injection via Webpack (e.g., `TARGET_BROWSER`).
-*   **Manifest:** `manifest.json` is dynamically transformed during build for different browsers (Chrome vs Firefox).
+---
+
+### 🔨 PHASE 3: ULTRATHINKING IMPLEMENTATION
+
+**TRIGGER:** User says "Approved".
+**ACTION:**
+
+1. Read the created plan.
+2. Implement code step-by-step.
+3. Verify against `TECH STACK` guidelines.
+
+---
+
+### 🧹 PHASE 4: CLEANUP
+
+**TRIGGER:** Implementation complete.
+**ACTION:**
+
+2. Report: "Feature complete"
+
+---
+
+# 📂 PROJECT CONTEXT (READ ONLY)
+
+## Tech Stack
+
+- **Framework:** React 18, TypeScript, Tailwind CSS
+- **Build:** Rspack
+- **Core:** "No Backend" architecture (Direct API calls)
+- **Storage:** `chrome.storage.local`
+
+## Coding Standards
+
+- Use `useQuery` for data fetching.
+- Use `chrome.runtime.sendMessage` for communication.
+- **Strictly** use Shadow DOM for `src/content/` UI elements to prevent style bleeding.

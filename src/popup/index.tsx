@@ -14,12 +14,9 @@ import {
   FiCheckCircle,
   FiCamera,
   FiFileText,
-  FiArrowLeft,
 } from 'react-icons/fi';
 import { Loader } from 'lucide-react';
 
-import { apiService } from '@/services/api';
-import { storageService } from '@/services/storage';
 import { UserData, MessageType } from '@/types/messages';
 import SettingsPage from '@/popup/components/SettingsPage';
 
@@ -74,204 +71,11 @@ const PopupApp: React.FC = () => {
 
   // Legacy OAuth helpers removed — background handles OAuth and writes session.
 
-  useEffect(() => {
-    // Note: Previously had a debug timeout that forced exit from loading.
-    // It has been removed to avoid interrupting normal initialization.
-
-    const handleInitialization = async () => {
-      console.log('🚀 Starting popup initialization...');
-
-      // Test storage service immediately
-      try {
-        console.log('🧪 Testing storage service...');
-        const testResult = await storageService.getAll();
-        console.log('🧪 Storage service test result:', testResult);
-
-        // Test API service
-        try {
-          console.log('🧪 Testing API service health check...');
-          const healthResult = await apiService.healthCheck();
-          console.log('🧪 API health check result:', healthResult);
-        } catch (e) {
-          console.warn('🧪 Health check failed (non-fatal in popup init):', e);
-        }
-      } catch (testError) {
-        console.error('🧪 Service tests failed:', testError);
-      }
-
-      // OAuth session handled by background; proceed with normal initialization
-      await initialize();
-      initializationCompleted.current = true;
-    };
-
-    // Initialize popup normally
-    const initialize = async () => {
-      try {
-        console.log('🚀 Starting initialization...');
-        await initializePopup();
-        console.log('✅ Initialization completed successfully');
-      } catch (error) {
-        console.error('❌ Primary initialization failed:', error);
-        setState(prev => ({
-          ...prev,
-          currentView: 'login',
-          error: 'Failed to initialize extension',
-        }));
-      }
-    };
-
-    console.log('🚀 STARTING INITIALIZATION - SINGLE CALL');
-    handleInitialization();
-
-    // Fallback timeout - if initialization takes too long, show login
-    const fallbackTimeout = setTimeout(() => {
-      if (!initializationCompleted.current) {
-        console.error(
-          '⏰ Initialization timed out after 8 seconds, forcing login view'
-        );
-        setState(prev => {
-          if (prev.currentView === 'loading') {
-            console.log('⏰ TIMEOUT: Forcing transition from loading to login');
-            return {
-              ...prev,
-              currentView: 'login',
-              connectionStatus: 'disconnected',
-              error: 'Initialization timed out. Please try again.',
-              isAuthenticated: false,
-              user: null,
-            };
-          }
-          return prev;
-        });
-        initializationCompleted.current = true;
-      }
-    }, 8000); // 8 second timeout
-
-    return () => {
-      clearTimeout(fallbackTimeout);
-    };
-  }, []);
-
-  const initializePopup = async (): Promise<void> => {
-    try {
-      console.log('🔍 Initializing popup...');
-
-      // First, let's see ALL storage data
-      const allStorage = await storageService.getAll();
-      console.log('🔍 ALL STORAGE DATA:', allStorage);
-
-      // Check authentication status step by step
-      const auth = await storageService.getAuth();
-      console.log('🔍 Raw auth data:', auth);
-
-      const isAuthenticated = await storageService.isAuthenticated();
-      console.log('🔍 isAuthenticated result:', isAuthenticated);
-
-      const user = await storageService.getUser();
-      console.log('🔍 User data:', user);
-
-      // Add timeout safety check
-      if (!initializationCompleted.current) {
-        console.log('🔍 Setting initializationCompleted flag');
-        initializationCompleted.current = true;
-      }
-
-      console.log('🔍 Current stored data summary:', {
-        isAuthenticated,
-        hasUser: !!user,
-        hasAuth: !!auth,
-        userEmail: user?.email,
-        tokenExists: !!auth?.jwtToken,
-        refreshTokenExists: !!auth?.refreshToken,
-        expiresAt: auth?.expiresAt,
-        tokenExpired: auth?.expiresAt
-          ? Date.now() > auth.expiresAt
-          : 'no expiry',
-        currentTime: Date.now(),
-      });
-
-      console.log('🔍 Auth check results:', {
-        isAuthenticated,
-        hasUser: !!user,
-        hasAuth: !!auth,
-        hasJwtToken: !!auth?.jwtToken,
-        hasRefreshToken: !!auth?.refreshToken,
-        tokenExpiry: auth?.expiresAt
-          ? new Date(auth.expiresAt).toISOString()
-          : 'none',
-        currentTime: new Date().toISOString(),
-      });
-
-      if (isAuthenticated && user) {
-        console.log('🟢 AUTHENTICATED PATH: User found and authenticated');
-        console.log('🟢 Setting currentView to dashboard...');
-
-        setState(prev => {
-          console.log('🟢 setState: dashboard - prev state:', prev.currentView);
-          const newState = {
-            ...prev,
-            isAuthenticated: true,
-            user,
-            currentView: 'dashboard' as const,
-            connectionStatus: 'connected' as const,
-            error: null, // Clear any previous errors
-          };
-          console.log('🟢 New state set:', newState.currentView);
-          console.log('🟢 STATE UPDATE: Loading -> Dashboard SUCCESSFUL');
-          return newState;
-        });
-
-        console.log('🟢 Dashboard state set, loading additional data...');
-      } else {
-        console.log(
-          '🔴 NOT AUTHENTICATED PATH: isAuthenticated=',
-          isAuthenticated,
-          'user=',
-          !!user
-        );
-        console.log('🔴 Setting currentView to login...');
-
-        setState(prev => {
-          console.log('🔴 setState: login - prev state:', prev.currentView);
-          const newState = {
-            ...prev,
-            currentView: 'login' as const,
-            connectionStatus: 'disconnected' as const,
-            isAuthenticated: false,
-            user: null,
-            error: null, // Clear any previous errors
-          };
-          console.log('🔴 New state set:', newState.currentView);
-          console.log('🔴 STATE UPDATE: Loading -> Login SUCCESSFUL');
-          return newState;
-        });
-      }
-    } catch (error) {
-      console.error('Failed to initialize popup:', error);
-      setState(prev => ({
-        ...prev,
-        error:
-          'Failed to initialize extension: ' +
-          (error instanceof Error ? error.message : 'Unknown error'),
-        connectionStatus: 'disconnected',
-        currentView: 'login',
-        isAuthenticated: false,
-        user: null,
-      }));
-    }
-  };
-
   const checkConnection = async (): Promise<void> => {
     try {
       setState(prev => ({
         ...prev,
         connectionStatus: 'connecting',
-      }));
-
-      const response = await apiService.healthCheck();
-      setState(prev => ({
-        ...prev,
-        connectionStatus: response.success ? 'connected' : 'disconnected',
       }));
     } catch (error) {
       console.warn('Connection check failed:', error);
@@ -345,42 +149,6 @@ const PopupApp: React.FC = () => {
   };
 
   // Removed recent screenshots loader
-
-  const handleLogout = async (): Promise<void> => {
-    try {
-      await apiService.logout();
-
-      // Clear all stored data
-      await storageService.remove('auth');
-      await storageService.remove('user');
-      await storageService.remove('settings');
-
-      setState(prev => ({
-        ...prev,
-        isAuthenticated: false,
-        user: null,
-        currentView: 'login',
-        connectionStatus: 'disconnected',
-        success: 'Logged out successfully',
-        error: null,
-      }));
-    } catch (error) {
-      console.error('Logout failed:', error);
-
-      // Force clear storage even if API call fails
-      await storageService.remove('auth');
-      await storageService.remove('user');
-      setState(prev => ({
-        ...prev,
-        isAuthenticated: false,
-        user: null,
-        currentView: 'login',
-        connectionStatus: 'disconnected',
-        success: 'Logged out successfully',
-        error: null,
-      }));
-    }
-  };
 
   const handleQuickCapture = async (): Promise<void> => {
     try {
@@ -598,7 +366,9 @@ const PopupApp: React.FC = () => {
         console.error('Direct capture failed:', error);
         setState(prev => ({
           ...prev,
-          error: `Screenshot capture failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+          error: `Screenshot capture failed: ${
+            error instanceof Error ? error.message : 'Unknown error'
+          }`,
         }));
       }
     });
@@ -683,26 +453,6 @@ const PopupApp: React.FC = () => {
       return () => clearTimeout(timer);
     }
   }, [state.error, state.success]);
-
-  // React to background-auth completion via session changes
-  useEffect(() => {
-    const unsub = storageService.onChanged('session' as any, async s => {
-      const token = (s as any)?.accessToken;
-      if (token) {
-        const user = await storageService.getUser();
-        setState(prev => ({
-          ...prev,
-          isAuthenticated: true,
-          user: user || (s as any)?.user || null,
-          currentView: 'dashboard',
-          error: null,
-        }));
-      }
-    });
-    return () => {
-      if (unsub) unsub();
-    };
-  }, []);
 
   if (state.currentView === 'loading') {
     return (
@@ -817,16 +567,16 @@ const PopupApp: React.FC = () => {
                   state.connectionStatus === 'connected'
                     ? 'bg-green-500'
                     : state.connectionStatus === 'connecting'
-                      ? 'bg-yellow-500 animate-pulse'
-                      : 'bg-red-500'
+                    ? 'bg-yellow-500 animate-pulse'
+                    : 'bg-red-500'
                 }`}
               />
               <span className="text-xs text-gray-600">
                 {state.connectionStatus === 'connected'
                   ? 'Connected'
                   : state.connectionStatus === 'connecting'
-                    ? 'Connecting...'
-                    : 'Offline'}
+                  ? 'Connecting...'
+                  : 'Offline'}
               </span>
             </div>
           </div>
@@ -849,7 +599,6 @@ const PopupApp: React.FC = () => {
             </button>
             <button
               type="button"
-              onClick={handleLogout}
               className="p-2 rounded-md text-gray-600 hover:text-gray-900 hover:bg-gray-100 transition-colors"
               title="Logout"
             >

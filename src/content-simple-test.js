@@ -1,11 +1,7 @@
 // Ultra simple content script test - no TypeScript, no complex imports
-console.log('🔥🔥🔥 SIMPLE TEST: Content script loaded!');
-console.log('🔥🔥🔥 SIMPLE TEST: URL:', window.location.href);
 
 // Add a simple test element immediately
 function addTestElement() {
-  console.log('🔧 SIMPLE TEST: Adding test element...');
-  
   const testElement = document.createElement('div');
   testElement.id = 'qa-simple-test';
   testElement.style.cssText = `
@@ -26,13 +22,11 @@ function addTestElement() {
     font-family: Arial, sans-serif;
   `;
   testElement.textContent = 'SIMPLE TEST';
-  testElement.onclick = function() {
-    console.log('🎯 SIMPLE TEST: Element clicked!');
+  testElement.onclick = function () {
     alert('Simple test works!');
   };
-  
+
   document.body.appendChild(testElement);
-  console.log('✅ SIMPLE TEST: Element added to DOM');
 }
 
 // Wait for DOM to be ready
@@ -41,5 +35,3 @@ if (document.readyState === 'loading') {
 } else {
   addTestElement();
 }
-
-console.log('🔥🔥🔥 SIMPLE TEST: Script execution completed');

@@ -2,10 +2,6 @@
  * Standalone Content Script - No external dependencies
  */
 
-console.log('🔥 QA EXTENSION: Standalone content script loaded!');
-console.log('🔥 QA EXTENSION: Current URL:', window.location.href);
-console.log('🔥 QA EXTENSION: Document ready state:', document.readyState);
-
 class StandaloneContentScript {
   constructor() {
     this.isInitialized = false;
@@ -13,11 +9,11 @@ class StandaloneContentScript {
     // Drag functionality properties
     this.isDragging = false;
     this.dragOffset = { x: 0, y: 0 };
-    this.currentPosition = { 
-      x: window.innerWidth - 80, 
-      y: window.innerHeight / 2 
+    this.currentPosition = {
+      x: window.innerWidth - 80,
+      y: window.innerHeight / 2,
     };
-    console.log('🚀 QA Extension Standalone Content Script starting...');
+
     this.initialize();
   }
 
@@ -34,8 +30,6 @@ class StandaloneContentScript {
       this.isInitialized = true;
       this.injectStyles();
       this.injectFloatingTrigger();
-      
-      console.log('QA Standalone content script initialized on:', window.location.href);
     } catch (error) {
       console.error('Failed to initialize standalone content script:', error);
     }
@@ -45,20 +39,18 @@ class StandaloneContentScript {
    * Inject floating trigger into the page
    */
   injectFloatingTrigger() {
-    console.log('🎯 Attempting to inject floating trigger on:', window.location.href);
-    
     // Don't inject on extension pages or special browser pages
-    if (window.location.href.startsWith('chrome://') || 
-        window.location.href.startsWith('chrome-extension://') ||
-        window.location.href.startsWith('edge://') ||
-        window.location.href.startsWith('moz-extension://')) {
-      console.log('🚫 Skipping injection on browser internal page');
+    if (
+      window.location.href.startsWith('chrome://') ||
+      window.location.href.startsWith('chrome-extension://') ||
+      window.location.href.startsWith('edge://') ||
+      window.location.href.startsWith('moz-extension://')
+    ) {
       return;
     }
 
     // Check if already injected
     if (this.floatingTriggerContainer) {
-      console.log('✅ Floating trigger already injected');
       return;
     }
 
@@ -66,12 +58,12 @@ class StandaloneContentScript {
       // Create container
       this.floatingTriggerContainer = document.createElement('div');
       this.floatingTriggerContainer.id = 'qa-floating-trigger-root';
-      
+
       // Create the trigger button
       const trigger = document.createElement('div');
       trigger.className = 'qa-floating-trigger-btn';
       trigger.textContent = 'QA';
-      
+
       // Apply modern glassmorphism styles
       Object.assign(trigger.style, {
         position: 'fixed',
@@ -103,9 +95,10 @@ class StandaloneContentScript {
         fontWeight: '600',
         pointerEvents: 'auto',
         transition: 'all 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94)',
-        fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+        fontFamily:
+          '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
         // Additional glass effect
-        filter: 'drop-shadow(0 4px 6px rgba(0, 0, 0, 0.1))'
+        filter: 'drop-shadow(0 4px 6px rgba(0, 0, 0, 0.1))',
       });
 
       // Add click handler (only if not dragging)
@@ -114,12 +107,12 @@ class StandaloneContentScript {
         mouseDownTime = Date.now();
       });
 
-      trigger.addEventListener('click', (e) => {
+      trigger.addEventListener('click', e => {
         // Only show menu if it was a quick click (not a drag)
         if (Date.now() - mouseDownTime > 200 || this.isDragging) return;
-        
+
         e.stopPropagation();
-        console.log('🎯 Floating trigger clicked!');
+
         this.showFloatingMenu(trigger);
       });
 
@@ -140,7 +133,8 @@ class StandaloneContentScript {
             0 0 0 2px rgba(255, 255, 255, 0.3),
             0 8px 32px rgba(255, 255, 255, 0.2)
           `;
-          trigger.style.filter = 'drop-shadow(0 8px 16px rgba(0, 0, 0, 0.15)) brightness(110%)';
+          trigger.style.filter =
+            'drop-shadow(0 8px 16px rgba(0, 0, 0, 0.15)) brightness(110%)';
           trigger.style.color = 'rgba(255, 255, 255, 1)';
         }
       });
@@ -165,8 +159,6 @@ class StandaloneContentScript {
       // Add to page
       this.floatingTriggerContainer.appendChild(trigger);
       document.body.appendChild(this.floatingTriggerContainer);
-
-      console.log('✅ QA floating trigger injected successfully');
     } catch (error) {
       console.error('❌ Failed to inject floating trigger:', error);
     }
@@ -177,31 +169,38 @@ class StandaloneContentScript {
    */
   setupDragHandlers(trigger) {
     // Mouse down - start potential drag
-    trigger.addEventListener('mousedown', (e) => {
-      if (e.button === 0) { // Left mouse button only
+    trigger.addEventListener('mousedown', e => {
+      if (e.button === 0) {
+        // Left mouse button only
         this.isDragging = false; // Will be set to true on first mousemove
         trigger.style.cursor = 'grabbing';
         trigger.style.transition = 'none';
         trigger.style.transform = 'translate(-50%, -50%) scale(0.95)';
-        
+
         this.dragOffset.x = e.clientX - this.currentPosition.x;
         this.dragOffset.y = e.clientY - this.currentPosition.y;
-        
+
         e.preventDefault();
       }
     });
 
     // Mouse move - handle dragging
-    document.addEventListener('mousemove', (e) => {
+    document.addEventListener('mousemove', e => {
       if (this.dragOffset.x !== 0 || this.dragOffset.y !== 0) {
         this.isDragging = true;
-        
-        const newX = Math.max(30, Math.min(e.clientX - this.dragOffset.x, window.innerWidth - 30));
-        const newY = Math.max(30, Math.min(e.clientY - this.dragOffset.y, window.innerHeight - 30));
-        
+
+        const newX = Math.max(
+          30,
+          Math.min(e.clientX - this.dragOffset.x, window.innerWidth - 30)
+        );
+        const newY = Math.max(
+          30,
+          Math.min(e.clientY - this.dragOffset.y, window.innerHeight - 30)
+        );
+
         this.currentPosition.x = newX;
         this.currentPosition.y = newY;
-        
+
         trigger.style.left = newX + 'px';
         trigger.style.top = newY + 'px';
       }
@@ -212,14 +211,15 @@ class StandaloneContentScript {
       if (this.dragOffset.x !== 0 || this.dragOffset.y !== 0) {
         this.dragOffset.x = 0;
         this.dragOffset.y = 0;
-        
+
         trigger.style.cursor = 'pointer';
-        trigger.style.transition = 'all 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94)';
+        trigger.style.transition =
+          'all 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94)';
         trigger.style.transform = 'translate(-50%, -50%) scale(1)';
-        
+
         // Snap to edges if close
         this.snapToEdges(trigger);
-        
+
         // Reset dragging state after a short delay
         setTimeout(() => {
           this.isDragging = false;
@@ -229,9 +229,15 @@ class StandaloneContentScript {
 
     // Handle window resize
     window.addEventListener('resize', () => {
-      const newX = Math.max(30, Math.min(this.currentPosition.x, window.innerWidth - 30));
-      const newY = Math.max(30, Math.min(this.currentPosition.y, window.innerHeight - 30));
-      
+      const newX = Math.max(
+        30,
+        Math.min(this.currentPosition.x, window.innerWidth - 30)
+      );
+      const newY = Math.max(
+        30,
+        Math.min(this.currentPosition.y, window.innerHeight - 30)
+      );
+
       if (newX !== this.currentPosition.x || newY !== this.currentPosition.y) {
         this.currentPosition.x = newX;
         this.currentPosition.y = newY;
@@ -247,7 +253,7 @@ class StandaloneContentScript {
   snapToEdges(trigger) {
     const snapDistance = 50;
     let snapped = false;
-    
+
     // Snap to left edge
     if (this.currentPosition.x < snapDistance) {
       this.currentPosition.x = 30;
@@ -258,7 +264,7 @@ class StandaloneContentScript {
       this.currentPosition.x = window.innerWidth - 30;
       snapped = true;
     }
-    
+
     // Snap to top edge
     if (this.currentPosition.y < snapDistance) {
       this.currentPosition.y = 30;
@@ -269,7 +275,7 @@ class StandaloneContentScript {
       this.currentPosition.y = window.innerHeight - 30;
       snapped = true;
     }
-    
+
     if (snapped) {
       trigger.style.left = this.currentPosition.x + 'px';
       trigger.style.top = this.currentPosition.y + 'px';
@@ -298,23 +304,23 @@ class StandaloneContentScript {
     const menuWidth = 220;
     const menuHeight = 200; // Approximate height
     const triggerRect = trigger.getBoundingClientRect();
-    
+
     // Default position: to the left of trigger
     let menuX = this.currentPosition.x - menuWidth - 20;
     let menuY = this.currentPosition.y;
-    
+
     // Adjust if menu goes off screen
     if (menuX < 10) {
       // Show on right side if left side doesn't fit
       menuX = this.currentPosition.x + 50;
     }
-    if (menuY - menuHeight/2 < 10) {
+    if (menuY - menuHeight / 2 < 10) {
       // Align to top if menu goes above screen
-      menuY = menuHeight/2 + 10;
+      menuY = menuHeight / 2 + 10;
     }
-    if (menuY + menuHeight/2 > window.innerHeight - 10) {
+    if (menuY + menuHeight / 2 > window.innerHeight - 10) {
       // Align to bottom if menu goes below screen
-      menuY = window.innerHeight - menuHeight/2 - 10;
+      menuY = window.innerHeight - menuHeight / 2 - 10;
     }
     if (menuX + menuWidth > window.innerWidth - 10) {
       // Force to left side with margin if right side doesn't fit
@@ -340,12 +346,13 @@ class StandaloneContentScript {
       padding: '16px',
       width: menuWidth + 'px',
       zIndex: '2147483646',
-      fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+      fontFamily:
+        '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
       filter: 'drop-shadow(0 8px 16px rgba(0, 0, 0, 0.1))',
       // Initial animation state
       opacity: '0',
       transform: 'translateY(-50%) scale(0.8)',
-      transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
+      transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
     });
 
     // Style menu items with enhanced glassmorphism
@@ -365,7 +372,7 @@ class StandaloneContentScript {
         border: '1px solid rgba(255, 255, 255, 0.3)',
         transition: 'all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94)',
         boxShadow: 'inset 0 2px 8px rgba(255, 255, 255, 0.2)',
-        textShadow: '0 1px 2px rgba(0, 0, 0, 0.3)'
+        textShadow: '0 1px 2px rgba(0, 0, 0, 0.3)',
       });
 
       item.addEventListener('mouseenter', () => {
@@ -379,7 +386,7 @@ class StandaloneContentScript {
             inset 0 3px 12px rgba(255, 255, 255, 0.3),
             0 4px 16px rgba(31, 38, 135, 0.2)
           `,
-          color: 'rgba(255, 255, 255, 1)'
+          color: 'rgba(255, 255, 255, 1)',
         });
       });
 
@@ -391,15 +398,15 @@ class StandaloneContentScript {
           border: '1px solid rgba(255, 255, 255, 0.3)',
           transform: 'translateY(0) scale(1)',
           boxShadow: 'inset 0 2px 8px rgba(255, 255, 255, 0.2)',
-          color: 'rgba(255, 255, 255, 0.9)'
+          color: 'rgba(255, 255, 255, 0.9)',
         });
       });
 
-      item.addEventListener('click', (e) => {
+      item.addEventListener('click', e => {
         const action = e.target.getAttribute('data-action');
-        console.log('Menu action:', action);
+
         alert(`${action} clicked!`);
-        
+
         // Animate out before removing
         menu.style.opacity = '0';
         menu.style.transform = 'translateY(-50%) scale(0.8)';
@@ -412,7 +419,7 @@ class StandaloneContentScript {
     });
 
     document.body.appendChild(menu);
-    
+
     // Animate menu in
     requestAnimationFrame(() => {
       menu.style.opacity = '1';
@@ -421,18 +428,22 @@ class StandaloneContentScript {
 
     // Close menu when clicking outside
     setTimeout(() => {
-      document.addEventListener('click', (e) => {
-        if (!menu.contains(e.target) && !trigger.contains(e.target)) {
-          // Animate out before removing
-          menu.style.opacity = '0';
-          menu.style.transform = 'translateY(-50%) scale(0.8)';
-          setTimeout(() => {
-            if (menu.parentNode) {
-              menu.remove();
-            }
-          }, 200);
-        }
-      }, { once: true });
+      document.addEventListener(
+        'click',
+        e => {
+          if (!menu.contains(e.target) && !trigger.contains(e.target)) {
+            // Animate out before removing
+            menu.style.opacity = '0';
+            menu.style.transform = 'translateY(-50%) scale(0.8)';
+            setTimeout(() => {
+              if (menu.parentNode) {
+                menu.remove();
+              }
+            }, 200);
+          }
+        },
+        { once: true }
+      );
     }, 100);
   }
 
@@ -462,7 +473,7 @@ class StandaloneContentScript {
       this.floatingTriggerContainer.remove();
       this.floatingTriggerContainer = null;
     }
-    
+
     const styles = document.querySelector('#qa-extension-styles');
     if (styles) {
       styles.remove();
@@ -471,9 +482,7 @@ class StandaloneContentScript {
 }
 
 // Initialize content script
-console.log('📋 Initializing QA Extension Standalone Content Script...');
 const contentScript = new StandaloneContentScript();
-console.log('✅ QA Extension Standalone Content Script initialized');
 
 // Clean up on page unload
 window.addEventListener('beforeunload', () => {

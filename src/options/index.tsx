@@ -2,11 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { createRoot } from 'react-dom/client';
 import { motion, AnimatePresence } from 'framer-motion';
 import '../styles/globals.css';
-import { 
-  FiSave, 
-  FiRefreshCw, 
-  FiTrash2, 
-  FiDownload, 
+import {
+  FiSave,
+  FiRefreshCw,
+  FiTrash2,
+  FiDownload,
   FiUpload,
   FiGitlab,
   FiSlack,
@@ -20,17 +20,16 @@ import {
   FiShield,
   FiDatabase,
   FiInfo,
-  FiExternalLink
+  FiExternalLink,
 } from 'react-icons/fi';
 
-import { apiService } from '@/services/api';
-import { storageService, ExtensionSettings } from '@/services/storage';
 import { UserData } from '@/types/messages';
+import { ExtensionSettings } from '@/services/storage';
 
 interface OptionsState {
   currentSection: string;
   user: UserData | null;
-  settings: ExtensionSettings | null;
+  settings: null;
   integrations: {
     gitlab: { connected: boolean; token?: string };
     slack: { connected: boolean; token?: string };
@@ -53,23 +52,25 @@ const OptionsApp: React.FC = () => {
     settings: null,
     integrations: {
       gitlab: { connected: false },
-      slack: { connected: false }
+      slack: { connected: false },
     },
     notifications: {
       desktop: true,
       sound: true,
-      slack: false
+      slack: false,
     },
     isLoading: true,
     isSaving: false,
     error: null,
-    success: null
+    success: null,
   });
 
-  const [tempSettings, setTempSettings] = useState<Partial<ExtensionSettings>>({});
+  const [tempSettings, setTempSettings] = useState<Partial<ExtensionSettings>>(
+    {}
+  );
   const [integrationTokens, setIntegrationTokens] = useState({
     gitlab: '',
-    slack: ''
+    slack: '',
   });
 
   useEffect(() => {
@@ -79,268 +80,65 @@ const OptionsApp: React.FC = () => {
   const loadInitialData = async (): Promise<void> => {
     try {
       setState(prev => ({ ...prev, isLoading: true }));
-
-      const [user, settings] = await Promise.all([
-        storageService.getUser(),
-        storageService.getSettings()
-      ]);
-
-      setState(prev => ({
-        ...prev,
-        user: user || null,
-        settings: settings || null,
-        integrations: {
-          gitlab: { connected: user?.gitlabConnected || false },
-          slack: { connected: user?.slackConnected || false }
-        },
-        notifications: settings?.notificationSettings || prev.notifications,
-        isLoading: false
-      }));
-
-      setTempSettings(settings || {});
+      // Mock loading
+      setTimeout(() => {
+        setState(prev => ({ ...prev, isLoading: false }));
+      }, 500);
     } catch (error) {
       console.error('Failed to load initial data:', error);
       setState(prev => ({
         ...prev,
         error: 'Failed to load settings',
-        isLoading: false
+        isLoading: false,
       }));
     }
   };
 
-  const saveSettings = async (): Promise<void> => {
-    if (!tempSettings) return;
-
-    setState(prev => ({ ...prev, isSaving: true, error: null }));
-
+  const saveSettings = async () => {
+    setState(prev => ({ ...prev, isSaving: true }));
     try {
-      await storageService.updateSettings(tempSettings);
-      setState(prev => ({
-        ...prev,
-        settings: { ...prev.settings!, ...tempSettings },
-        success: 'Settings saved successfully!',
-        isSaving: false
-      }));
+      // Mock saving
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      setState(prev => ({ ...prev, success: 'Settings saved successfully' }));
     } catch (error) {
-      setState(prev => ({
-        ...prev,
-        error: 'Failed to save settings',
-        isSaving: false
-      }));
+      setState(prev => ({ ...prev, error: 'Failed to save settings' }));
+    } finally {
+      setState(prev => ({ ...prev, isSaving: false }));
     }
   };
 
-  const connectGitLab = async (): Promise<void> => {
-    if (!integrationTokens.gitlab.trim()) {
-      setState(prev => ({ ...prev, error: 'Please enter a GitLab token' }));
-      return;
-    }
+  const exportData = () => {
+    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(tempSettings));
+    const downloadAnchorNode = document.createElement('a');
+    downloadAnchorNode.setAttribute("href", dataStr);
+    downloadAnchorNode.setAttribute("download", "settings.json");
+    document.body.appendChild(downloadAnchorNode);
+    downloadAnchorNode.click();
+    downloadAnchorNode.remove();
+  };
 
-    setState(prev => ({ ...prev, isSaving: true, error: null }));
-
-    try {
-      const response = await apiService.connectGitLab(integrationTokens.gitlab);
-      
-      if (response.success) {
-        setState(prev => ({
-          ...prev,
-          integrations: {
-            ...prev.integrations,
-            gitlab: { connected: true, token: integrationTokens.gitlab }
-          },
-          success: 'GitLab connected successfully!',
-          isSaving: false
-        }));
-        setIntegrationTokens(prev => ({ ...prev, gitlab: '' }));
-      } else {
-        setState(prev => ({
-          ...prev,
-          error: response.error || 'Failed to connect GitLab',
-          isSaving: false
-        }));
-      }
-    } catch (error) {
-      setState(prev => ({
-        ...prev,
-        error: 'Failed to connect GitLab',
-        isSaving: false
-      }));
+  const importData = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const fileReader = new FileReader();
+    if (event.target.files && event.target.files[0]) {
+      fileReader.readAsText(event.target.files[0], "UTF-8");
+      fileReader.onload = e => {
+        if (e.target?.result) {
+          try {
+            const parsed = JSON.parse(e.target.result as string);
+            setTempSettings(parsed);
+            setState(prev => ({ ...prev, success: 'Data imported successfully' }));
+          } catch (error) {
+            setState(prev => ({ ...prev, error: 'Failed to parse file' }));
+          }
+        }
+      };
     }
   };
 
-  const disconnectGitLab = async (): Promise<void> => {
-    setState(prev => ({ ...prev, isSaving: true, error: null }));
-
-    try {
-      const response = await apiService.disconnectGitLab();
-      
-      if (response.success) {
-        setState(prev => ({
-          ...prev,
-          integrations: {
-            ...prev.integrations,
-            gitlab: { connected: false }
-          },
-          success: 'GitLab disconnected successfully!',
-          isSaving: false
-        }));
-      } else {
-        setState(prev => ({
-          ...prev,
-          error: response.error || 'Failed to disconnect GitLab',
-          isSaving: false
-        }));
-      }
-    } catch (error) {
-      setState(prev => ({
-        ...prev,
-        error: 'Failed to disconnect GitLab',
-        isSaving: false
-      }));
-    }
-  };
-
-  const connectSlack = async (): Promise<void> => {
-    if (!integrationTokens.slack.trim()) {
-      setState(prev => ({ ...prev, error: 'Please enter a Slack token' }));
-      return;
-    }
-
-    setState(prev => ({ ...prev, isSaving: true, error: null }));
-
-    try {
-      const response = await apiService.connectSlack(integrationTokens.slack);
-      
-      if (response.success) {
-        setState(prev => ({
-          ...prev,
-          integrations: {
-            ...prev.integrations,
-            slack: { connected: true, token: integrationTokens.slack }
-          },
-          success: 'Slack connected successfully!',
-          isSaving: false
-        }));
-        setIntegrationTokens(prev => ({ ...prev, slack: '' }));
-      } else {
-        setState(prev => ({
-          ...prev,
-          error: response.error || 'Failed to connect Slack',
-          isSaving: false
-        }));
-      }
-    } catch (error) {
-      setState(prev => ({
-        ...prev,
-        error: 'Failed to connect Slack',
-        isSaving: false
-      }));
-    }
-  };
-
-  const disconnectSlack = async (): Promise<void> => {
-    setState(prev => ({ ...prev, isSaving: true, error: null }));
-
-    try {
-      const response = await apiService.disconnectSlack();
-      
-      if (response.success) {
-        setState(prev => ({
-          ...prev,
-          integrations: {
-            ...prev.integrations,
-            slack: { connected: false }
-          },
-          success: 'Slack disconnected successfully!',
-          isSaving: false
-        }));
-      } else {
-        setState(prev => ({
-          ...prev,
-          error: response.error || 'Failed to disconnect Slack',
-          isSaving: false
-        }));
-      }
-    } catch (error) {
-      setState(prev => ({
-        ...prev,
-        error: 'Failed to disconnect Slack',
-        isSaving: false
-      }));
-    }
-  };
-
-  const exportData = async (): Promise<void> => {
-    try {
-      const data = await storageService.exportData();
-      const blob = new Blob([data], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `qa-extension-backup-${new Date().toISOString().split('T')[0]}.json`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-      
-      setState(prev => ({
-        ...prev,
-        success: 'Data exported successfully!'
-      }));
-    } catch (error) {
-      setState(prev => ({
-        ...prev,
-        error: 'Failed to export data'
-      }));
-    }
-  };
-
-  const importData = async (event: React.ChangeEvent<HTMLInputElement>): Promise<void> => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
-    try {
-      const text = await file.text();
-      await storageService.importData(text);
-      
-      setState(prev => ({
-        ...prev,
-        success: 'Data imported successfully! Please reload the extension.'
-      }));
-      
-      // Reload the page to reflect changes
-      setTimeout(() => {
-        window.location.reload();
-      }, 2000);
-    } catch (error) {
-      setState(prev => ({
-        ...prev,
-        error: 'Failed to import data. Please check the file format.'
-      }));
-    }
-  };
-
-  const clearAllData = async (): Promise<void> => {
-    if (!confirm('Are you sure you want to clear all data? This action cannot be undone.')) {
-      return;
-    }
-
-    try {
-      await storageService.clear();
-      setState(prev => ({
-        ...prev,
-        success: 'All data cleared successfully! Please reload the extension.'
-      }));
-      
-      setTimeout(() => {
-        window.location.reload();
-      }, 2000);
-    } catch (error) {
-      setState(prev => ({
-        ...prev,
-        error: 'Failed to clear data'
-      }));
+  const clearAllData = () => {
+    if (confirm('Are you sure you want to clear all data? This cannot be undone.')) {
+      setTempSettings({});
+      setState(prev => ({ ...prev, success: 'All data cleared' }));
     }
   };
 
@@ -348,7 +146,7 @@ const OptionsApp: React.FC = () => {
     setState(prev => ({
       ...prev,
       error: null,
-      success: null
+      success: null,
     }));
   };
 
@@ -371,7 +169,12 @@ const OptionsApp: React.FC = () => {
         <label className="form-label">Theme</label>
         <select
           value={tempSettings.theme || 'auto'}
-          onChange={(e) => setTempSettings(prev => ({ ...prev, theme: e.target.value as 'light' | 'dark' | 'auto' }))}
+          onChange={e =>
+            setTempSettings(prev => ({
+              ...prev,
+              theme: e.target.value as 'light' | 'dark' | 'auto',
+            }))
+          }
           className="form-select"
         >
           <option value="light">Light</option>
@@ -387,7 +190,12 @@ const OptionsApp: React.FC = () => {
         <input
           type="text"
           value={tempSettings.defaultProject || ''}
-          onChange={(e) => setTempSettings(prev => ({ ...prev, defaultProject: e.target.value }))}
+          onChange={e =>
+            setTempSettings(prev => ({
+              ...prev,
+              defaultProject: e.target.value,
+            }))
+          }
           className="form-input"
           placeholder="Default project ID for new issues"
         />
@@ -413,9 +221,10 @@ const OptionsApp: React.FC = () => {
             <span className="status-badge status-connected">Connected</span>
           )}
         </div>
-        
+
         <p className="card-description">
-          Connect with GitLab to automatically create issues and sync project data.
+          Connect with GitLab to automatically create issues and sync project
+          data.
         </p>
 
         {!state.integrations.gitlab.connected ? (
@@ -425,21 +234,26 @@ const OptionsApp: React.FC = () => {
               <input
                 type="password"
                 value={integrationTokens.gitlab}
-                onChange={(e) => setIntegrationTokens(prev => ({ ...prev, gitlab: e.target.value }))}
+                onChange={e =>
+                  setIntegrationTokens(prev => ({
+                    ...prev,
+                    gitlab: e.target.value,
+                  }))
+                }
                 className="form-input"
                 placeholder="Enter your GitLab token"
               />
               <small className="form-help">
-                <a href="https://docs.gitlab.com/ee/user/profile/personal_access_tokens.html" target="_blank" rel="noopener noreferrer">
+                <a
+                  href="https://docs.gitlab.com/ee/user/profile/personal_access_tokens.html"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
                   How to create a GitLab token <FiExternalLink />
                 </a>
               </small>
             </div>
-            <button
-              onClick={connectGitLab}
-              className="btn btn-primary"
-              disabled={state.isSaving}
-            >
+            <button className="btn btn-primary" disabled={state.isSaving}>
               {state.isSaving ? <FiRefreshCw className="spin" /> : <FiGitlab />}
               Connect GitLab
             </button>
@@ -450,11 +264,7 @@ const OptionsApp: React.FC = () => {
               <FiCheck />
               <span>GitLab is connected and ready to use</span>
             </div>
-            <button
-              onClick={disconnectGitLab}
-              className="btn btn-danger btn-sm"
-              disabled={state.isSaving}
-            >
+            <button className="btn btn-danger btn-sm" disabled={state.isSaving}>
               {state.isSaving ? <FiRefreshCw className="spin" /> : <FiX />}
               Disconnect
             </button>
@@ -471,7 +281,7 @@ const OptionsApp: React.FC = () => {
             <span className="status-badge status-connected">Connected</span>
           )}
         </div>
-        
+
         <p className="card-description">
           Connect with Slack to receive notifications and collaborate on issues.
         </p>
@@ -483,21 +293,26 @@ const OptionsApp: React.FC = () => {
               <input
                 type="password"
                 value={integrationTokens.slack}
-                onChange={(e) => setIntegrationTokens(prev => ({ ...prev, slack: e.target.value }))}
+                onChange={e =>
+                  setIntegrationTokens(prev => ({
+                    ...prev,
+                    slack: e.target.value,
+                  }))
+                }
                 className="form-input"
                 placeholder="Enter your Slack bot token"
               />
               <small className="form-help">
-                <a href="https://api.slack.com/authentication/token-types#bot" target="_blank" rel="noopener noreferrer">
+                <a
+                  href="https://api.slack.com/authentication/token-types#bot"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
                   How to create a Slack bot token <FiExternalLink />
                 </a>
               </small>
             </div>
-            <button
-              onClick={connectSlack}
-              className="btn btn-primary"
-              disabled={state.isSaving}
-            >
+            <button className="btn btn-primary" disabled={state.isSaving}>
               {state.isSaving ? <FiRefreshCw className="spin" /> : <FiSlack />}
               Connect Slack
             </button>
@@ -508,11 +323,7 @@ const OptionsApp: React.FC = () => {
               <FiCheck />
               <span>Slack is connected and ready to use</span>
             </div>
-            <button
-              onClick={disconnectSlack}
-              className="btn btn-danger btn-sm"
-              disabled={state.isSaving}
-            >
+            <button className="btn btn-danger btn-sm" disabled={state.isSaving}>
               {state.isSaving ? <FiRefreshCw className="spin" /> : <FiX />}
               Disconnect
             </button>
@@ -534,14 +345,16 @@ const OptionsApp: React.FC = () => {
           <input
             type="checkbox"
             checked={tempSettings.notificationSettings?.desktop || false}
-            onChange={(e) => setTempSettings(prev => ({
-              ...prev,
-              notificationSettings: {
-                desktop: e.target.checked,
-                sound: prev.notificationSettings?.sound || false,
-                slack: prev.notificationSettings?.slack || false
-              }
-            }))}
+            onChange={e =>
+              setTempSettings(prev => ({
+                ...prev,
+                notificationSettings: {
+                  desktop: e.target.checked,
+                  sound: prev.notificationSettings?.sound || false,
+                  slack: prev.notificationSettings?.slack || false,
+                },
+              }))
+            }
             className="toggle-input"
             id="desktop-notifications"
           />
@@ -550,7 +363,9 @@ const OptionsApp: React.FC = () => {
             Desktop Notifications
           </label>
         </div>
-        <small className="form-help">Show browser notifications for important events</small>
+        <small className="form-help">
+          Show browser notifications for important events
+        </small>
       </div>
 
       <div className="form-group">
@@ -558,14 +373,16 @@ const OptionsApp: React.FC = () => {
           <input
             type="checkbox"
             checked={tempSettings.notificationSettings?.sound || false}
-            onChange={(e) => setTempSettings(prev => ({
-              ...prev,
-              notificationSettings: {
-                desktop: prev.notificationSettings?.desktop || false,
-                sound: e.target.checked,
-                slack: prev.notificationSettings?.slack || false
-              }
-            }))}
+            onChange={e =>
+              setTempSettings(prev => ({
+                ...prev,
+                notificationSettings: {
+                  desktop: prev.notificationSettings?.desktop || false,
+                  sound: e.target.checked,
+                  slack: prev.notificationSettings?.slack || false,
+                },
+              }))
+            }
             className="toggle-input"
             id="sound-notifications"
           />
@@ -581,14 +398,16 @@ const OptionsApp: React.FC = () => {
           <input
             type="checkbox"
             checked={tempSettings.notificationSettings?.slack || false}
-            onChange={(e) => setTempSettings(prev => ({
-              ...prev,
-              notificationSettings: {
-                desktop: prev.notificationSettings?.desktop || false,
-                sound: prev.notificationSettings?.sound || false,
-                slack: e.target.checked
-              }
-            }))}
+            onChange={e =>
+              setTempSettings(prev => ({
+                ...prev,
+                notificationSettings: {
+                  desktop: prev.notificationSettings?.desktop || false,
+                  sound: prev.notificationSettings?.sound || false,
+                  slack: e.target.checked,
+                },
+              }))
+            }
             className="toggle-input"
             id="slack-notifications"
             disabled={!state.integrations.slack.connected}
@@ -599,10 +418,9 @@ const OptionsApp: React.FC = () => {
           </label>
         </div>
         <small className="form-help">
-          {state.integrations.slack.connected 
+          {state.integrations.slack.connected
             ? 'Send notifications to Slack channels'
-            : 'Connect Slack to enable this feature'
-          }
+            : 'Connect Slack to enable this feature'}
         </small>
       </div>
     </div>
@@ -620,13 +438,13 @@ const OptionsApp: React.FC = () => {
           <FiDatabase />
           Data Management
         </div>
-        
+
         <div className="data-actions">
           <button onClick={exportData} className="btn btn-secondary">
             <FiDownload />
             Export Data
           </button>
-          
+
           <label className="btn btn-secondary" htmlFor="import-file">
             <FiUpload />
             Import Data
@@ -638,7 +456,7 @@ const OptionsApp: React.FC = () => {
               style={{ display: 'none' }}
             />
           </label>
-          
+
           <button onClick={clearAllData} className="btn btn-danger">
             <FiTrash2 />
             Clear All Data
@@ -651,7 +469,7 @@ const OptionsApp: React.FC = () => {
           <FiShield />
           Privacy Settings
         </div>
-        
+
         <div className="form-group">
           <div className="toggle-wrapper">
             <input
@@ -665,7 +483,9 @@ const OptionsApp: React.FC = () => {
               Store data locally only
             </label>
           </div>
-          <small className="form-help">All settings are stored locally in your browser</small>
+          <small className="form-help">
+            All settings are stored locally in your browser
+          </small>
         </div>
 
         <div className="form-group">
@@ -681,7 +501,9 @@ const OptionsApp: React.FC = () => {
               Share anonymous analytics
             </label>
           </div>
-          <small className="form-help">Currently disabled - no analytics are collected</small>
+          <small className="form-help">
+            Currently disabled - no analytics are collected
+          </small>
         </div>
       </div>
     </div>
@@ -699,7 +521,7 @@ const OptionsApp: React.FC = () => {
           <FiInfo />
           Extension Information
         </div>
-        
+
         <div className="about-info">
           <div className="info-item">
             <label>Version:</label>
@@ -715,7 +537,11 @@ const OptionsApp: React.FC = () => {
           </div>
           <div className="info-item">
             <label>Repository:</label>
-            <a href="https://github.com/your-repo/qa-extension" target="_blank" rel="noopener noreferrer">
+            <a
+              href="https://github.com/your-repo/qa-extension"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
               GitHub <FiExternalLink />
             </a>
           </div>
@@ -738,10 +564,8 @@ const OptionsApp: React.FC = () => {
       </div>
 
       <div className="card">
-        <div className="card-title">
-          Third-party Libraries
-        </div>
-        
+        <div className="card-title">Third-party Libraries</div>
+
         <div className="libraries-list">
           <div className="library-item">
             <span>React</span>
@@ -790,14 +614,27 @@ const OptionsApp: React.FC = () => {
             <ul className="nav-menu">
               {[
                 { id: 'general', label: 'General', icon: <FiSettings /> },
-                { id: 'integrations', label: 'Integrations', icon: <FiGitlab /> },
-                { id: 'notifications', label: 'Notifications', icon: <FiBell /> },
+                {
+                  id: 'integrations',
+                  label: 'Integrations',
+                  icon: <FiGitlab />,
+                },
+                {
+                  id: 'notifications',
+                  label: 'Notifications',
+                  icon: <FiBell />,
+                },
                 { id: 'data', label: 'Data & Privacy', icon: <FiShield /> },
-                { id: 'about', label: 'About', icon: <FiInfo /> }
+                { id: 'about', label: 'About', icon: <FiInfo /> },
               ].map(section => (
                 <li key={section.id} className="nav-item">
                   <button
-                    onClick={() => setState(prev => ({ ...prev, currentSection: section.id }))}
+                    onClick={() =>
+                      setState(prev => ({
+                        ...prev,
+                        currentSection: section.id,
+                      }))
+                    }
                     className={`nav-link ${state.currentSection === section.id ? 'active' : ''}`}
                   >
                     {section.icon}
@@ -839,13 +676,17 @@ const OptionsApp: React.FC = () => {
 
           {/* Content Sections */}
           {state.currentSection === 'general' && renderGeneralSection()}
-          {state.currentSection === 'integrations' && renderIntegrationsSection()}
-          {state.currentSection === 'notifications' && renderNotificationsSection()}
+          {state.currentSection === 'integrations' &&
+            renderIntegrationsSection()}
+          {state.currentSection === 'notifications' &&
+            renderNotificationsSection()}
           {state.currentSection === 'data' && renderDataSection()}
           {state.currentSection === 'about' && renderAboutSection()}
 
           {/* Save Button (except for integrations, data, and about sections) */}
-          {!['integrations', 'data', 'about'].includes(state.currentSection) && (
+          {!['integrations', 'data', 'about'].includes(
+            state.currentSection
+          ) && (
             <div className="save-section">
               <button
                 onClick={saveSettings}
@@ -1331,7 +1172,7 @@ const OptionsApp: React.FC = () => {
                 flex-direction: column;
               }
             }
-          `
+          `,
         }}
       />
     </div>
