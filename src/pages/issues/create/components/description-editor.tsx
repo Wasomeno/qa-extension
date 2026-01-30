@@ -28,7 +28,6 @@ import {
   Loader2,
   FileText,
   Table as TableIcon,
-  Plus,
   Trash2,
   Columns,
   Rows,
@@ -101,7 +100,7 @@ export const DescriptionEditor = ({
     editorProps: {
       attributes: {
         class: cn(
-          'prose prose-sm max-w-none focus:outline-none min-h-[150px] px-4 py-3',
+          'prose prose-sm max-w-none focus:outline-none min-h-[300px] px-4 py-3',
           className
         ),
       },
@@ -135,7 +134,7 @@ export const DescriptionEditor = ({
   }
 
   return (
-    <div className="border border-gray-200 rounded-xl bg-gray-50 focus-within:bg-white focus-within:ring-2 focus-within:ring-blue-100 transition-all overflow-hidden flex flex-col shadow-sm">
+    <div className="border border-gray-200 rounded-xl bg-gray-50 focus-within:bg-white focus-within:ring-2 focus-within:ring-blue-100 transition-all overflow-hidden flex flex-col shadow-sm ">
       {/* Toolbar */}
       <div className="flex flex-wrap items-center gap-1 p-1.5 bg-gray-50/80 border-b border-gray-200 sticky top-0 z-10 backdrop-blur-sm">
         {/* History */}
@@ -393,10 +392,10 @@ export const DescriptionEditor = ({
         </div>
       </div>
 
-      {/* 
-        Inject essential styles for Tiptap content. 
-        Since we are in a Shadow DOM or isolated environment, 
-        global styles might not apply correctly. 
+      {/*
+        Inject essential styles for Tiptap content.
+        Since we are in a Shadow DOM or isolated environment,
+        global styles might not apply correctly.
       */}
       <style>{`
         .ProseMirror {
@@ -458,7 +457,7 @@ export const DescriptionEditor = ({
           color: #2563eb;
           text-decoration: underline;
         }
-        
+
         /* Table Styles */
         .ProseMirror table {
           border-collapse: collapse;

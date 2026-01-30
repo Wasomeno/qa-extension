@@ -56,16 +56,15 @@ export const SingleIssueTab: React.FC<SingleIssueTabProps> = ({
   };
 
   return (
-    <div className="space-y-6 max-w-2xl mt-0">
+    <div className="space-y-6 mt-0">
       <IssueFormFields
         formState={formState}
         onChange={updates => setFormState(prev => ({ ...prev, ...updates }))}
         portalContainer={portalContainer}
       />
-
-      <div className="flex gap-3 pt-4">
+      <div className="flex justify-center">
         <Button
-          className="flex-1"
+          className="flex-1 max-w-sm"
           size="lg"
           onClick={handleCreateSingleIssue}
           disabled={
@@ -78,9 +77,6 @@ export const SingleIssueTab: React.FC<SingleIssueTabProps> = ({
             <Loader2 className="w-4 h-4 mr-2 animate-spin" />
           )}
           Create Issue
-        </Button>
-        <Button variant="secondary" size="lg">
-          Save Draft
         </Button>
       </div>
     </div>

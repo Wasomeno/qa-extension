@@ -189,7 +189,7 @@ const FloatingTriggerInner: React.FC<FloatingTriggerProps> = ({ onClose }) => {
           position={popupPosition}
           onClose={handleClose}
           containerRef={popupContainerRef}
-          width={420}
+          width={360}
         >
           {renderPopupContent()}
         </PopupWrapper>

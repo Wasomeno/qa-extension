@@ -9,7 +9,11 @@ import { PinNoteModal } from './components/pin-note-modal';
 import { PinnedIssueMeta } from '@/types/issues';
 import { usePinnedIssues, PinnedIssue } from '@/hooks/use-pinned-issues';
 
-export const PinnedPage: React.FC = () => {
+interface PinnedPageProps {
+  portalContainer?: HTMLElement | null;
+}
+
+export const PinnedPage: React.FC<PinnedPageProps> = ({ portalContainer }) => {
   const { pinnedIssues, isLoading, togglePin, updatePinMeta } =
     usePinnedIssues();
 

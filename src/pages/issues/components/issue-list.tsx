@@ -43,24 +43,30 @@ export const IssueList: React.FC<IssueListProps> = ({
   }
 
   // Group issues by project
-  const groupedIssues = issues.reduce((acc, issue) => {
-    const pid = issue.project_id.toString();
-    if (!acc[pid]) {
-      acc[pid] = {
-        projectId: pid,
-        projectName: issue.project_name,
-        issues: [],
-      };
-    }
-    acc[pid].issues.push(issue);
-    return acc;
-  }, {} as Record<string, { projectId: string; projectName: string; issues: Issue[] }>);
+  const groupedIssues = issues.reduce(
+    (acc, issue) => {
+      const pid = issue.project_id.toString();
+      if (!acc[pid]) {
+        acc[pid] = {
+          projectId: pid,
+          projectName: issue.project_name,
+          issues: [],
+        };
+      }
+      acc[pid].issues.push(issue);
+      return acc;
+    },
+    {} as Record<
+      string,
+      { projectId: string; projectName: string; issues: Issue[] }
+    >
+  );
 
   const projectGroups = Object.values(groupedIssues);
 
   if (issues.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center py-12 text-center">
+      <div className="flex flex-col flex-1 w-full items-center justify-center py-12 text-center">
         <div className="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center mb-4">
           <FolderOpen className="w-8 h-8 text-gray-300" />
         </div>
@@ -94,7 +100,7 @@ export const IssueList: React.FC<IssueListProps> = ({
   }
 
   return (
-    <div className="space-y-4 pb-12">
+    <div className="space-y-4 pb-12 flex flex-1 flex-col w-full">
       {projectGroups.map(group => {
         const isCollapsed = collapsedProjects[group.projectId];
 

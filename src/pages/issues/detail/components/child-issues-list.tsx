@@ -14,6 +14,7 @@ import { AddChildModal } from './add-child-modal';
 import { toast } from 'sonner';
 import { ChildIssue } from '@/types/issues';
 import { cn } from '@/lib/utils';
+import { IssueFormState } from '@/pages/issues/create/components/issue-form-fields';
 // MockIssue was removed from types/issues.ts, using Issue from api/issue instead
 // check if AddChildModal can handle it
 
@@ -22,10 +23,12 @@ import { useGetIssues } from '@/pages/issues/hooks/use-get-issues';
 
 interface ChildIssuesListProps {
   parentIssue: Issue;
+  portalContainer?: HTMLElement | null;
 }
 
 export const ChildIssuesList: React.FC<ChildIssuesListProps> = ({
   parentIssue,
+  portalContainer,
 }) => {
   const queryClient = useQueryClient();
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -60,9 +63,14 @@ export const ChildIssuesList: React.FC<ChildIssuesListProps> = ({
   });
 
   const createIssueMutation = useMutation({
-    mutationFn: (title: string) =>
+    mutationFn: (formState: IssueFormState) =>
       createIssue(parentIssue.project_id, {
-        title,
+        title: formState.title,
+        description: formState.description,
+        assignee_ids: formState.selectedAssignee
+          ? [parseInt(formState.selectedAssignee.id)]
+          : [],
+        labels: formState.selectedLabels.map(l => l.name),
       }),
     onSuccess: async newIssue => {
       if (newIssue.data && newIssue.data.iid) {
@@ -91,8 +99,8 @@ export const ChildIssuesList: React.FC<ChildIssuesListProps> = ({
     createLinkMutation.mutate(issue.iid.toString());
   };
 
-  const handleCreateNew = (title: string) => {
-    createIssueMutation.mutate(title);
+  const handleCreateNew = (formState: IssueFormState) => {
+    createIssueMutation.mutate(formState);
   };
 
   if (isLoading) {
@@ -183,33 +191,26 @@ export const ChildIssuesList: React.FC<ChildIssuesListProps> = ({
             ))}
           </div>
         ) : (
-          <div className="p-8 text-center">
+          <div className="p-8 text-center flex flex-col w-full items-center justify-center">
             <div className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-gray-50 mb-3">
-              <LinkIcon className="w-5 h-5 text-gray-400" />
+              <LinkIcon className="w-5 h-5 text-neutral-400" />
             </div>
-            <h3 className="text-sm font-medium text-gray-900">
+            <h3 className="text-sm font-medium text-neutral-500">
               No child tasks
             </h3>
-            <p className="text-xs text-gray-500 mt-1 mb-4">
+            <p className="text-xs text-neutral-400 mt-1 mb-4">
               Break down this issue into smaller tasks
             </p>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setIsAddModalOpen(true)}
-            >
-              Add
-            </Button>
           </div>
         )}
       </div>
-
       <AddChildModal
         isOpen={isAddModalOpen}
         onClose={() => setIsAddModalOpen(false)}
         onAdd={handleAddExisting}
         onCreate={handleCreateNew}
         parentIssue={parentIssue as any}
+        portalContainer={portalContainer}
       />
     </div>
   );

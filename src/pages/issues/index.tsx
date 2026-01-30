@@ -4,7 +4,6 @@ import { IssueFilterState } from '@/types/issues';
 import { IssueDetailPage } from './detail';
 import { IssueFilterBar } from './components/filter-bar';
 import { IssueList } from './components/issue-list';
-import { QuickFilterChips } from './components/quick-filter-chips';
 import { useGetProjects } from '@/hooks/use-get-projects';
 import { useGetLabels } from '@/hooks/use-get-labels';
 import { useGetIssues } from './hooks/use-get-issues';
@@ -13,9 +12,13 @@ import { Issue } from '@/api/issue';
 
 interface IssuesPageProps {
   initialIssue?: Issue | null;
+  portalContainer?: HTMLElement | null;
 }
 
-export const IssuesPage: React.FC<IssuesPageProps> = ({ initialIssue }) => {
+export const IssuesPage: React.FC<IssuesPageProps> = ({
+  initialIssue,
+  portalContainer,
+}) => {
   const [filters, setFilters] = useState<IssueFilterState>({
     search: '',
     projectId: 'ALL',
@@ -73,18 +76,6 @@ export const IssuesPage: React.FC<IssuesPageProps> = ({ initialIssue }) => {
     setFilters(prev => ({ ...prev, [key]: value }));
   };
 
-  const handleQuickFilterToggle = (
-    key: keyof IssueFilterState['quickFilters']
-  ) => {
-    setFilters(prev => ({
-      ...prev,
-      quickFilters: {
-        ...prev.quickFilters,
-        [key]: !prev.quickFilters[key],
-      },
-    }));
-  };
-
   // If an issue is selected, show the detail page instead of the list
   if (selectedIssue) {
     return (
@@ -93,13 +84,14 @@ export const IssuesPage: React.FC<IssuesPageProps> = ({ initialIssue }) => {
           key={selectedIssue.id}
           issue={selectedIssue}
           onBack={() => setSelectedIssue(null)}
+          portalContainer={portalContainer}
         />
       </AnimatePresence>
     );
   }
 
   return (
-    <div className="flex flex-col h-full relative overflow-hidden">
+    <div className="flex flex-1 w-full flex-col overflow-hidden">
       {/* Header & Filters */}
       <div className="flex-none space-y-4 px-8 pt-8 pb-4 border-b border-gray-100 bg-white z-10">
         <div>
@@ -108,21 +100,17 @@ export const IssuesPage: React.FC<IssuesPageProps> = ({ initialIssue }) => {
             Manage issues across your projects
           </p>
         </div>
-
         <IssueFilterBar
           filters={filters}
           onFilterChange={handleFilterChange}
           projectOptions={projectOptions}
           labelOptions={labelOptions}
-        />
-        <QuickFilterChips
-          filters={filters.quickFilters}
-          onToggle={handleQuickFilterToggle}
+          portalContainer={portalContainer}
         />
       </div>
 
       {/* Main Content Area */}
-      <div className="flex-1 overflow-y-auto overscroll-contain mt-2 px-8 pb-8">
+      <div className="flex-1 flex flex-col w-full overflow-y-auto overscroll-contain mt-2 px-8 pb-8">
         <IssueList
           issues={issues.data}
           isLoading={issues.isLoading}

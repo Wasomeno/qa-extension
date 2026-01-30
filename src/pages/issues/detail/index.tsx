@@ -38,6 +38,7 @@ import { ChildIssuesList } from '@/pages/issues/detail/components/child-issues-l
 interface IssueDetailPageProps {
   issue: Issue;
   onBack: () => void;
+  portalContainer?: HTMLElement | null;
 }
 
 const statusConfig: Record<
@@ -149,6 +150,7 @@ const EditableSection: React.FC<EditableSectionProps> = ({
 export const IssueDetailPage: React.FC<IssueDetailPageProps> = ({
   issue,
   onBack,
+  portalContainer,
 }) => {
   // Removed history state, using props directly
   const containerRef = React.useRef<HTMLDivElement>(null);
@@ -383,7 +385,7 @@ export const IssueDetailPage: React.FC<IssueDetailPageProps> = ({
                 content={description}
                 onChange={setDescription}
                 className="min-h-[200px]"
-                portalContainer={containerRef.current}
+                portalContainer={portalContainer || containerRef.current}
               />
             }
           >
@@ -394,7 +396,10 @@ export const IssueDetailPage: React.FC<IssueDetailPageProps> = ({
           </EditableSection>
 
           {/* Child Tasks */}
-          <ChildIssuesList parentIssue={issue} />
+          <ChildIssuesList
+            parentIssue={issue}
+            portalContainer={portalContainer}
+          />
 
           {/* Comments Section */}
           <div className="space-y-6">
@@ -470,33 +475,6 @@ export const IssueDetailPage: React.FC<IssueDetailPageProps> = ({
                     </div>
                   ))}
             </div>
-
-            {/* Comment Placeholder */}
-            <div className="flex gap-3">
-              <div className="flex-shrink-0">
-                {/* Current User Avatar Placeholder - ideally should come from user context */}
-                <div className="w-8 h-8 rounded-full bg-gray-100 border border-gray-200 flex items-center justify-center text-gray-400">
-                  You
-                </div>
-              </div>
-              <div className="flex-1">
-                <div className="border border-gray-200 rounded-lg bg-white overflow-hidden focus-within:ring-2 focus-within:ring-blue-50 focus-within:border-blue-400 transition-all">
-                  <textarea
-                    className="w-full p-3 text-sm border-0 resize-none focus:ring-0 min-h-[100px]"
-                    placeholder="Write a comment..."
-                    disabled
-                  />
-                  <div className="bg-gray-50 px-3 py-2 border-t border-gray-100 flex items-center justify-between">
-                    <span className="text-xs text-amber-600 font-medium bg-amber-50 px-2 py-0.5 rounded">
-                      will integrate it later
-                    </span>
-                    <Button disabled size="sm" className="h-7 text-xs">
-                      Comment
-                    </Button>
-                  </div>
-                </div>
-              </div>
-            </div>
           </div>
         </div>
 
@@ -520,7 +498,9 @@ export const IssueDetailPage: React.FC<IssueDetailPageProps> = ({
                   <SelectTrigger className="w-full h-8 text-xs">
                     <SelectValue placeholder="Select status" />
                   </SelectTrigger>
-                  <SelectContent container={containerRef.current}>
+                  <SelectContent
+                    container={portalContainer || containerRef.current}
+                  >
                     <SelectItem value="opened">Open</SelectItem>
                     <SelectItem value="closed">Closed</SelectItem>
                   </SelectContent>
@@ -638,7 +618,7 @@ export const IssueDetailPage: React.FC<IssueDetailPageProps> = ({
                     }
                   }}
                   disabled={isSaving}
-                  portalContainer={containerRef.current}
+                  portalContainer={portalContainer || containerRef.current}
                 />
               }
             >

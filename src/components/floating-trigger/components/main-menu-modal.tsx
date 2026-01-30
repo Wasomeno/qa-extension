@@ -1,6 +1,13 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { LayoutDashboard, List, Pin, PlusCircle, X, SquareKanban } from 'lucide-react';
+import {
+  LayoutDashboard,
+  List,
+  Pin,
+  PlusCircle,
+  X,
+  SquareKanban,
+} from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useKeyboardIsolation } from '@/hooks/use-keyboard-isolation';
 import { useSessionUser } from '@/hooks/use-session-user';
@@ -13,7 +20,28 @@ import { PinnedPage } from '@/pages/pinned';
 import { CreateIssuePage } from '@/pages/issues/create';
 import { ProfilePage } from '@/pages/profile';
 
-type MenuView = 'dashboard' | 'issues' | 'boards' | 'pinned' | 'create' | 'profile';
+import {
+  SidebarProvider,
+  Sidebar,
+  SidebarContent,
+  SidebarHeader,
+  SidebarGroup,
+  SidebarGroupContent,
+  SidebarMenu,
+  SidebarMenuItem,
+  SidebarMenuButton,
+  SidebarFooter,
+  SidebarTrigger,
+  SidebarRail,
+} from '@/components/ui/sidebar';
+
+type MenuView =
+  | 'dashboard'
+  | 'issues'
+  | 'boards'
+  | 'pinned'
+  | 'create'
+  | 'profile';
 
 interface MenuItem {
   id: MenuView;
@@ -44,6 +72,7 @@ const MainMenuModal: React.FC<MainMenuModalProps> = ({
   const keyboardIsolation = useKeyboardIsolation();
   const [container, setContainer] = useState<HTMLDivElement | null>(null);
   const { user } = useSessionUser();
+  const [internalIssue, setInternalIssue] = useState<any>(null);
 
   // Switch to issues view if initialIssue is provided
   React.useEffect(() => {
@@ -52,20 +81,35 @@ const MainMenuModal: React.FC<MainMenuModalProps> = ({
     }
   }, [isOpen, initialIssue]);
 
+  const handleNavigateToIssue = (issue: any) => {
+    setInternalIssue(issue);
+    setActiveView('issues');
+  };
+
   const renderContent = () => {
     switch (activeView) {
       case 'dashboard':
-        return <DashboardPage />;
+        return <DashboardPage portalContainer={container} />;
       case 'issues':
-        return <IssuesPage initialIssue={initialIssue} />;
+        return (
+          <IssuesPage
+            initialIssue={internalIssue || initialIssue}
+            portalContainer={container}
+          />
+        );
       case 'boards':
-        return <BoardsPage />;
+        return (
+          <BoardsPage
+            portalContainer={container}
+            onNavigateToIssue={handleNavigateToIssue}
+          />
+        );
       case 'pinned':
-        return <PinnedPage />;
+        return <PinnedPage portalContainer={container} />;
       case 'create':
         return <CreateIssuePage portalContainer={container} />;
       case 'profile':
-        return <ProfilePage />;
+        return <ProfilePage portalContainer={container} />;
       default:
         return <DashboardPage />;
     }
@@ -102,7 +146,7 @@ const MainMenuModal: React.FC<MainMenuModalProps> = ({
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
               transition={{ type: 'spring', stiffness: 300, damping: 30 }}
-              className="bg-white rounded-2xl overflow-hidden shadow-2xl border border-gray-200 pointer-events-auto"
+              className="relative bg-white rounded-2xl overflow-hidden shadow-2xl border border-gray-200 pointer-events-auto"
               style={{
                 width: '1000px',
                 maxWidth: '95vw',
@@ -112,102 +156,110 @@ const MainMenuModal: React.FC<MainMenuModalProps> = ({
               }}
               {...keyboardIsolation}
             >
-              <div className="flex h-full">
-                {/* Sidebar */}
-                <div className="w-[220px] bg-gray-50/80 border-r border-gray-200/60 flex flex-col">
-                  {/* Logo / Header */}
-                  <div className="px-5 py-5 border-b border-gray-200/60">
-                    <h2 className="text-base font-semibold text-gray-900">
-                      Gitlab Companion
-                    </h2>
-                    <p className="text-xs text-gray-500 mt-0.5">Workspace</p>
-                  </div>
-
-                  {/* Menu Items */}
-                  <nav className="flex-1 px-3 py-4 space-y-1">
-                    {MENU_ITEMS.map(item => {
-                      const Icon = item.icon;
-                      const isActive = activeView === item.id;
-
-                      return (
-                        <button
-                          key={item.id}
-                          onClick={() => setActiveView(item.id)}
-                          className={cn(
-                            'w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150',
-                            isActive
-                              ? 'bg-gray-200/80 text-gray-900'
-                              : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
-                          )}
-                        >
-                          <Icon
-                            className={cn(
-                              'w-5 h-5 flex-shrink-0',
-                              isActive ? 'text-gray-700' : 'text-gray-400'
-                            )}
-                          />
-                          <span>{item.label}</span>
-                        </button>
-                      );
-                    })}
-                  </nav>
-
-                  {/* User Card */}
-                  <div className="px-3 py-3 border-t border-gray-200/60">
-                    <button
-                      onClick={() => setActiveView('profile')}
-                      className={cn(
-                        'w-full flex items-center gap-3 px-2 py-2 rounded-lg transition-all duration-150',
-                        activeView === 'profile'
-                          ? 'bg-gray-200/80'
-                          : 'hover:bg-gray-100'
-                      )}
-                    >
-                      {/* Avatar placeholder */}
-                      {user?.avatar_url ? (
-                        <img
-                          src={user.avatar_url}
-                          alt={user.name || user.username}
-                          className="w-8 h-8 rounded-full object-cover flex-shrink-0"
-                        />
-                      ) : (
-                        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center flex-shrink-0">
-                          <span className="text-xs font-medium text-white">
-                            {(user?.name || user?.username || 'U')
-                              .charAt(0)
-                              .toUpperCase()}
-                          </span>
-                        </div>
-                      )}
-
-                      <div className="flex-1 min-w-0 text-left">
-                        <p className="text-sm font-medium text-gray-900 truncate">
-                          {user?.name || user?.username || 'Guest User'}
-                        </p>
-                        <p className="text-xs text-gray-500 truncate">
-                          {user ? `@${user.username}` : 'Not logged in'}
-                        </p>
-                      </div>
-                    </button>
-                    <p className="text-[10px] text-gray-400 mt-2 px-2">
-                      v1.0.0
-                    </p>
-                  </div>
-                </div>
-
-                {/* Content Area */}
-                <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-                  <motion.div
-                    key={activeView}
-                    initial={{ opacity: 0, x: 10 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ duration: 0.15 }}
-                    className="flex-1 flex flex-col relative w-full h-full"
+              <SidebarProvider
+                style={{ minHeight: '100%' }}
+                className="h-full w-full !min-h-0"
+              >
+                <div className="flex h-full w-full">
+                  <Sidebar
+                    collapsible="icon"
+                    className="!absolute !h-full border-r border-gray-200/60"
                   >
-                    {renderContent()}
-                  </motion.div>
+                    <SidebarHeader>
+                      <div className="flex items-center justify-between px-2 py-2">
+                        <div className="flex flex-col overflow-hidden group-data-[collapsible=icon]:hidden">
+                          <h2 className="text-sm font-semibold text-gray-900 truncate">
+                            Gitlab Companion
+                          </h2>
+                          <p className="text-xs text-gray-500 truncate">
+                            Workspace
+                          </p>
+                        </div>
+                        <SidebarTrigger className="ml-auto" />
+                      </div>
+                    </SidebarHeader>
+                    <SidebarContent>
+                      <SidebarGroup>
+                        <SidebarGroupContent>
+                          <SidebarMenu className="space-y-1">
+                            {MENU_ITEMS.map(item => {
+                              const Icon = item.icon;
+                              const isActive = activeView === item.id;
+
+                              return (
+                                <SidebarMenuItem key={item.id}>
+                                  <SidebarMenuButton
+                                    isActive={isActive}
+                                    onClick={() => setActiveView(item.id)}
+                                    tooltip={item.label}
+                                  >
+                                    <Icon />
+                                    <span>{item.label}</span>
+                                  </SidebarMenuButton>
+                                </SidebarMenuItem>
+                              );
+                            })}
+                          </SidebarMenu>
+                        </SidebarGroupContent>
+                      </SidebarGroup>
+                    </SidebarContent>
+                    <SidebarFooter>
+                      <SidebarMenu>
+                        <SidebarMenuItem>
+                          <SidebarMenuButton
+                            isActive={activeView === 'profile'}
+                            onClick={() => setActiveView('profile')}
+                            size="lg"
+                            className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
+                          >
+                            {/* Avatar placeholder */}
+                            {user?.avatar_url ? (
+                              <img
+                                src={user.avatar_url}
+                                alt={user.name || user.username}
+                                className="h-8 w-8 rounded-lg object-cover"
+                              />
+                            ) : (
+                              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground">
+                                <span className="text-xs font-medium">
+                                  {(user?.name || user?.username || 'U')
+                                    .charAt(0)
+                                    .toUpperCase()}
+                                </span>
+                              </div>
+                            )}
+                            <div className="grid flex-1 text-left text-sm leading-tight">
+                              <span className="truncate font-semibold">
+                                {user?.name || user?.username || 'Guest User'}
+                              </span>
+                              <span className="truncate text-xs">
+                                {user ? `@${user.username}` : 'Not logged in'}
+                              </span>
+                            </div>
+                          </SidebarMenuButton>
+                        </SidebarMenuItem>
+                      </SidebarMenu>
+                      <div className="px-4 py-2 group-data-[collapsible=icon]:hidden">
+                        <p className="text-[10px] text-gray-400">v1.0.0</p>
+                      </div>
+                    </SidebarFooter>
+                    <SidebarRail />
+                  </Sidebar>
+
+                  {/* Content Area */}
+                  <div className="flex-1 flex flex-col min-w-0 overflow-hidden bg-background">
+                    <motion.div
+                      key={activeView}
+                      initial={{ opacity: 0, x: 10 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ duration: 0.15 }}
+                      className="flex-1 flex flex-col relative w-full h-full"
+                    >
+                      {renderContent()}
+                    </motion.div>
+                  </div>
                 </div>
-              </div>
+              </SidebarProvider>
             </motion.div>
           </div>
         </>

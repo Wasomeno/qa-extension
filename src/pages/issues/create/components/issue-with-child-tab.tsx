@@ -100,12 +100,9 @@ export const IssueWithChildTab: React.FC<IssueWithChildTabProps> = ({
   };
 
   return (
-    <div className="space-y-8 max-w-2xl mt-0">
+    <div className="space-y-8 mt-0">
       {/* Parent Issue Form */}
       <div className="border-b pb-6">
-        <h2 className="text-lg font-semibold mb-4 text-gray-900">
-          Parent Issue
-        </h2>
         <IssueFormFields
           formState={parentIssueState}
           onChange={updates =>
@@ -156,8 +153,7 @@ export const IssueWithChildTab: React.FC<IssueWithChildTabProps> = ({
                   </Button>
                 )}
               </div>
-
-              <AccordionContent className="pt-2 pb-6">
+              <AccordionContent className="pt-2 pb-6 px-1">
                 <IssueFormFields
                   formState={{
                     ...child,
@@ -172,10 +168,9 @@ export const IssueWithChildTab: React.FC<IssueWithChildTabProps> = ({
           ))}
         </Accordion>
       </div>
-
-      <div className="flex gap-3 pt-4">
+      <div className="flex justify-center">
         <Button
-          className="flex-1"
+          className="flex-1 max-w-sm"
           size="lg"
           onClick={handleCreateParentAndChildren}
           disabled={
@@ -188,10 +183,7 @@ export const IssueWithChildTab: React.FC<IssueWithChildTabProps> = ({
           {createIssueWithChildMutation.isPending && (
             <Loader2 className="w-4 h-4 mr-2 animate-spin" />
           )}
-          Create Parent & {childIssues.length} Children
-        </Button>
-        <Button variant="secondary" size="lg">
-          Save Draft
+          Create Issue with {childIssues.length} Children
         </Button>
       </div>
     </div>

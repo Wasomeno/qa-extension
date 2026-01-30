@@ -72,12 +72,6 @@ interface CompactIssueCreatorProps {
   };
 }
 
-interface LabelOption {
-  value: string;
-  label: string;
-  color: string;
-}
-
 const CompactIssueCreator: React.FC<CompactIssueCreatorProps> = ({
   onClose,
   portalContainer,

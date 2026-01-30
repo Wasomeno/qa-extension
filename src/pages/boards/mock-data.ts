@@ -7,12 +7,17 @@ export interface BoardIssue {
   assignee?: MockUser;
   labels: MockLabel[];
   weight?: number;
+  webUrl: string;
+  projectId: number;
+  projectName: string;
 }
 
 export interface BoardColumn {
   id: string;
   title: string;
   issues: BoardIssue[];
+  color?: string;
+  textColor?: string;
 }
 
 export interface ProjectBoard {
@@ -23,10 +28,30 @@ export interface ProjectBoard {
 }
 
 const MOCK_USERS: MockUser[] = [
-  { id: '1', name: 'Pickle Rick', username: 'pickle_rick', avatarUrl: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Pickle' },
-  { id: '2', name: 'Morty Smith', username: 'morty', avatarUrl: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Morty' },
-  { id: '3', name: 'Summer Smith', username: 'summer', avatarUrl: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Summer' },
-  { id: '4', name: 'Jerry Smith', username: 'jerry', avatarUrl: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Jerry' },
+  {
+    id: '1',
+    name: 'Pickle Rick',
+    username: 'pickle_rick',
+    avatarUrl: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Pickle',
+  },
+  {
+    id: '2',
+    name: 'Morty Smith',
+    username: 'morty',
+    avatarUrl: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Morty',
+  },
+  {
+    id: '3',
+    name: 'Summer Smith',
+    username: 'summer',
+    avatarUrl: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Summer',
+  },
+  {
+    id: '4',
+    name: 'Jerry Smith',
+    username: 'jerry',
+    avatarUrl: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Jerry',
+  },
 ];
 
 const MOCK_LABELS: MockLabel[] = [
@@ -41,21 +66,42 @@ const generateIssues = (count: number): BoardIssue[] => {
     id: `issue-${Math.random().toString(36).substr(2, 9)}`,
     iid: Math.floor(Math.random() * 1000),
     title: `Issue ${i + 1}: ${['Fix the flux capacitor', 'Calibrate portal gun', 'Avoid family therapy', 'Defeat the Galactic Federation'][Math.floor(Math.random() * 4)]}`,
-    assignee: Math.random() > 0.3 ? MOCK_USERS[Math.floor(Math.random() * MOCK_USERS.length)] : undefined,
+    assignee:
+      Math.random() > 0.3
+        ? MOCK_USERS[Math.floor(Math.random() * MOCK_USERS.length)]
+        : undefined,
     labels: MOCK_LABELS.slice(0, Math.floor(Math.random() * 3)),
     weight: Math.floor(Math.random() * 5) + 1,
+    webUrl: '#',
+    projectId: 1,
+    projectName: 'Mock Project',
   }));
 };
 
 export const MOCK_BOARDS: ProjectBoard[] = [
   {
     id: 'proj-1',
-    name: 'Rick\'s Garage',
+    name: "Rick's Garage",
     avatarUrl: 'https://api.dicebear.com/7.x/identicon/svg?seed=Garage',
     columns: [
-      { id: 'col-1', title: 'To Do', issues: generateIssues(3) },
-      { id: 'col-2', title: 'Doing', issues: generateIssues(2) },
-      { id: 'col-3', title: 'Done', issues: generateIssues(5) },
+      {
+        id: 'col-1',
+        title: 'To Do',
+        issues: generateIssues(3),
+        color: '#10b981',
+      },
+      {
+        id: 'col-2',
+        title: 'Doing',
+        issues: generateIssues(2),
+        color: '#f59e0b',
+      },
+      {
+        id: 'col-3',
+        title: 'Done',
+        issues: generateIssues(5),
+        color: '#3b82f6',
+      },
     ],
   },
   {
@@ -63,9 +109,24 @@ export const MOCK_BOARDS: ProjectBoard[] = [
     name: 'Citadel of Ricks',
     avatarUrl: 'https://api.dicebear.com/7.x/identicon/svg?seed=Citadel',
     columns: [
-      { id: 'col-4', title: 'Backlog', issues: generateIssues(4) },
-      { id: 'col-5', title: 'In Review', issues: generateIssues(1) },
-      { id: 'col-6', title: 'Deployed', issues: generateIssues(2) },
+      {
+        id: 'col-4',
+        title: 'Backlog',
+        issues: generateIssues(4),
+        color: '#6b7280',
+      },
+      {
+        id: 'col-5',
+        title: 'In Review',
+        issues: generateIssues(1),
+        color: '#8b5cf6',
+      },
+      {
+        id: 'col-6',
+        title: 'Deployed',
+        issues: generateIssues(2),
+        color: '#06b6d4',
+      },
     ],
   },
   {
@@ -73,8 +134,18 @@ export const MOCK_BOARDS: ProjectBoard[] = [
     name: 'Purge Planet',
     avatarUrl: 'https://api.dicebear.com/7.x/identicon/svg?seed=Purge',
     columns: [
-      { id: 'col-7', title: 'Open', issues: generateIssues(2) },
-      { id: 'col-8', title: 'Closed', issues: generateIssues(6) },
+      {
+        id: 'col-7',
+        title: 'Open',
+        issues: generateIssues(2),
+        color: '#ef4444',
+      },
+      {
+        id: 'col-8',
+        title: 'Closed',
+        issues: generateIssues(6),
+        color: '#10b981',
+      },
     ],
   },
 ];

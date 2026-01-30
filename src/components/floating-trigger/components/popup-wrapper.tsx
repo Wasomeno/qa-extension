@@ -15,7 +15,7 @@ const PopupWrapper: React.FC<PopupWrapperProps> = ({
   onClose,
   children,
   containerRef,
-  width = 420,
+  width = 360,
 }) => {
   const keyboardIsolation = useKeyboardIsolation();
   const portalRef = useRef<HTMLDivElement>(null);

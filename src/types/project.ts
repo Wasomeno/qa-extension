@@ -267,3 +267,58 @@ export interface GitLabProjectMember {
   avatar_url: string;
   member_role: null;
 }
+export interface IssueAssignee {
+  id: number;
+  name: string;
+  username: string;
+  state: string;
+  avatar_url: string;
+  web_url: string;
+}
+
+export interface IssueAuthor {
+  id: number;
+  name: string;
+  username: string;
+  state: string;
+  avatar_url: string;
+  web_url: string;
+}
+
+export interface IssueResponse {
+  id: number;
+  iid: number;
+  title: string;
+  description: string;
+  state: string;
+  labels: Label[];
+  assignees: IssueAssignee[];
+  author: IssueAuthor;
+  created_at?: string; // ISO 8601 Date String
+}
+
+export interface Label {
+  id: number;
+  name: string;
+  color: string;
+  description: string;
+  description_html?: string;
+  text_color?: string;
+}
+
+export interface BoardListResponse {
+  id: number;
+  label: Label;
+  position: number;
+  issues: IssueResponse[];
+}
+
+export interface BoardResponse {
+  id: number;
+  name: string;
+  lists: BoardListResponse[];
+}
+
+export interface GetProjectBoardsResponse {
+  boards: BoardResponse[];
+}

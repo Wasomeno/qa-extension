@@ -4,7 +4,13 @@ import { Settings, Bell, LogOut, ChevronRight } from 'lucide-react';
 import { useSessionUser } from '@/hooks/use-session-user';
 import { api } from '@/services/api';
 
-export const ProfilePage: React.FC = () => {
+interface ProfilePageProps {
+  portalContainer?: HTMLElement | null;
+}
+
+export const ProfilePage: React.FC<ProfilePageProps> = ({
+  portalContainer,
+}) => {
   const { user, clearUser } = useSessionUser();
 
   const handleLogout = async () => {

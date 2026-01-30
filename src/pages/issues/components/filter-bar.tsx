@@ -1,6 +1,14 @@
 import React from 'react';
 import { Search, ChevronDown, Filter } from 'lucide-react';
-import { IssueFilterState, IssueStatus } from '@/types/issues';
+import { IssueFilterState } from '@/types/issues';
+import { Input } from '@/components/ui/input';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 
 interface Option {
   label: string;
@@ -15,6 +23,7 @@ interface IssueFilterBarProps {
   ) => void;
   projectOptions: Option[];
   labelOptions: Option[];
+  portalContainer?: HTMLElement | null;
 }
 
 export const IssueFilterBar: React.FC<IssueFilterBarProps> = ({
@@ -22,73 +31,86 @@ export const IssueFilterBar: React.FC<IssueFilterBarProps> = ({
   onFilterChange,
   projectOptions,
   labelOptions,
+  portalContainer,
 }) => {
   return (
     <div className="flex flex-col gap-3">
       <div className="flex items-center gap-3">
         {/* Search Input */}
         <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-          <input
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 z-10" />
+          <Input
             type="text"
             placeholder="Search issues..."
             value={filters.search}
             onChange={e => onFilterChange('search', e.target.value)}
-            className="w-full h-10 pl-9 pr-4 bg-white border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all placeholder:text-gray-400"
+            className="pl-9 bg-white border-gray-200 rounded-xl focus:ring-blue-500/20 focus:border-blue-500"
           />
         </div>
 
         {/* Project Filter */}
-        <div className="relative min-w-[140px]">
-          <select
+        <div className="min-w-[140px]">
+          <Select
             value={filters.projectId}
-            onChange={e => onFilterChange('projectId', e.target.value)}
-            className="w-full h-10 pl-3 pr-8 bg-white border border-gray-200 rounded-xl text-sm appearance-none focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 cursor-pointer text-gray-700"
+            onValueChange={val => onFilterChange('projectId', val)}
           >
-            <option value="ALL">All Projects</option>
-            {projectOptions.map(p => (
-              <option key={p.value} value={p.value}>
-                {p.label}
-              </option>
-            ))}
-          </select>
-          <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+            <SelectTrigger className="bg-white border-gray-200 rounded-xl text-gray-700 focus:ring-blue-500/20 focus:border-blue-500">
+              <SelectValue placeholder="All Projects" />
+            </SelectTrigger>
+            <SelectContent container={portalContainer}>
+              <SelectItem value="ALL">All Projects</SelectItem>
+              {projectOptions.map(p => (
+                <SelectItem key={p.value} value={String(p.value)}>
+                  {p.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
 
-        {/* Label Filter (Replaces Status) */}
-        {/* Note: Simplified to single label selection for now as per native select limits */}
-        <div className="relative min-w-[140px]">
-          <select
-            value={filters.labels?.[0] || ''}
-            onChange={e => {
-              const val = e.target.value;
-              onFilterChange('labels', val ? [val] : []);
+        {/* Label Filter */}
+        <div className="min-w-[140px]">
+          <Select
+            value={filters.labels?.[0] || 'ALL'}
+            onValueChange={val => {
+              onFilterChange('labels', val === 'ALL' ? [] : [val]);
             }}
-            className="w-full h-10 pl-3 pr-8 bg-white border border-gray-200 rounded-xl text-sm appearance-none focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 cursor-pointer text-gray-700"
           >
-            <option value="">All Labels</option>
-            {labelOptions.map(l => (
-              <option key={l.value} value={l.value}>
-                {l.label}
-              </option>
-            ))}
-          </select>
-          <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+            <SelectTrigger className="bg-white border-gray-200 rounded-xl text-gray-700 focus:ring-blue-500/20 focus:border-blue-500">
+              <SelectValue placeholder="All Labels" />
+            </SelectTrigger>
+            <SelectContent container={portalContainer}>
+              <SelectItem value="ALL">All Labels</SelectItem>
+              {labelOptions.map(l => (
+                <SelectItem key={l.value} value={String(l.value)}>
+                  {l.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
 
         {/* Sort Filter */}
-        <div className="relative min-w-[140px]">
-          <select
+        <div className="min-w-[140px]">
+          <Select
             value={filters.sort}
-            onChange={e => onFilterChange('sort', e.target.value as any)}
-            className="w-full h-10 pl-3 pr-8 bg-white border border-gray-200 rounded-xl text-sm appearance-none focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 cursor-pointer text-gray-700"
+            onValueChange={val =>
+              onFilterChange('sort', val as IssueFilterState['sort'])
+            }
           >
-            <option value="UPDATED">Recently Updated</option>
-            <option value="NEWEST">Newest Created</option>
-            <option value="OLDEST">Oldest Created</option>
-            <option value="PRIORITY">Priority</option>
-          </select>
-          <Filter className="absolute right-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
+            <SelectTrigger className="bg-white border-gray-200 rounded-xl text-gray-700 focus:ring-blue-500/20 focus:border-blue-500">
+              <div className="flex items-center gap-2">
+                <Filter className="w-3.5 h-3.5 text-gray-400" />
+                <SelectValue />
+              </div>
+            </SelectTrigger>
+            <SelectContent container={portalContainer}>
+              <SelectItem value="UPDATED">Recently Updated</SelectItem>
+              <SelectItem value="NEWEST">Newest Created</SelectItem>
+              <SelectItem value="OLDEST">Oldest Created</SelectItem>
+              <SelectItem value="PRIORITY">Priority</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
       </div>
     </div>

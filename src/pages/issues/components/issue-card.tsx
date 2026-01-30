@@ -6,6 +6,7 @@ import {
   GitPullRequest,
   Palette,
   MessageSquare,
+  Link2,
 } from 'lucide-react';
 import { IssueStatus, PinColor, PinnedIssueMeta } from '@/types/issues';
 import { Issue } from '@/api/issue';
@@ -251,6 +252,16 @@ const withIssueActions = (variant: 'default' | 'pinned') => {
           title="Open in GitLab"
         >
           <ExternalLink className="w-3.5 h-3.5" />
+        </button>
+        <button
+          onClick={e => {
+            e.stopPropagation();
+            navigator.clipboard.writeText(issue.web_url);
+          }}
+          className="p-1 hover:bg-gray-100 rounded text-gray-400 hover:text-blue-600 transition-colors"
+          title="Copy Link"
+        >
+          <Link2 className="w-3.5 h-3.5" />
         </button>
       </>
     );

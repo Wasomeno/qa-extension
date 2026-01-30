@@ -2,7 +2,13 @@ import React from 'react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { StatCard } from './components/stat-card';
 
-export const DashboardPage: React.FC = () => {
+interface DashboardPageProps {
+  portalContainer?: HTMLElement | null;
+}
+
+export const DashboardPage: React.FC<DashboardPageProps> = ({
+  portalContainer,
+}) => {
   return (
     <ScrollArea className="h-full">
       <div className="space-y-8 p-8">
