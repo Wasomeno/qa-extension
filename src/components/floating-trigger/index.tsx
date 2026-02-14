@@ -14,6 +14,8 @@ import CompactIssueCreator from '@/pages/issues/create/components/compact-creato
 import CompactIssueList from '@/pages/issues/components/compact-list';
 import CompactPinnedIssues from '@/pages/pinned/components/compact-list';
 import { getGitlabLoginSession } from '@/api/auth';
+import { MessageType } from '@/types/messages';
+import { useSessionUser } from '@/hooks/use-session-user';
 
 interface FloatingTriggerProps {
   onClose?: () => void;
@@ -31,7 +33,7 @@ const queryClient = new QueryClient({
 });
 
 const FloatingTriggerInner: React.FC<FloatingTriggerProps> = ({ onClose }) => {
-  const [isLoggedIn, setIsLoggedIn] = useState<boolean>(false);
+  const { user } = useSessionUser();
   const [activeFeature, setActiveFeature] = useState<
     'issue' | 'issues' | 'pinned' | 'menu' | 'login' | null
   >(null);
@@ -43,16 +45,42 @@ const FloatingTriggerInner: React.FC<FloatingTriggerProps> = ({ onClose }) => {
   const [hiddenReason, setHiddenReason] = useState<'auto' | 'manual' | null>(
     null
   );
-  const [opacity, setOpacity] = useState<number>(1);
   const [isHovered, setIsHovered] = useState<boolean>(false);
   const popupContainerRef = useRef<HTMLDivElement>(null);
+
+  const opacity = activeFeature === 'menu' && !isHovered ? 0.3 : 1;
 
   const session = useQuery({
     queryKey: ['session'],
     queryFn: async () => getGitlabLoginSession(),
   });
 
-  const isSessionExists = session.data?.success;
+  const isSessionExists = session.data?.success || !!user;
+
+  // Sync state on logout
+  useEffect(() => {
+    if (!user && !session.isLoading && !session.data?.success) {
+      handleClose();
+    }
+  }, [user, session.data, session.isLoading]);
+
+  useEffect(() => {
+    if (typeof chrome !== 'undefined' && chrome.runtime?.onMessage) {
+      const handleMessage = (message: any) => {
+        if (
+          message.type === MessageType.AUTH_LOGOUT ||
+          message.type === MessageType.AUTH_SESSION_UPDATED
+        ) {
+          session.refetch();
+          if (message.type === MessageType.AUTH_LOGOUT || (message.type === MessageType.AUTH_SESSION_UPDATED && !message.data)) {
+            handleClose();
+          }
+        }
+      };
+      chrome.runtime.onMessage.addListener(handleMessage);
+      return () => chrome.runtime.onMessage.removeListener(handleMessage);
+    }
+  }, [session]);
 
   // Calculate fixed bottom-center position for capsule
   const getCapsulePosition = useCallback(() => {
@@ -111,7 +139,7 @@ const FloatingTriggerInner: React.FC<FloatingTriggerProps> = ({ onClose }) => {
     }
 
     // Menu modal is wider than other popups
-    const popupWidth = action === 'menu' ? 600 : 420;
+    const popupWidth = action === 'menu' ? 600 : 360;
     const arrowHeight = 8; // Height of the tooltip arrow
     const gap = 8; // Gap between popup and capsule
 
@@ -164,7 +192,7 @@ const FloatingTriggerInner: React.FC<FloatingTriggerProps> = ({ onClose }) => {
         return (
           <LoginPopup
             onClose={handleClose}
-            onLoginSuccess={() => setIsLoggedIn(true)}
+            onLoginSuccess={handleClose}
           />
         );
       default:
@@ -181,7 +209,7 @@ const FloatingTriggerInner: React.FC<FloatingTriggerProps> = ({ onClose }) => {
         onHoverChange={setIsHovered}
         onActionClick={handleActionClick}
         hasActivePopup={!!activeFeature}
-        isLoggedIn={isSessionExists || isLoggedIn}
+        isLoggedIn={isSessionExists}
       />
 
       {activeFeature && activeFeature !== 'menu' && popupPosition && (

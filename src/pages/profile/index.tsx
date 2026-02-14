@@ -1,8 +1,8 @@
 import React from 'react';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Settings, Bell, LogOut, ChevronRight } from 'lucide-react';
+import { Settings, Bell, LogOut, ChevronRight, Loader2 } from 'lucide-react';
 import { useSessionUser } from '@/hooks/use-session-user';
-import { api } from '@/services/api';
+import { useLogout } from '@/hooks/use-logout';
 
 interface ProfilePageProps {
   portalContainer?: HTMLElement | null;
@@ -11,20 +11,11 @@ interface ProfilePageProps {
 export const ProfilePage: React.FC<ProfilePageProps> = ({
   portalContainer,
 }) => {
-  const { user, clearUser } = useSessionUser();
+  const { user } = useSessionUser();
+  const logoutMutation = useLogout();
 
   const handleLogout = async () => {
-    try {
-      // Optional: Call backend logout if needed
-      // await api.post('/auth/logout');
-
-      // Clear local session
-      await clearUser();
-
-      // Refresh or redirect if needed
-    } catch (e) {
-      console.error('Logout failed', e);
-    }
+    logoutMutation.mutate();
   };
 
   return (
@@ -115,9 +106,14 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({
         <div className="pt-4">
           <button
             onClick={handleLogout}
-            className="flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-red-600 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors"
+            disabled={logoutMutation.isPending}
+            className="flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-red-600 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            <LogOut className="w-4 h-4" />
+            {logoutMutation.isPending ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <LogOut className="w-4 h-4" />
+            )}
             Sign Out
           </button>
         </div>

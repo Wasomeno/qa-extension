@@ -1,5 +1,6 @@
 const path = require('path');
 const rspack = require('@rspack/core');
+require('dotenv').config({ path: path.resolve(__dirname, '.env') });
 
 module.exports = (env, argv) => {
   const targetBrowser = (env && env.browser) || process.env.BROWSER || 'chrome';
@@ -12,6 +13,7 @@ module.exports = (env, argv) => {
     entry: {
       background: './src/background/index.ts',
       content: './src/content/simple-trigger.ts',
+      recorder: './src/content/recorder/index.tsx',
       'content-simple-test': './src/content-simple-test.js',
       popup: './src/popup/index.tsx',
       options: './src/options/index.tsx',
@@ -30,6 +32,12 @@ module.exports = (env, argv) => {
         '@services': path.resolve(__dirname, 'src/services'),
         '@utils': path.resolve(__dirname, 'src/utils'),
         '@types': path.resolve(__dirname, 'src/types'),
+      },
+      fallback: {
+        crypto: require.resolve('crypto-browserify'),
+        stream: require.resolve('stream-browserify'),
+        vm: require.resolve('vm-browserify'),
+        buffer: require.resolve('buffer/'),
       },
     },
     module: {
@@ -93,11 +101,16 @@ module.exports = (env, argv) => {
       ],
     },
     plugins: [
+      new rspack.ProvidePlugin({
+        Buffer: ['buffer', 'Buffer'],
+        process: 'process/browser.js',
+      }),
       new rspack.DefinePlugin({
         'process.env.NODE_ENV': JSON.stringify(
           isDevelopment ? 'development' : 'production'
         ),
         'process.env.TARGET_BROWSER': JSON.stringify(targetBrowser),
+        __GOOGLE_API_KEY__: JSON.stringify(process.env.GOOGLE_API_KEY || ''),
       }),
       new rspack.CssExtractRspackPlugin({
         filename: '[name].css',
@@ -182,6 +195,10 @@ module.exports = (env, argv) => {
             to: 'icons',
           },
           {
+            from: './public/log-loom-logo.png',
+            to: 'assets/log-loom-logo.png',
+          },
+          {
             from: './public/assets',
             to: 'assets',
             noErrorOnMissing: true,
@@ -224,7 +241,7 @@ module.exports = (env, argv) => {
         },
       },
       // Simplified runtimeChunk to avoid boolean return issue
-      runtimeChunk: false, 
+      runtimeChunk: false,
     },
   };
 };

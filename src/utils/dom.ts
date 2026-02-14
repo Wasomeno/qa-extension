@@ -21,7 +21,27 @@ export function generateSelector(element: Element): string {
     return 'body';
   }
 
-  // Use ID if available and unique
+  // 1. Check for high-priority stable attributes (QA-friendly)
+  const stableAttributes = [
+    'data-testid',
+    'data-test-id',
+    'data-qa',
+    'data-cy',
+    'aria-label',
+    'name',
+  ];
+
+  for (const attr of stableAttributes) {
+    const value = element.getAttribute(attr);
+    if (value) {
+      const selector = `[${attr}="${CSS.escape(value)}"]`;
+      if (document.querySelectorAll(selector).length === 1) {
+        return selector;
+      }
+    }
+  }
+
+  // 2. Use ID if available and unique
   if (element.id) {
     const idSelector = `#${CSS.escape(element.id)}`;
     if (document.querySelectorAll(idSelector).length === 1) {
@@ -29,38 +49,51 @@ export function generateSelector(element: Element): string {
     }
   }
 
-  // Build path from element to root
+  // 3. Build path from element to root
   const path: string[] = [];
   let current: Element | null = element;
 
   while (current && current !== document.body) {
     let selector = current.tagName.toLowerCase();
-    
-    // Add ID if available
-    if (current.id) {
-      selector += `#${CSS.escape(current.id)}`;
-    }
-    
-    // Add classes if available
-    if (current.className && typeof current.className === 'string') {
-      const classes = current.className.trim().split(/\s+/).filter(Boolean);
-      if (classes.length > 0) {
-        selector += '.' + classes.map(c => CSS.escape(c)).join('.');
+
+    // Try to find a unique combination for this level
+    let foundUnique = false;
+
+    // Check stable attributes for current element in path
+    for (const attr of stableAttributes) {
+      const value = current.getAttribute(attr);
+      if (value) {
+        selector += `[${attr}="${CSS.escape(value)}"]`;
+        foundUnique = true;
+        break;
       }
     }
-    
-    // Add nth-child if needed for uniqueness
+
+    if (!foundUnique && current.id) {
+      selector += `#${CSS.escape(current.id)}`;
+      foundUnique = true;
+    }
+
+    if (!foundUnique && current.className && typeof current.className === 'string') {
+      const classes = current.className.trim().split(/\s+/).filter(Boolean);
+      if (classes.length > 0) {
+        // Only use the first few classes to avoid overly specific/dynamic selectors
+        selector += '.' + classes.slice(0, 2).map(c => CSS.escape(c)).join('.');
+      }
+    }
+
+    // Add nth-child if needed for uniqueness among siblings
     const parent = current.parentElement;
     if (parent) {
       const siblings = Array.from(parent.children).filter(
         sibling => sibling.tagName === current!.tagName
       );
       if (siblings.length > 1) {
-        const index = siblings.indexOf(current) + 1;
+        const index = Array.from(parent.children).indexOf(current) + 1;
         selector += `:nth-child(${index})`;
       }
     }
-    
+
     path.unshift(selector);
     current = current.parentElement;
   }

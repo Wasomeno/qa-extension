@@ -88,8 +88,8 @@ class BackgroundService {
             (ct.includes('application/json')
               ? 'json'
               : ct.startsWith('text/')
-              ? 'text'
-              : 'arrayBuffer');
+                ? 'text'
+                : 'arrayBuffer');
 
           let body: any = undefined;
           try {
@@ -164,9 +164,19 @@ class BackgroundService {
           const body = await (resp.headers.get('content-type')?.includes('json')
             ? resp.json()
             : resp.text());
+          const headers: Record<string, string> = {};
+          resp.headers.forEach((v, k) => (headers[k] = v));
+
           sendResponse({
             success: true,
-            data: { ok: resp.ok, status: resp.status, body },
+            data: {
+              ok: resp.ok,
+              status: resp.status,
+              statusText: resp.statusText,
+              url: resp.url,
+              headers,
+              body,
+            },
           });
         } catch (e: any) {
           sendResponse({ success: false, error: e?.message });

@@ -9,6 +9,7 @@ import { useGetLabels } from '@/hooks/use-get-labels';
 import { useGetIssues } from './hooks/use-get-issues';
 import { usePinnedIssues } from '@/hooks/use-pinned-issues';
 import { Issue } from '@/api/issue';
+import { useNavigation } from '@/contexts/navigation-context';
 
 interface IssuesPageProps {
   initialIssue?: Issue | null;
@@ -19,6 +20,7 @@ export const IssuesPage: React.FC<IssuesPageProps> = ({
   initialIssue,
   portalContainer,
 }) => {
+  const { current, push, pop } = useNavigation();
   const [filters, setFilters] = useState<IssueFilterState>({
     search: '',
     projectId: 'ALL',
@@ -35,15 +37,6 @@ export const IssuesPage: React.FC<IssuesPageProps> = ({
       unassigned: false,
     },
   });
-  const [selectedIssue, setSelectedIssue] = useState<Issue | null>(
-    initialIssue || null
-  );
-
-  React.useEffect(() => {
-    if (initialIssue) {
-      setSelectedIssue(initialIssue);
-    }
-  }, [initialIssue]);
 
   // Fetch filter options
   const projects = useGetProjects();
@@ -76,6 +69,8 @@ export const IssuesPage: React.FC<IssuesPageProps> = ({
     setFilters(prev => ({ ...prev, [key]: value }));
   };
 
+  const selectedIssue = current.view === 'issue-detail' ? (current.params as Issue) : (initialIssue || null);
+
   // If an issue is selected, show the detail page instead of the list
   if (selectedIssue) {
     return (
@@ -83,7 +78,7 @@ export const IssuesPage: React.FC<IssuesPageProps> = ({
         <IssueDetailPage
           key={selectedIssue.id}
           issue={selectedIssue}
-          onBack={() => setSelectedIssue(null)}
+          onBack={pop}
           portalContainer={portalContainer}
         />
       </AnimatePresence>
@@ -115,7 +110,7 @@ export const IssuesPage: React.FC<IssuesPageProps> = ({
           issues={issues.data}
           isLoading={issues.isLoading}
           isProjectFiltered={filters.projectId !== 'ALL'}
-          onIssueClick={setSelectedIssue}
+          onIssueClick={(issue) => push('issue-detail', issue)}
           onPin={togglePin}
           isPinned={isPinned}
         />

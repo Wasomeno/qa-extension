@@ -173,7 +173,7 @@ export interface CreateIssueRequest {
   /**
    * The type of issue.
    */
-  issue_type?: 'issue' | 'incident' | 'test_case';
+  issue_type?: 'issue' | 'incident' | 'test_case' | 'task';
 }
 
 export type UpdateIssueRequest = {
@@ -240,7 +240,7 @@ export type UpdateIssueRequest = {
   /**
    * Type of issue (e.g., 'issue', 'incident', 'test_case').
    */
-  issue_type?: 'issue' | 'incident' | 'test_case';
+  issue_type?: 'issue' | 'incident' | 'test_case' | 'task';
 
   /**
    * The ID of the epic to assign the issue to.
@@ -332,6 +332,52 @@ export async function getIssueComments(projectId: number, id: number) {
     `/projects/${projectId}/issues/${id}/comments`
   );
 }
+
+export interface CreateIssueCommentRequest {
+  body: string;
+  created_at?: string;
+}
+
+export interface UpdateIssueCommentRequest {
+  body: string;
+}
+
+export async function createIssueComment(
+  projectId: number,
+  issueIid: number,
+  request: CreateIssueCommentRequest
+) {
+  return api.post<IssueComment>(
+    `/projects/${projectId}/issues/${issueIid}/comments`,
+    {
+      body: JSON.stringify(request),
+    }
+  );
+}
+
+export async function updateIssueComment(
+  projectId: number,
+  issueIid: number,
+  commentId: number,
+  request: UpdateIssueCommentRequest
+) {
+  return api.put<IssueComment>(
+    `/projects/${projectId}/issues/${issueIid}/comments/${commentId}`,
+    {
+      body: JSON.stringify(request),
+    }
+  );
+}
+
+export async function deleteIssueComment(
+  projectId: number,
+  issueIid: number,
+  commentId: number
+) {
+  return api.delete<void>(
+    `/projects/${projectId}/issues/${issueIid}/comments/${commentId}`
+  );
+}
 export interface CreateIssueWithChildRequest extends CreateIssueRequest {
   child_issues: CreateIssueRequest[];
 }
@@ -392,5 +438,29 @@ export async function deleteIssueLink(
 ) {
   return api.delete<void>(
     `/projects/${projectId}/issues/${issueIid}/links/${issueLinkId}`
+  );
+}
+
+export interface CreateChildIssueRequest extends CreateIssueRequest {
+  existing_child_iid?: number;
+}
+
+export async function createChildIssue(
+  projectId: number,
+  issueIid: number,
+  request: CreateChildIssueRequest
+) {
+  return api.post<Issue>(`/projects/${projectId}/issues/${issueIid}/children`, {
+    body: JSON.stringify(request),
+  });
+}
+
+export async function unlinkChildIssue(
+  projectId: number,
+  issueIid: number,
+  childIid: number
+) {
+  return api.delete<void>(
+    `/projects/${projectId}/issues/${issueIid}/children/${childIid}`
   );
 }

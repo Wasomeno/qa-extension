@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X } from 'lucide-react';
+import { X, Pin } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Issue } from '@/api/issue';
@@ -55,8 +55,17 @@ const CompactPinnedList: React.FC<CompactPinnedListProps> = ({
               ))}
             </div>
           ) : pinnedIssues.length === 0 ? (
-            <div className="text-center py-12 text-sm text-gray-500 flex flex-col items-center">
-              <p>No pinned issues</p>
+            <div className="flex flex-col items-center justify-center py-12 text-center">
+              <div className="w-12 h-12 bg-gray-50 rounded-full flex items-center justify-center mb-3">
+                <Pin className="w-6 h-6 text-gray-300" />
+              </div>
+              <h3 className="text-sm font-semibold text-gray-700">
+                No pinned issues
+              </h3>
+              <p className="text-xs text-gray-400 mt-1 max-w-[200px] mx-auto">
+                Pin important issues from the Issues tab to keep them here for
+                quick access.
+              </p>
             </div>
           ) : (
             pinnedIssues.map(issue => (

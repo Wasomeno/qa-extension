@@ -19,7 +19,6 @@ import {
   Heading1,
   Heading2,
   Heading3,
-  Minus,
   Link as LinkIcon,
   Terminal,
   Undo,

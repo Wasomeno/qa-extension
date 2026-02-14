@@ -16,6 +16,14 @@ function isExtensionPage(): boolean {
   }
 }
 
+function isNode(): boolean {
+  return (
+    typeof process !== 'undefined' &&
+    !!process.versions &&
+    !!process.versions.node
+  );
+}
+
 async function sendMessageWithRetry(
   payload: any,
   attempts = 6,
@@ -52,18 +60,30 @@ export async function bridgeFetch<T = any>(
 ): Promise<BackgroundFetchResponse<T>> {
   // Content scripts run under the page origin and are subject to CORS.
   // Route their requests through the background via message.
-  if (!isExtensionPage()) {
+  // Node.js environment should use direct fetch.
+  if (!isExtensionPage() && !isNode()) {
     try {
+      // Strip AbortSignal as it is not serializable
+      // Explicitly cast to any to avoid TS errors if types don't match perfectly
+      const initAny = (req.init || {}) as any;
+      const { signal, ...safeInit } = initAny;
+      const safeReq = { ...req, init: safeInit };
+
+      console.log('[Bridge] Sending background fetch request for', req.url);
       const reply = await sendMessageWithRetry(
-        { type: MessageType.BACKGROUND_FETCH, data: req },
+        { type: MessageType.BACKGROUND_FETCH, data: safeReq },
         8,
         200
       );
-      if (reply && (reply as any).success && (reply as any).data) {
+      console.log('[Bridge] Got reply:', reply);
+
+      if (reply && (reply as any).success) {
         return (reply as any).data as BackgroundFetchResponse<T>;
+      } else {
+        throw new Error((reply as any)?.error || 'Unknown background error');
       }
-      // Fall through to a uniform failure
     } catch (e: any) {
+      console.error('[Bridge] Background fetch failed:', e);
       return {
         ok: false,
         status: 0,
@@ -85,8 +105,8 @@ export async function bridgeFetch<T = any>(
       (ct.includes('application/json')
         ? 'json'
         : ct.startsWith('text/')
-        ? 'text'
-        : 'arrayBuffer');
+          ? 'text'
+          : 'arrayBuffer');
     let body: any = undefined;
     try {
       if (want === 'json') body = await resp.json();

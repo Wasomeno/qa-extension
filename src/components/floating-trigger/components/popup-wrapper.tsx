@@ -23,16 +23,16 @@ const PopupWrapper: React.FC<PopupWrapperProps> = ({
 
   // Handle clicks outside the popup
   React.useEffect(() => {
-    const handleClickOutside = (event: Event) => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (!popupRef.current) return;
+
       // Use composedPath to handle shadow DOM event retargeting
       const path = event.composedPath();
-      const clickedInsidePopup = path.some(el => el === popupRef.current);
+      const clickedInsidePopup =
+        path.some(el => el === popupRef.current) ||
+        popupRef.current?.contains(event.target as Node);
 
       if (!clickedInsidePopup) {
-        console.log('Clicked outside popup, closing...', {
-          path,
-          popupRef: popupRef.current,
-        });
         onClose();
       }
     };
@@ -40,12 +40,12 @@ const PopupWrapper: React.FC<PopupWrapperProps> = ({
     // Add event listener with a small delay to prevent immediate closure
     // Always listen on document to catch clicks globally
     const timeoutId = setTimeout(() => {
-      document.addEventListener('mousedown', handleClickOutside);
+      document.addEventListener('click', handleClickOutside);
     }, 200);
 
     return () => {
       clearTimeout(timeoutId);
-      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('click', handleClickOutside);
     };
   }, [onClose]);
 

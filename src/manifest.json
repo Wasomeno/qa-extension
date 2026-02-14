@@ -42,12 +42,18 @@
   "options_page": "options.html",
   "web_accessible_resources": [
     {
-      "resources": ["assets/*", "styles/*", "*.js", "*.css"],
+      "resources": [
+        "assets/log-loom-logo.png",
+        "assets/*",
+        "styles/*",
+        "*.js",
+        "*.css"
+      ],
       "matches": ["<all_urls>"]
     }
   ],
   "content_security_policy": {
-    "extension_pages": "script-src 'self'; object-src 'self';"
+    "extension_pages": "script-src 'self'; object-src 'self'; connect-src 'self' https://generativelanguage.googleapis.com https://gitlab.com http://localhost:3000;"
   },
   "icons": {
     "16": "icons/icon-16.png",

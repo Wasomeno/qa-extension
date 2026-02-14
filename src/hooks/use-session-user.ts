@@ -75,6 +75,7 @@ export const useSessionUser = () => {
     if (chrome.storage && chrome.storage.session) {
       await chrome.storage.session.remove(STORAGE_KEY);
     }
+    setUserState(null);
   }, []);
 
   return { user, setUser, syncUser, clearUser, loading };

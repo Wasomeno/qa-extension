@@ -131,7 +131,7 @@ const FloatingTriggerButton: React.FC<FloatingTriggerButtonProps> = ({
         initial={false}
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
-        className="fixed bg-white/95 backdrop-blur-xs border border-black/5 shadow-sm"
+        className="fixed bg-white/95 backdrop-blur-xs border border-black/5 shadow-sm overflow-hidden"
         style={{
           display: hidden ? 'none' : undefined,
           zIndex: 999999,
@@ -142,7 +142,7 @@ const FloatingTriggerButton: React.FC<FloatingTriggerButtonProps> = ({
           top: position.y + offsetY,
           width: isExpanded ? expandedWidth : restingWidth,
           height: isExpanded ? expandedHeight : restingHeight,
-          borderRadius: isExpanded ? 26 : 20,
+          borderRadius: isExpanded ? 26 : (isLoggedIn ? 20 : 26),
           opacity: opacity,
         }}
         transition={{
@@ -155,7 +155,7 @@ const FloatingTriggerButton: React.FC<FloatingTriggerButtonProps> = ({
       >
         <TooltipProvider delayDuration={200}>
           <div className="flex items-center justify-center h-full w-full">
-            <AnimatePresence>
+            <AnimatePresence mode="wait">
               {isExpanded && !isLoggedIn && (
                 <motion.div
                   key="login-container"
@@ -179,9 +179,11 @@ const FloatingTriggerButton: React.FC<FloatingTriggerButtonProps> = ({
                         <LogIn className="w-5 h-5 text-gray-700" />
                       </motion.button>
                     </TooltipTrigger>
-                    <TooltipContent side="top" className="mb-2">
-                      <p>Login</p>
-                    </TooltipContent>
+                    {!hasActivePopup && (
+                      <TooltipContent side="top" className="mb-2">
+                        <p>Login</p>
+                      </TooltipContent>
+                    )}
                   </Tooltip>
                 </motion.div>
               )}
@@ -209,9 +211,11 @@ const FloatingTriggerButton: React.FC<FloatingTriggerButtonProps> = ({
                         <PlusCircle className="w-5 h-5 text-gray-700" />
                       </motion.button>
                     </TooltipTrigger>
-                    <TooltipContent side="top" className="mb-2">
-                      <p>Create Issue</p>
-                    </TooltipContent>
+                    {!hasActivePopup && (
+                      <TooltipContent side="top" className="mb-2">
+                        <p>Create Issue</p>
+                      </TooltipContent>
+                    )}
                   </Tooltip>
 
                   {/* Pinned Issues */}
@@ -229,9 +233,11 @@ const FloatingTriggerButton: React.FC<FloatingTriggerButtonProps> = ({
                         <Pin className="w-5 h-5 text-gray-700" />
                       </motion.button>
                     </TooltipTrigger>
-                    <TooltipContent side="top" className="mb-2">
-                      <p>Pinned Issues</p>
-                    </TooltipContent>
+                    {!hasActivePopup && (
+                      <TooltipContent side="top" className="mb-2">
+                        <p>Pinned Issues</p>
+                      </TooltipContent>
+                    )}
                   </Tooltip>
                   {/* Main Menu */}
                   <Tooltip>
@@ -246,9 +252,11 @@ const FloatingTriggerButton: React.FC<FloatingTriggerButtonProps> = ({
                         <Menu className="w-5 h-5 text-gray-700" />
                       </motion.button>
                     </TooltipTrigger>
-                    <TooltipContent side="top" className="mb-2">
-                      <p>Main Menu</p>
-                    </TooltipContent>
+                    {!hasActivePopup && (
+                      <TooltipContent side="top" className="mb-2">
+                        <p>Main Menu</p>
+                      </TooltipContent>
+                    )}
                   </Tooltip>
                 </motion.div>
               )}

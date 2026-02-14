@@ -1,10 +1,13 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { ProjectFilter } from './components/project-filter';
 import { ProjectBoardView } from './components/project-board-view';
 import { useGetProjects } from '@/hooks/use-get-projects';
 import { useGetProjectBoards } from './hooks/use-get-project-boards';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ProjectBoard } from './mock-data';
+import { updateIssue } from '@/api/issue';
+import { toast } from 'sonner';
+import { useQueryClient } from '@tanstack/react-query';
 
 interface BoardsPageProps {
   portalContainer?: HTMLDivElement | null;
@@ -28,11 +31,56 @@ export const BoardsPage: React.FC<BoardsPageProps> = ({
     Number(activeProjectId)
   );
 
+  const queryClient = useQueryClient();
+
   // Select the first board by default (API returns list of boards)
   const selectedBoardData = boards[0];
 
   const handleProjectSelect = (projectId: string | number) => {
     setSelectedProjectId(projectId);
+  };
+
+  const handleMoveIssue = async (
+    issueId: string,
+    sourceColId: string,
+    targetColId: string
+  ) => {
+    if (!selectedBoardData || !activeProjectId) return;
+
+    // Find Columns
+    const sourceList = selectedBoardData.lists.find(
+      l => l.id.toString() === sourceColId
+    );
+    const targetList = selectedBoardData.lists.find(
+      l => l.id.toString() === targetColId
+    );
+
+    if (!sourceList || !targetList) return;
+
+    // Find Issue IID
+    const issue = sourceList.issues.find(i => i.id.toString() === issueId);
+    if (!issue) return;
+
+    try {
+      const updateData: any = {};
+
+      // Handle Labels
+      if (targetList.label) {
+        updateData.add_labels = [targetList.label.name];
+      }
+      if (sourceList.label) {
+        updateData.remove_labels = [sourceList.label.name];
+      }
+
+      if (Object.keys(updateData).length > 0) {
+        await updateIssue(Number(activeProjectId), issue.iid, updateData);
+        toast.success('Issue moved');
+        queryClient.invalidateQueries({ queryKey: ['project-boards'] });
+      }
+    } catch (e) {
+      console.error(e);
+      toast.error('Failed to move issue');
+    }
   };
 
   console.log('BOARDS', boards);
@@ -125,6 +173,7 @@ export const BoardsPage: React.FC<BoardsPageProps> = ({
                 <ProjectBoardView
                   key={mappedBoard.id}
                   project={mappedBoard}
+                  onMoveIssue={handleMoveIssue}
                   onOpenIssue={issue => {
                     // Map BoardIssue to structure expected by IssueDetail
                     // Minimal mapping; detail page will fetch full data or use partials

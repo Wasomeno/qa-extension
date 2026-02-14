@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { createIssueLink, Issue, createIssue } from '@/api/issue';
+import { createChildIssue, unlinkChildIssue, Issue } from '@/api/issue';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
@@ -9,14 +9,13 @@ import {
   ExternalLink,
   CheckCircle2,
   Circle,
+  XCircle,
 } from 'lucide-react';
 import { AddChildModal } from './add-child-modal';
 import { toast } from 'sonner';
 import { ChildIssue } from '@/types/issues';
 import { cn } from '@/lib/utils';
 import { IssueFormState } from '@/pages/issues/create/components/issue-form-fields';
-// MockIssue was removed from types/issues.ts, using Issue from api/issue instead
-// check if AddChildModal can handle it
 
 // Hook
 import { useGetIssues } from '@/pages/issues/hooks/use-get-issues';
@@ -41,16 +40,16 @@ export const ChildIssuesList: React.FC<ChildIssuesListProps> = ({
     issueIds: childIids,
   });
 
-  const createLinkMutation = useMutation({
-    mutationFn: (targetIid: string) =>
-      createIssueLink(parentIssue.project_id, parentIssue.iid, targetIid),
+  const createChildMutation = useMutation({
+    mutationFn: (targetIid?: number) =>
+      createChildIssue(parentIssue.project_id, parentIssue.iid, {
+        title: '', // placeholder, will be overridden by existing_child_iid if provided
+        existing_child_iid: targetIid,
+      }),
     onSuccess: () => {
-      // We need to invalidate the parent issue because the 'child' field is on it
       queryClient.invalidateQueries({
         queryKey: ['issue', parentIssue.iid],
       });
-      // Also invalidate child issues list (which uses 'issues' key)
-      // Actually useGetIssues uses 'issues' key.
       queryClient.invalidateQueries({
         queryKey: ['issues'],
       });
@@ -62,45 +61,61 @@ export const ChildIssuesList: React.FC<ChildIssuesListProps> = ({
     },
   });
 
-  const createIssueMutation = useMutation({
+  const createNewChildMutation = useMutation({
     mutationFn: (formState: IssueFormState) =>
-      createIssue(parentIssue.project_id, {
+      createChildIssue(parentIssue.project_id, parentIssue.iid, {
         title: formState.title,
         description: formState.description,
         assignee_ids: formState.selectedAssignee
           ? [parseInt(formState.selectedAssignee.id)]
           : [],
         labels: formState.selectedLabels.map(l => l.name),
+        issue_type: 'task',
       }),
-    onSuccess: async newIssue => {
-      if (newIssue.data && newIssue.data.iid) {
-        await createIssueLink(
-          parentIssue.project_id,
-          parentIssue.iid,
-          newIssue.data.iid.toString()
-        );
-        // We need to invalidate the parent issue because the 'child' field is on it
-        queryClient.invalidateQueries({
-          queryKey: ['issue', parentIssue.iid],
-        });
-        queryClient.invalidateQueries({
-          queryKey: ['child-issues', parentIssue.project_id, parentIssue.iid],
-        });
-        toast.success('Child task created and linked');
-        setIsAddModalOpen(false);
-      }
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: ['issue', parentIssue.iid],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ['issues'],
+      });
+      toast.success('Child task created and linked');
+      setIsAddModalOpen(false);
     },
     onError: () => {
       toast.error('Failed to create child task');
     },
   });
 
+  const unlinkMutation = useMutation({
+    mutationFn: (childIid: number) =>
+      unlinkChildIssue(parentIssue.project_id, parentIssue.iid, childIid),
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: ['issue', parentIssue.iid],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ['issues'],
+      });
+      toast.success('Child task unlinked');
+    },
+    onError: () => {
+      toast.error('Failed to unlink child task');
+    },
+  });
+
   const handleAddExisting = (issue: Issue) => {
-    createLinkMutation.mutate(issue.iid.toString());
+    createChildMutation.mutate(issue.iid);
   };
 
   const handleCreateNew = (formState: IssueFormState) => {
-    createIssueMutation.mutate(formState);
+    createNewChildMutation.mutate(formState);
+  };
+
+  const handleUnlink = (childIid: number) => {
+    if (confirm('Are you sure you want to unlink this child task?')) {
+      unlinkMutation.mutate(childIid);
+    }
   };
 
   if (isLoading) {
@@ -117,15 +132,13 @@ export const ChildIssuesList: React.FC<ChildIssuesListProps> = ({
     );
   }
 
-  // no derivation needed, hook provides data
-
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h2 className="text-sm font-medium text-gray-900 flex items-center gap-2">
           Child Tasks
           <span className="text-xs text-gray-400 font-normal">
-            {childIssues.length}
+            {childIssues?.length || 0}
           </span>
         </h2>
         <Button
@@ -140,7 +153,7 @@ export const ChildIssuesList: React.FC<ChildIssuesListProps> = ({
       </div>
 
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-        {childIssues.length > 0 ? (
+        {childIssues && childIssues.length > 0 ? (
           <div className="divide-y divide-gray-100">
             {childIssues.map((issue: ChildIssue) => (
               <div
@@ -151,7 +164,6 @@ export const ChildIssuesList: React.FC<ChildIssuesListProps> = ({
                   <div
                     className={cn(
                       'flex-shrink-0',
-                      // 'state' might differ in Issue vs IssueLink, but Issue has 'state'
                       issue.state === 'opened'
                         ? 'text-green-500'
                         : 'text-blue-500'
@@ -185,7 +197,16 @@ export const ChildIssuesList: React.FC<ChildIssuesListProps> = ({
                   >
                     <ExternalLink className="w-3.5 h-3.5" />
                   </Button>
-                  {/* Unlink removed as we don't have link ID anymore */}
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-7 w-7 p-0 text-gray-400 hover:text-red-600"
+                    onClick={() => handleUnlink(issue.iid)}
+                    disabled={unlinkMutation.isPending}
+                    title="Unlink child task"
+                  >
+                    <XCircle className="w-3.5 h-3.5" />
+                  </Button>
                 </div>
               </div>
             ))}

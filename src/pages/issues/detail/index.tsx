@@ -11,6 +11,7 @@ import {
   Calendar,
   Smile,
   Reply,
+  Trash2,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -34,6 +35,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { usePinnedIssues } from '@/hooks/use-pinned-issues';
 import { useGetIssueComments } from '../hooks/use-get-issue-comments';
 import { ChildIssuesList } from '@/pages/issues/detail/components/child-issues-list';
+import { useIssueCommentMutations } from '@/pages/issues/hooks/use-issue-comment-mutations';
 
 interface IssueDetailPageProps {
   issue: Issue;
@@ -175,6 +177,38 @@ export const IssueDetailPage: React.FC<IssueDetailPageProps> = ({
   console.log(issue);
 
   const comments = useGetIssueComments(issue.project_id, issue.iid);
+
+  // Comments Mutation Logic
+  const [newComment, setNewComment] = useState('');
+  const [editingCommentId, setEditingCommentId] = useState<number | null>(null);
+  const [editCommentBody, setEditCommentBody] = useState('');
+
+  const {
+    createComment,
+    updateComment,
+    deleteComment,
+    isCreating,
+    isUpdating,
+    isDeleting,
+  } = useIssueCommentMutations(projectId, issueId);
+
+  const handleCreateComment = async () => {
+    if (!newComment.trim()) return;
+    await createComment({ body: newComment });
+    setNewComment('');
+  };
+
+  const handleUpdateComment = async (commentId: number) => {
+    if (!editCommentBody.trim()) return;
+    await updateComment({ commentId, data: { body: editCommentBody } });
+    setEditingCommentId(null);
+  };
+
+  const handleDeleteComment = async (commentId: number) => {
+    if (confirm('Are you sure you want to delete this comment?')) {
+      await deleteComment(commentId);
+    }
+  };
 
   // Adapting to single assignee for now as per previous code assumption, though API supports array
   const [selectedAssignee, setSelectedAssignee] = useState(
@@ -402,7 +436,7 @@ export const IssueDetailPage: React.FC<IssueDetailPageProps> = ({
           />
 
           {/* Comments Section */}
-          <div className="space-y-6">
+          <div className="space-y-6 pb-6">
             <h2 className="text-sm font-medium text-gray-900 flex items-center gap-2">
               Comments
               <span className="text-xs text-gray-400 font-normal">
@@ -459,21 +493,92 @@ export const IssueDetailPage: React.FC<IssueDetailPageProps> = ({
                               <button className="p-1 hover:bg-gray-200 rounded text-gray-400 hover:text-gray-600">
                                 <Reply className="w-3.5 h-3.5" />
                               </button>
-                              <button className="p-1 hover:bg-gray-200 rounded text-gray-400 hover:text-gray-600">
-                                <Pencil className="w-3.5 h-3.5" />
-                              </button>
+                              {editingCommentId !== comment.id && (
+                                <>
+                                  <button
+                                    onClick={() => {
+                                      setEditingCommentId(comment.id);
+                                      setEditCommentBody(comment.body);
+                                    }}
+                                    className="p-1 hover:bg-gray-200 rounded text-gray-400 hover:text-gray-600"
+                                  >
+                                    <Pencil className="w-3.5 h-3.5" />
+                                  </button>
+                                  <button
+                                    onClick={() =>
+                                      handleDeleteComment(comment.id)
+                                    }
+                                    className="p-1 hover:bg-gray-200 rounded text-gray-400 hover:text-red-600"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </>
+                              )}
                             </div>
                           </div>
                           <div className="p-3">
-                            <MarkdownRenderer
-                              content={comment.body}
-                              className="text-xs [&_p]:leading-relaxed [&_p]:!mt-1.5 [&_h1]:!text-base [&_h2]:!text-sm [&_h3]:!text-xs [&_code]:!text-xs [&_pre]:!p-2 [&_li]:!leading-relaxed [&_table]:!text-xs [&_td]:!text-xs [&_th]:!text-xs"
-                            />
+                            {editingCommentId === comment.id ? (
+                              <div className="space-y-2">
+                                <DescriptionEditor
+                                  content={editCommentBody}
+                                  onChange={setEditCommentBody}
+                                  className="min-h-[100px]"
+                                  portalContainer={
+                                    portalContainer || containerRef.current
+                                  }
+                                />
+                                <div className="flex justify-end gap-2">
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    onClick={() => setEditingCommentId(null)}
+                                  >
+                                    Cancel
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    onClick={() =>
+                                      handleUpdateComment(comment.id)
+                                    }
+                                    disabled={isUpdating}
+                                  >
+                                    Save
+                                  </Button>
+                                </div>
+                              </div>
+                            ) : (
+                              <MarkdownRenderer
+                                content={comment.body}
+                                className="text-xs [&_p]:leading-relaxed [&_p]:!mt-1.5 [&_h1]:!text-base [&_h2]:!text-sm [&_h3]:!text-xs [&_code]:!text-xs [&_pre]:!p-2 [&_li]:!leading-relaxed [&_table]:!text-xs [&_td]:!text-xs [&_th]:!text-xs"
+                              />
+                            )}
                           </div>
                         </div>
                       </div>
                     </div>
                   ))}
+            </div>
+
+            {/* New Comment Box */}
+            <div className="pt-6 mt-2 border-t border-gray-100">
+              <h3 className="text-sm font-medium mb-3 text-gray-700">Add a comment</h3>
+              <div className="space-y-2">
+                <DescriptionEditor
+                  content={newComment}
+                  onChange={setNewComment}
+                  placeholder="Write a comment..."
+                  className="min-h-[120px]"
+                  portalContainer={portalContainer || containerRef.current}
+                />
+                <div className="flex justify-end">
+                  <Button
+                    onClick={handleCreateComment}
+                    disabled={isCreating || !newComment.trim()}
+                  >
+                    {isCreating ? 'Posting...' : 'Post Comment'}
+                  </Button>
+                </div>
+              </div>
             </div>
           </div>
         </div>

@@ -34,6 +34,11 @@ interface ProjectBoardViewProps {
   project: ProjectBoard;
   onPinIssue?: (issue: BoardIssue) => void;
   onOpenIssue?: (issue: BoardIssue) => void;
+  onMoveIssue?: (
+    issueId: string,
+    sourceColId: string,
+    targetColId: string
+  ) => void;
 }
 
 // Droppable Wrapper for Column
@@ -62,12 +67,14 @@ export const ProjectBoardView: React.FC<ProjectBoardViewProps> = ({
   project: initialProject,
   onPinIssue,
   onOpenIssue,
+  onMoveIssue,
 }) => {
   // Lift state to local component to allow reordering
   const [columns, setColumns] = useState<IBoardColumn[]>(
     initialProject.columns
   );
   const [activeIssue, setActiveIssue] = useState<BoardIssue | null>(null);
+  const [startColumnId, setStartColumnId] = useState<string | null>(null);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -90,6 +97,9 @@ export const ProjectBoardView: React.FC<ProjectBoardViewProps> = ({
     const { active } = event;
     const issue = active.data.current?.issue as BoardIssue;
     if (issue) setActiveIssue(issue);
+
+    const activeColumn = findColumn(active.id as string);
+    if (activeColumn) setStartColumnId(activeColumn.id);
   };
 
   const handleDragOver = (event: DragOverEvent) => {
@@ -248,12 +258,25 @@ export const ProjectBoardView: React.FC<ProjectBoardViewProps> = ({
     const { active, over } = event;
     setActiveIssue(null);
 
-    if (!over) return;
+    if (!over) {
+      setStartColumnId(null);
+      return;
+    }
 
     const activeColumn = findColumn(active.id as string);
     const overColumn = findColumn(over.id as string);
 
-    if (!activeColumn || !overColumn) return;
+    if (!activeColumn || !overColumn) {
+      setStartColumnId(null);
+      return;
+    }
+
+    // If different column, trigger move
+    if (activeColumn.id !== startColumnId) {
+      // Logic for move is handled in onDragOver optimistically
+      // Here we just persist
+      onMoveIssue?.(active.id as string, startColumnId!, activeColumn.id);
+    }
 
     // If same column, reorder
     if (activeColumn === overColumn) {
@@ -275,6 +298,7 @@ export const ProjectBoardView: React.FC<ProjectBoardViewProps> = ({
         });
       }
     }
+    setStartColumnId(null);
   };
 
   const dropAnimation: DropAnimation = {

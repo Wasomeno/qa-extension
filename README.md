@@ -9,28 +9,31 @@ An AI-powered quality assurance platform that revolutionizes bug reporting and t
 ## Features
 
 ### 🎯 Smart Issue Creation
+
 - **AI-Powered Analysis**: Automatically generate comprehensive bug reports from user recordings
 - **Context-Aware Descriptions**: Include browser info, console errors, and reproduction steps
 - **Intelligent Classification**: Auto-assign severity, priority, and relevant labels
 - **Acceptance Criteria**: Generate testable acceptance criteria for every issue
 
- 
-
 ### 🔗 Seamless Integrations
+
 - **GitLab Integration**: Automatic issue creation, project synchronization, and webhook support
 - **Slack Notifications**: Real-time alerts and team collaboration features
 - **OAuth Authentication**: Secure single sign-on with GitLab and Slack
 - **API-First Design**: RESTful API with comprehensive webhook support
 
 ### 🤖 AI-Driven Automation
+
 - **Issue Generation**: Transform captured context into detailed bug reports
 - **Test Script Creation**: Generate Playwright, Cypress, or Selenium test scripts
 - **Smart Classification**: Automatic severity and priority assignment
 - **Content Enhancement**: Improve existing issue descriptions with AI insights
 
 ### 🌐 Cross-Platform Support
+
 - **Browser Extension**: Chrome extension for seamless web testing
 - **Web Dashboard**: Comprehensive project and issue management interface
+- **QA Agent CLI**: Intelligent CLI tool for GitLab issue management via natural language
 - **Mobile Ready**: Responsive design for mobile testing workflows
 - **API Access**: Full programmatic access to all features
 
@@ -61,6 +64,7 @@ nano .env
 ```
 
 Required environment variables:
+
 ```env
 # Database
 DATABASE_URL=postgresql://qa_user:qa_password@localhost:5432/qa_command_center
@@ -132,7 +136,7 @@ QA Command Center
 ├── extension/           # Browser extension (Chrome & Firefox)
 │   ├── src/
 │   │   ├── background/  # Chrome service worker / Firefox background script
-│   │   ├── content/     # Content scripts  
+│   │   ├── content/     # Content scripts
 │   │   ├── popup/       # Extension popup
 │   │   ├── options/     # Settings page
 │   │   └── components/  # React components
@@ -225,11 +229,12 @@ docker-compose restart backend
 ### Testing
 
 #### Unit Tests
+
 ```bash
 # Backend unit tests
 cd backend && npm test
 
-# Extension unit tests  
+# Extension unit tests
 cd extension && npm test
 
 # Run all tests
@@ -237,6 +242,7 @@ npm run test:all
 ```
 
 #### Integration Tests
+
 ```bash
 # API integration tests
 cd backend && npm run test:integration
@@ -246,6 +252,7 @@ npm run test:e2e
 ```
 
 #### Load Testing
+
 ```bash
 # Performance testing
 cd tests/load
@@ -283,7 +290,13 @@ npm run load-test
 3. **Generate Script**: AI creates a complete test script
 4. **Review and Integrate**: Add the script to your test suite
 
-### 5. Team Collaboration
+### 5. QA Agent CLI
+
+1. **Configure Environment**: Ensure `GOOGLE_API_KEY` and `GITLAB_TOKEN` are set in your `.env` file.
+2. **Run Agent**: Execute `npm run agent:run`.
+3. **Interact**: Ask questions or give commands like "List open bugs in project X" directly in the terminal.
+
+### 6. Team Collaboration
 
 1. **Share Recordings**: Send recording links to team members
 2. **Slack Notifications**: Automatic alerts for new issues and updates
@@ -301,6 +314,7 @@ The QA Command Center provides a comprehensive REST API. Full documentation is a
 ### Quick API Examples
 
 #### Authentication
+
 ```javascript
 // Register new user
 const response = await fetch('/api/auth/register', {
@@ -310,44 +324,46 @@ const response = await fetch('/api/auth/register', {
     email: 'user@example.com',
     username: 'testuser',
     fullName: 'Test User',
-    password: 'SecurePass123!'
-  })
+    password: 'SecurePass123!',
+  }),
 });
 ```
 
 #### Create Issue
+
 ```javascript
 // Create new issue
 const issue = await fetch('/api/issues', {
   method: 'POST',
   headers: {
-    'Authorization': `Bearer ${token}`,
-    'Content-Type': 'application/json'
+    Authorization: `Bearer ${token}`,
+    'Content-Type': 'application/json',
   },
   body: JSON.stringify({
     title: 'Login button not working',
     description: 'Detailed description...',
     projectId: 'project-uuid',
     severity: 'high',
-    priority: 'urgent'
-  })
+    priority: 'urgent',
+  }),
 });
 ```
 
 #### Start Recording
+
 ```javascript
 // Start new recording session
 const recording = await fetch('/api/recordings', {
   method: 'POST',
   headers: {
-    'Authorization': `Bearer ${token}`,
-    'Content-Type': 'application/json'
+    Authorization: `Bearer ${token}`,
+    'Content-Type': 'application/json',
   },
   body: JSON.stringify({
     name: 'Login flow recording',
     projectId: 'project-uuid',
-    url: 'https://myapp.com/login'
-  })
+    url: 'https://myapp.com/login',
+  }),
 });
 ```
 
@@ -355,22 +371,22 @@ const recording = await fetch('/api/recordings', {
 
 ### Environment Variables
 
-| Variable | Description | Default | Required |
-|----------|-------------|---------|----------|
-| `NODE_ENV` | Environment mode | `development` | No |
-| `PORT` | API server port | `3000` | No |
-| `DATABASE_URL` | PostgreSQL connection string | - | Yes |
-| `REDIS_URL` | Redis connection string | - | Yes |
-| `JWT_SECRET` | JWT signing secret | - | Yes |
-| `REFRESH_TOKEN_SECRET` | Refresh token secret | - | Yes |
-| `GITLAB_CLIENT_ID` | GitLab OAuth client ID | - | Yes* |
-| `GITLAB_CLIENT_SECRET` | GitLab OAuth secret | - | Yes* |
-| `SLACK_CLIENT_ID` | Slack OAuth client ID | - | No |
-| `SLACK_CLIENT_SECRET` | Slack OAuth secret | - | No |
-| `OPENAI_API_KEY` | OpenAI API key | - | Yes |
-| `OPENAI_MODEL` | OpenAI model to use | `gpt-4.1-mini` | No |
+| Variable               | Description                  | Default        | Required |
+| ---------------------- | ---------------------------- | -------------- | -------- |
+| `NODE_ENV`             | Environment mode             | `development`  | No       |
+| `PORT`                 | API server port              | `3000`         | No       |
+| `DATABASE_URL`         | PostgreSQL connection string | -              | Yes      |
+| `REDIS_URL`            | Redis connection string      | -              | Yes      |
+| `JWT_SECRET`           | JWT signing secret           | -              | Yes      |
+| `REFRESH_TOKEN_SECRET` | Refresh token secret         | -              | Yes      |
+| `GITLAB_CLIENT_ID`     | GitLab OAuth client ID       | -              | Yes\*    |
+| `GITLAB_CLIENT_SECRET` | GitLab OAuth secret          | -              | Yes\*    |
+| `SLACK_CLIENT_ID`      | Slack OAuth client ID        | -              | No       |
+| `SLACK_CLIENT_SECRET`  | Slack OAuth secret           | -              | No       |
+| `OPENAI_API_KEY`       | OpenAI API key               | -              | Yes      |
+| `OPENAI_MODEL`         | OpenAI model to use          | `gpt-4.1-mini` | No       |
 
-*Required for GitLab integration
+\*Required for GitLab integration
 
 ### Extension Configuration
 
@@ -392,12 +408,12 @@ module.exports = {
     client: 'postgresql',
     connection: process.env.DATABASE_URL,
     migrations: {
-      directory: './database/migrations'
+      directory: './database/migrations',
     },
     seeds: {
-      directory: './database/seeds'
-    }
-  }
+      directory: './database/seeds',
+    },
+  },
 };
 ```
 
@@ -426,7 +442,7 @@ npm install --production
 npm run build
 
 # Build extension
-cd ../extension  
+cd ../extension
 npm install --production
 npm run build
 
@@ -440,6 +456,7 @@ pm2 start ecosystem.config.js
 ### Environment-Specific Configuration
 
 #### Staging
+
 ```env
 NODE_ENV=staging
 DATABASE_URL=postgresql://user:pass@staging-db:5432/qa_staging
@@ -447,6 +464,7 @@ CORS_ORIGIN=https://staging.qa-command-center.com
 ```
 
 #### Production
+
 ```env
 NODE_ENV=production
 DATABASE_URL=postgresql://user:pass@prod-db:5432/qa_production
@@ -457,24 +475,28 @@ RATE_LIMIT_MAX_REQUESTS=1000
 ## Security
 
 ### Authentication & Authorization
+
 - JWT-based authentication with refresh tokens
 - OAuth 2.0 integration with GitLab and Slack
 - Role-based access control (RBAC)
 - Session management with secure cookies
 
 ### Data Protection
+
 - HTTPS enforcement in production
 - Input validation and sanitization
 - SQL injection prevention with parameterized queries
 - XSS protection with content security policies
 
 ### API Security
+
 - Rate limiting on all endpoints
 - Request size limits
 - CORS configuration
 - Security headers with Helmet.js
 
 ### Extension Security
+
 - Content Security Policy (CSP)
 - Secure communication with HTTPS
 - Permission-based access model
@@ -483,23 +505,26 @@ RATE_LIMIT_MAX_REQUESTS=1000
 ## Monitoring & Logging
 
 ### Application Monitoring
+
 - Health check endpoints
 - Performance metrics with Prometheus
 - Error tracking with Sentry
 - Uptime monitoring
 
 ### Logging Strategy
+
 ```javascript
 // Structured logging with Winston
 logger.info('User action', {
   userId: 'uuid',
   action: 'create_issue',
   projectId: 'project-uuid',
-  timestamp: new Date().toISOString()
+  timestamp: new Date().toISOString(),
 });
 ```
 
 ### Metrics Collection
+
 - API response times
 - Database query performance
 - Extension usage statistics
@@ -510,6 +535,7 @@ logger.info('User action', {
 ### Common Issues
 
 #### Backend Won't Start
+
 ```bash
 # Check database connection
 npm run db:ping
@@ -522,12 +548,14 @@ docker-compose ps
 ```
 
 #### Extension Not Loading
+
 1. Verify Chrome developer mode is enabled
 2. Check extension manifest.json validity
 3. Review browser console for errors
 4. Ensure proper CORS configuration
 
 #### Database Connection Issues
+
 ```bash
 # Test database connectivity
 psql $DATABASE_URL
@@ -540,6 +568,7 @@ npm run db:status
 ```
 
 #### GitLab Integration Issues
+
 1. Verify OAuth application settings in GitLab
 2. Check redirect URI configuration
 3. Confirm client ID and secret are correct
@@ -548,12 +577,14 @@ npm run db:status
 ### Debug Mode
 
 Enable debug logging:
+
 ```env
 LOG_LEVEL=debug
 NODE_ENV=development
 ```
 
 Check application logs:
+
 ```bash
 # Backend logs
 npm run logs
@@ -612,12 +643,14 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ### Commercial Support
 
 For enterprise support, custom integrations, or professional services:
+
 - Email: enterprise@qa-command-center.com
 - Website: https://qa-command-center.com/enterprise
 
 ## Roadmap
 
 ### Version 1.1 (Q2 2024)
+
 - [ ] Advanced recording filters and smart detection
 - [ ] Mobile testing support with device emulation
 - [ ] Jira integration alongside GitLab
@@ -625,6 +658,7 @@ For enterprise support, custom integrations, or professional services:
 - [ ] Performance testing integration
 
 ### Version 1.2 (Q3 2024)
+
 - [ ] Multi-language support (i18n)
 - [ ] Advanced analytics dashboard
 - [ ] Custom AI model fine-tuning
@@ -632,6 +666,7 @@ For enterprise support, custom integrations, or professional services:
 - [ ] Advanced reporting and exports
 
 ### Version 2.0 (Q4 2024)
+
 - [ ] Visual regression testing
 - [ ] Cross-browser testing automation
 - [ ] API testing capabilities
