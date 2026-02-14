@@ -14,6 +14,7 @@ module.exports = (env, argv) => {
       background: './src/background/index.ts',
       content: './src/content/simple-trigger.ts',
       recorder: './src/content/recorder/index.tsx',
+      player: './src/content/player/index.ts',
       'content-simple-test': './src/content-simple-test.js',
       popup: './src/popup/index.tsx',
       options: './src/options/index.tsx',

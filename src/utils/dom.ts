@@ -363,6 +363,21 @@ export function simulateClick(element: Element): void {
 }
 
 /**
+ * Simulate user input on an element
+ */
+export function simulateInput(element: Element, value: string): void {
+  if (element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement || element instanceof HTMLSelectElement) {
+    element.value = value;
+    
+    // Dispatch input event
+    element.dispatchEvent(new Event('input', { bubbles: true, cancelable: true }));
+    
+    // Dispatch change event
+    element.dispatchEvent(new Event('change', { bubbles: true, cancelable: true }));
+  }
+}
+
+/**
  * Get element's computed style properties
  */
 export function getElementStyles(element: Element, properties: string[]): Record<string, string> {

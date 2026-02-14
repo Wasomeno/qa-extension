@@ -146,6 +146,31 @@ class BackgroundService {
       this.handleContextMenu.bind(this)
     );
     this.setupContextMenus();
+
+    // Listen for tab updates to re-inject player if playback is active
+    chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+      if (changeInfo.status === 'complete' && tab.url) {
+        void this.checkAndInjectPlayer(tabId, tab.url);
+      }
+    });
+  }
+
+  private async checkAndInjectPlayer(tabId: number, url: string) {
+    if (url.startsWith('chrome://') || url.startsWith('chrome-extension://'))
+      return;
+
+    try {
+      const result = await chrome.storage.local.get(['activePlayback']);
+      if (result.activePlayback && result.activePlayback.isActive) {
+        console.log('[Background] Active playback detected, injecting player.js');
+        await chrome.scripting.executeScript({
+          target: { tabId },
+          files: ['player.js'],
+        });
+      }
+    } catch (error) {
+      console.error('[Background] Failed to inject player.js:', error);
+    }
   }
 
   private async handleMessage(
@@ -204,6 +229,66 @@ class BackgroundService {
         } catch (e: any) {
           sendResponse({ success: false, error: e?.message || 'AI processing failed' });
         }
+        break;
+
+      case MessageType.START_PLAYBACK:
+        try {
+          const { blueprint } = message.data || {};
+          if (!blueprint) {
+            sendResponse({ success: false, error: 'Missing blueprint' });
+            return;
+          }
+
+          const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+          if (!tab?.id) {
+            sendResponse({ success: false, error: 'No active tab' });
+            return;
+          }
+
+          // Persist state
+          await chrome.storage.local.set({
+            activePlayback: {
+              isActive: true,
+              blueprint,
+              currentStepIndex: 0,
+              status: 'playing',
+            },
+          });
+
+          // Inject player
+          await chrome.scripting.executeScript({
+            target: { tabId: tab.id },
+            files: ['player.js'],
+          });
+
+          // Send message to start
+          setTimeout(() => {
+            chrome.tabs.sendMessage(tab.id!, {
+              type: MessageType.START_PLAYBACK,
+              data: { blueprint },
+            });
+          }, 500);
+
+          sendResponse({ success: true });
+        } catch (e: any) {
+          sendResponse({ success: false, error: e?.message });
+        }
+        break;
+
+      case MessageType.STOP_PLAYBACK:
+        await chrome.storage.local.remove('activePlayback');
+        this.broadcast({ type: MessageType.STOP_PLAYBACK });
+        sendResponse({ success: true });
+        break;
+
+      case MessageType.PLAYBACK_STATUS_UPDATE:
+        // Could be used to update UI or logs
+        console.log('[Background] Playback status update:', message.data);
+        if (message.data.status === 'completed' || message.data.status === 'failed') {
+          // Keep state for a bit so UI can show it, or remove?
+          // For now, let's keep it until manually cleared or new test starts
+        }
+        sendResponse({ success: true });
         break;
 
       default:
