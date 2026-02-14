@@ -5,6 +5,7 @@ import {
 } from '../types/messages';
 import { AIProcessor } from '../services/ai-processor';
 import { RawEvent } from '../types/recording';
+import { SAMPLE_BLUEPRINT } from '../lib/seed-data';
 
 class BackgroundService {
   private aiProcessor: AIProcessor;
@@ -39,11 +40,20 @@ class BackgroundService {
   private setupListeners() {
     console.log('Setting up message listeners...');
 
-    chrome.runtime.onInstalled.addListener(() => {
+    chrome.runtime.onInstalled.addListener(async () => {
       // Allow content scripts to access storage.session
       if (chrome.storage && chrome.storage.session) {
         chrome.storage.session.setAccessLevel({
           accessLevel: 'TRUSTED_AND_UNTRUSTED_CONTEXTS',
+        });
+      }
+
+      // Seed sample data if empty
+      const result = await chrome.storage.local.get(['test-blueprints']);
+      if (!result['test-blueprints'] || result['test-blueprints'].length === 0) {
+        console.log('Seeding sample blueprint...');
+        await chrome.storage.local.set({
+          'test-blueprints': [SAMPLE_BLUEPRINT],
         });
       }
     });
