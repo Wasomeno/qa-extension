@@ -134,6 +134,17 @@
     text-transform: none;
   }
 
+  /* SVG normalization for Lucide icons */
+  svg {
+    display: inline-block;
+    vertical-align: middle;
+  }
+
+  /* Universal box-sizing for shadow DOM elements */
+  * {
+    box-sizing: border-box;
+  }
+
   /* Extension-specific styles */
   .extension-popup {
     @apply w-96 min-h-[500px] max-h-[600px] overflow-y-auto overflow-x-hidden;

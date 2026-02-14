@@ -15,6 +15,7 @@ export interface RecordingSession {
   id: string;
   name: string;
   baseUrl: string;
+  projectId?: number;
   createdAt: number;
   events: RawEvent[];
 }
@@ -27,8 +28,10 @@ export interface TestStep {
 }
 
 export interface TestBlueprint {
+  id: string;
   name: string;
   description: string;
+  projectId?: number;
   steps: TestStep[];
   parameters: string[];
 }

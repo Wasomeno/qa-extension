@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { EventLogger } from './event-logger';
 import { MessageType } from '@/types/messages';
+import { RawEvent } from '@/types/recording';
 
 interface RecorderUIProps {
   shadowHostId: string;
@@ -8,12 +9,15 @@ interface RecorderUIProps {
 
 const RecorderUI: React.FC<RecorderUIProps> = ({ shadowHostId }) => {
   const [isRecording, setIsRecording] = useState(false);
-  const [events, setEvents] = useState<any[]>([]);
-  const eventsRef = useRef<any[]>([]);
+  const [events, setEvents] = useState<RawEvent[]>([]);
+  const eventsRef = useRef<RawEvent[]>([]);
+  const scrollRef = useRef<HTMLDivElement>(null);
   
-  // Sync ref with state
   useEffect(() => {
     eventsRef.current = events;
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
   }, [events]);
 
   const [logger] = useState(() => new EventLogger(shadowHostId, (event) => {
@@ -21,7 +25,6 @@ const RecorderUI: React.FC<RecorderUIProps> = ({ shadowHostId }) => {
   }));
 
   useEffect(() => {
-    // Check initial state from storage
     chrome.storage.local.get(['isRecording'], (result) => {
       if (result.isRecording) {
         logger.start();
@@ -29,7 +32,7 @@ const RecorderUI: React.FC<RecorderUIProps> = ({ shadowHostId }) => {
       }
     });
 
-    const handleMessage = (message: any, sender: any, sendResponse: any) => {
+    const handleMessage = (message: any, sender: chrome.runtime.MessageSender, sendResponse: (response?: any) => void) => {
       if (message.type === MessageType.START_RECORDING) {
         logger.start();
         setIsRecording(true);
@@ -38,7 +41,6 @@ const RecorderUI: React.FC<RecorderUIProps> = ({ shadowHostId }) => {
       } else if (message.type === MessageType.STOP_RECORDING) {
         logger.stop();
         setIsRecording(false);
-        // Return events to background/popup
         sendResponse?.({ success: true, events: eventsRef.current });
       }
       return true;
@@ -71,14 +73,25 @@ const RecorderUI: React.FC<RecorderUIProps> = ({ shadowHostId }) => {
             <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
             <span className="text-xs font-bold text-red-600 uppercase tracking-wider">Recording</span>
           </div>
-          <div className="max-h-32 overflow-y-auto">
+          <div ref={scrollRef} className="max-h-48 overflow-y-auto custom-scrollbar">
             {events.length === 0 ? (
               <p className="text-[10px] text-gray-500 italic">Waiting for interactions...</p>
             ) : (
-              <ul className="space-y-1">
-                {events.slice(-5).reverse().map((e, i) => (
-                  <li key={i} className="text-[10px] text-gray-700 truncate border-b border-gray-100 pb-1">
-                    <span className="font-semibold">{e.type}:</span> {e.element.tagName}
+              <ul className="space-y-1.5">
+                {events.map((e, i) => (
+                  <li key={i} className="text-[10px] text-gray-700 border-b border-gray-100 pb-1.5">
+                    <div className="flex justify-between items-start mb-0.5">
+                      <span className="font-bold text-gray-900 uppercase text-[9px]">{e.type}</span>
+                      <span className="text-gray-400 text-[8px]">{new Date(e.timestamp).toLocaleTimeString([], { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span>
+                    </div>
+                    <div className="font-mono bg-gray-50 p-1 rounded border border-gray-100 truncate mb-1" title={e.element.selector}>
+                      {e.element.selector}
+                    </div>
+                    {e.element.textContent && (
+                      <div className="text-gray-500 italic truncate">
+                        "{e.element.textContent}"
+                      </div>
+                    )}
                   </li>
                 ))}
               </ul>

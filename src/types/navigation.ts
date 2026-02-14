@@ -7,6 +7,7 @@ export type ViewType =
   | 'create-issue' 
   | 'profile' 
   | 'agent'
+  | 'recordings'
   | 'login'
   | 'loading';
 

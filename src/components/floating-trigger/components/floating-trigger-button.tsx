@@ -1,6 +1,13 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { PlusCircle, List, Pin, Menu, LogIn } from 'lucide-react';
+import {
+  PlusCircle,
+  Pin,
+  Menu,
+  LogIn,
+  Video as VideoIcon,
+  Video,
+} from 'lucide-react';
 import { useKeyboardIsolation } from '@/hooks/use-keyboard-isolation';
 import {
   Tooltip,
@@ -8,6 +15,12 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover';
+import { CompactRecordingsList } from '@/pages/recordings/components/compact-list';
 
 interface FloatingTriggerButtonProps {
   position: { x: number; y: number };
@@ -17,7 +30,7 @@ interface FloatingTriggerButtonProps {
   opacity?: number;
   onHoverChange?: (isHovered: boolean) => void;
   onActionClick?: (
-    action: 'issue' | 'issues' | 'pinned' | 'menu' | 'login',
+    action: 'issue' | 'issues' | 'pinned' | 'menu' | 'login' | 'record',
     iconRect: DOMRect,
     capsuleRect: DOMRect
   ) => void;
@@ -79,9 +92,11 @@ const FloatingTriggerButton: React.FC<FloatingTriggerButtonProps> = ({
   const keyboardIsolation = useKeyboardIsolation();
   const rootRef = React.useRef<HTMLDivElement>(null);
   const [isHovered, setIsHovered] = React.useState(false);
+  const [isPopoverOpen, setIsPopoverOpen] = React.useState(false);
   const createIconRef = React.useRef<HTMLButtonElement>(null);
   const listIconRef = React.useRef<HTMLButtonElement>(null);
   const pinnedIconRef = React.useRef<HTMLButtonElement>(null);
+  const recordIconRef = React.useRef<HTMLButtonElement>(null);
   const menuIconRef = React.useRef<HTMLButtonElement>(null);
   const loginIconRef = React.useRef<HTMLButtonElement>(null);
 
@@ -97,7 +112,7 @@ const FloatingTriggerButton: React.FC<FloatingTriggerButtonProps> = ({
 
   const handleActionClick = (
     e: React.MouseEvent<HTMLButtonElement>,
-    action: 'issue' | 'issues' | 'pinned' | 'menu' | 'login',
+    action: 'issue' | 'issues' | 'pinned' | 'menu' | 'login' | 'record',
     iconRef: React.RefObject<HTMLButtonElement>
   ) => {
     e.preventDefault();
@@ -109,13 +124,13 @@ const FloatingTriggerButton: React.FC<FloatingTriggerButtonProps> = ({
     }
   };
 
-  // Show expanded state if hovered OR if there's an active popup
-  const isExpanded = isHovered || hasActivePopup;
+  // Show expanded state if hovered OR if there's an active popup OR if popover is open
+  const isExpanded = isHovered || hasActivePopup || isPopoverOpen;
 
   // Calculate position adjustment to keep capsule centered horizontally
   // and grow from bottom to top vertically
   const restingWidth = isLoggedIn ? 100 : 40;
-  const expandedWidth = isLoggedIn ? 200 : 60; // Wider for 3 buttons
+  const expandedWidth = isLoggedIn ? 240 : 60; // Wider for 4 buttons
   const restingHeight = 24;
   const expandedHeight = 52; // Slightly taller for elegance
   const widthDiff = expandedWidth - restingWidth;
@@ -131,18 +146,19 @@ const FloatingTriggerButton: React.FC<FloatingTriggerButtonProps> = ({
         initial={false}
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
-        className="fixed bg-white/95 backdrop-blur-xs border border-black/5 shadow-sm overflow-hidden"
+        className="fixed bg-white/95 backdrop-blur-xs border border-black/5 shadow-sm"
         style={{
           display: hidden ? 'none' : undefined,
           zIndex: 999999,
           pointerEvents: hidden ? 'none' : 'auto',
+          overflow: isExpanded ? 'visible' : 'hidden',
         }}
         animate={{
           left: position.x + offsetX,
           top: position.y + offsetY,
           width: isExpanded ? expandedWidth : restingWidth,
           height: isExpanded ? expandedHeight : restingHeight,
-          borderRadius: isExpanded ? 26 : (isLoggedIn ? 20 : 26),
+          borderRadius: isExpanded ? 26 : isLoggedIn ? 20 : 26,
           opacity: opacity,
         }}
         transition={{
@@ -239,6 +255,29 @@ const FloatingTriggerButton: React.FC<FloatingTriggerButtonProps> = ({
                       </TooltipContent>
                     )}
                   </Tooltip>
+
+                  {/* Record Test */}
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <motion.button
+                        ref={pinnedIconRef}
+                        variants={iconVariants}
+                        onClick={e =>
+                          handleActionClick(e, 'record', pinnedIconRef)
+                        }
+                        className="p-2 rounded-full hover:bg-black/5 transition-colors pointer-events-auto active:scale-95"
+                        aria-label="Automation Tests Recordings"
+                      >
+                        <Video className="w-5 h-5 text-gray-700" />
+                      </motion.button>
+                    </TooltipTrigger>
+                    {!hasActivePopup && (
+                      <TooltipContent side="top" className="mb-2">
+                        <p>Automation Tests Recordings</p>
+                      </TooltipContent>
+                    )}
+                  </Tooltip>
+
                   {/* Main Menu */}
                   <Tooltip>
                     <TooltipTrigger asChild>

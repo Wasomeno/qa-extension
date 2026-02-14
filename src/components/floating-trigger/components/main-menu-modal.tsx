@@ -8,6 +8,7 @@ import {
   X,
   SquareKanban,
   Bot,
+  Video as VideoIcon,
 } from 'lucide-react';
 import { useKeyboardIsolation } from '@/hooks/use-keyboard-isolation';
 import { useSessionUser } from '@/hooks/use-session-user';
@@ -23,6 +24,7 @@ import { PinnedPage } from '@/pages/pinned';
 import { CreateIssuePage } from '@/pages/issues/create';
 import { ProfilePage } from '@/pages/profile';
 import { AgentPage } from '@/pages/agent';
+import { RecordingsPage } from '@/pages/recordings';
 
 import {
   SidebarProvider,
@@ -50,6 +52,7 @@ const MENU_ITEMS: MenuItem[] = [
   { id: 'issues', label: 'Issues', icon: List },
   { id: 'boards', label: 'Issue Boards', icon: SquareKanban },
   { id: 'pinned', label: 'Pinned Issues', icon: Pin },
+  { id: 'recordings', label: 'Recordings', icon: VideoIcon },
   { id: 'create-issue', label: 'Create Issue', icon: PlusCircle },
   { id: 'agent', label: 'QA Agent', icon: Bot },
 ];
@@ -124,6 +127,8 @@ const MainMenuInner: React.FC<MainMenuModalProps> = ({
         return <ProfilePage portalContainer={container} />;
       case 'agent':
         return <AgentPage />;
+      case 'recordings':
+        return <RecordingsPage />;
       default:
         return <DashboardPage />;
     }

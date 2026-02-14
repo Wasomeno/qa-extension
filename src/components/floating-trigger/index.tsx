@@ -13,6 +13,7 @@ import LoginPopup from './components/login-popup';
 import CompactIssueCreator from '@/pages/issues/create/components/compact-creator';
 import CompactIssueList from '@/pages/issues/components/compact-list';
 import CompactPinnedIssues from '@/pages/pinned/components/compact-list';
+import { CompactRecordingsList } from '@/pages/recordings/components/compact-list';
 import { getGitlabLoginSession } from '@/api/auth';
 import { MessageType } from '@/types/messages';
 import { useSessionUser } from '@/hooks/use-session-user';
@@ -35,7 +36,7 @@ const queryClient = new QueryClient({
 const FloatingTriggerInner: React.FC<FloatingTriggerProps> = ({ onClose }) => {
   const { user } = useSessionUser();
   const [activeFeature, setActiveFeature] = useState<
-    'issue' | 'issues' | 'pinned' | 'menu' | 'login' | null
+    'issue' | 'issues' | 'pinned' | 'menu' | 'login' | 'record' | null
   >(null);
   const [popupPosition, setPopupPosition] = useState<{
     x: number;
@@ -129,7 +130,7 @@ const FloatingTriggerInner: React.FC<FloatingTriggerProps> = ({ onClose }) => {
 
   // Handle action click - calculate popup position above the capsule
   const handleActionClick = (
-    action: 'issue' | 'issues' | 'pinned' | 'menu' | 'login',
+    action: 'issue' | 'issues' | 'pinned' | 'menu' | 'login' | 'record',
     iconRect: DOMRect,
     capsuleRect: DOMRect
   ) => {
@@ -193,6 +194,13 @@ const FloatingTriggerInner: React.FC<FloatingTriggerProps> = ({ onClose }) => {
           <LoginPopup
             onClose={handleClose}
             onLoginSuccess={handleClose}
+          />
+        );
+      case 'record':
+        return (
+          <CompactRecordingsList
+            onClose={handleClose}
+            portalContainer={popupContainerRef.current}
           />
         );
       default:

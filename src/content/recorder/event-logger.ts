@@ -17,7 +17,6 @@ export class EventLogger {
     if (this.isRecording) return;
     this.isRecording = true;
 
-    // Use capture phase to catch events before they are stopped by page logic
     window.addEventListener('click', this.handleEvent, true);
     window.addEventListener('input', this.handleEvent, true);
     window.addEventListener('change', this.handleEvent, true);
