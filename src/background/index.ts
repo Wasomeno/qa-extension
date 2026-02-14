@@ -152,6 +152,7 @@ class BackgroundService {
     chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
       if (changeInfo.status === 'complete' && tab.url) {
         void this.checkAndInjectPlayer(tabId, tab.url);
+        void this.checkAndInjectRecorder(tabId, tab.url);
       }
     });
   }
@@ -171,6 +172,32 @@ class BackgroundService {
       }
     } catch (error) {
       console.error('[Background] Failed to inject player.js:', error);
+    }
+  }
+
+  private async checkAndInjectRecorder(tabId: number, url: string) {
+    if (url.startsWith('chrome://') || url.startsWith('chrome-extension://'))
+      return;
+
+    try {
+      const result = await chrome.storage.local.get(['isRecording']);
+      if (result.isRecording) {
+        console.log('[Background] Active recording detected, injecting recorder.js');
+        // Check if already injected to avoid duplicates
+        const [{ result: isInjected }] = await chrome.scripting.executeScript({
+          target: { tabId },
+          func: () => !!document.getElementById('qa-recorder-root'),
+        });
+
+        if (!isInjected) {
+          await chrome.scripting.executeScript({
+            target: { tabId },
+            files: ['recorder.js'],
+          });
+        }
+      }
+    } catch (error) {
+      console.error('[Background] Failed to inject recorder.js:', error);
     }
   }
 
@@ -229,6 +256,55 @@ class BackgroundService {
           sendResponse({ success: true, data: { blueprint } });
         } catch (e: any) {
           sendResponse({ success: false, error: e?.message || 'AI processing failed' });
+        }
+        break;
+
+      case MessageType.SAVE_BLUEPRINT:
+        try {
+          const { blueprint } = message.data || {};
+          if (!blueprint) {
+            sendResponse({ success: false, error: 'Missing blueprint' });
+            return;
+          }
+
+          const result = await chrome.storage.local.get(['test-blueprints']);
+          const blueprints = result['test-blueprints'] || [];
+          
+          // Add or update
+          const index = blueprints.findIndex((b: any) => b.id === blueprint.id);
+          if (index >= 0) {
+            blueprints[index] = blueprint;
+          } else {
+            blueprints.push(blueprint);
+          }
+
+          await chrome.storage.local.set({ 'test-blueprints': blueprints });
+          // Clear last blueprint after saving
+          await chrome.storage.local.remove('lastBlueprint');
+          
+          this.broadcast({ type: 'BLUEPRINT_SAVED', data: { blueprint } });
+          sendResponse({ success: true });
+        } catch (e: any) {
+          sendResponse({ success: false, error: e?.message });
+        }
+        break;
+
+      case MessageType.DELETE_BLUEPRINT:
+        try {
+          const { id } = message.data || {};
+          if (!id) {
+            sendResponse({ success: false, error: 'Missing blueprint ID' });
+            return;
+          }
+
+          const result = await chrome.storage.local.get(['test-blueprints']);
+          const blueprints = result['test-blueprints'] || [];
+          const filtered = blueprints.filter((b: any) => b.id !== id);
+
+          await chrome.storage.local.set({ 'test-blueprints': filtered });
+          sendResponse({ success: true });
+        } catch (e: any) {
+          sendResponse({ success: false, error: e?.message });
         }
         break;
 

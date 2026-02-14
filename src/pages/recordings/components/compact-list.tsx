@@ -56,7 +56,7 @@ export const CompactRecordingsList: React.FC<CompactRecordingsListProps> = ({
   const handleStartRecording = () => {
     if (typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
       chrome.runtime.sendMessage({ 
-        type: MessageType.RECORDING_START,
+        type: MessageType.START_RECORDING,
         projectId: selectedProjectId !== 'all' ? parseInt(selectedProjectId) : undefined
       });
     }
@@ -64,8 +64,18 @@ export const CompactRecordingsList: React.FC<CompactRecordingsListProps> = ({
   };
 
   const handleRunTest = (blueprint: TestBlueprint) => {
-    console.log('Running test:', blueprint.name);
+    chrome.runtime.sendMessage({
+      type: MessageType.START_PLAYBACK,
+      data: { blueprint },
+    });
     onClose();
+  };
+
+  const handleDelete = (id: string) => {
+    chrome.runtime.sendMessage({
+      type: MessageType.DELETE_BLUEPRINT,
+      data: { id },
+    });
   };
 
   return (
@@ -157,7 +167,15 @@ export const CompactRecordingsList: React.FC<CompactRecordingsListProps> = ({
                     >
                       <Play className="w-3.5 h-3.5 fill-current" />
                     </Button>
-                    <Button variant="ghost" size="icon" className="h-7 w-7 hover:bg-red-50 hover:text-red-600">
+                    <Button 
+                      variant="ghost" 
+                      size="icon" 
+                      className="h-7 w-7 hover:bg-red-50 hover:text-red-600"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDelete(rec.id);
+                      }}
+                    >
                       <Trash2 className="w-3.5 h-3.5" />
                     </Button>
                   </div>

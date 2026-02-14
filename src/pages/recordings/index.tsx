@@ -31,9 +31,8 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { TestBlueprint } from '@/types/recording';
-import { format } from 'date-fns';
+import { MessageType } from '@/types/messages';
 
 export const RecordingsPage: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
@@ -46,12 +45,52 @@ export const RecordingsPage: React.FC = () => {
     },
   });
 
+  const { data: lastBlueprint, refetch: refetchLastBlueprint } = useQuery({
+    queryKey: ['last-blueprint'],
+    queryFn: async () => {
+      return await storageService.get('lastBlueprint');
+    },
+  });
+
   const { data: projectsData, isLoading: isLoadingProjects } = useQuery({
     queryKey: ['projects'],
     queryFn: getProjects,
   });
 
   const projects = projectsData?.data?.projects || [];
+
+  const handleRunTest = (blueprint: TestBlueprint) => {
+    chrome.runtime.sendMessage({
+      type: MessageType.START_PLAYBACK,
+      data: { blueprint },
+    });
+  };
+
+  const handleDelete = async (id: string) => {
+    chrome.runtime.sendMessage(
+      {
+        type: MessageType.DELETE_BLUEPRINT,
+        data: { id },
+      },
+      () => {
+        refetchBlueprints();
+      }
+    );
+  };
+
+  const handleSaveLastBlueprint = async () => {
+    if (!lastBlueprint) return;
+    chrome.runtime.sendMessage(
+      {
+        type: MessageType.SAVE_BLUEPRINT,
+        data: { blueprint: lastBlueprint },
+      },
+      () => {
+        refetchBlueprints();
+        refetchLastBlueprint();
+      }
+    );
+  };
 
   // Categorize blueprints by project
   const categorizedBlueprints = useMemo(() => {
@@ -102,7 +141,13 @@ export const RecordingsPage: React.FC = () => {
               onChange={e => setSearchQuery(e.target.value)}
             />
           </div>
-          <Button size="sm" className="gap-2">
+          <Button
+            size="sm"
+            className="gap-2"
+            onClick={() => {
+              chrome.runtime.sendMessage({ type: MessageType.START_RECORDING });
+            }}
+          >
             <Plus className="w-4 h-4" />
             New Test
           </Button>
@@ -110,7 +155,42 @@ export const RecordingsPage: React.FC = () => {
       </header>
 
       <ScrollArea className="flex-1 px-6 py-6">
-        {categorizedBlueprints.length === 0 ? (
+        {lastBlueprint && (
+          <section className="mb-8 p-4 bg-blue-50 border border-blue-100 rounded-lg flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
+                <VideoIcon className="w-5 h-5 text-blue-600" />
+              </div>
+              <div>
+                <h3 className="font-semibold text-blue-900">
+                  New Recording Ready
+                </h3>
+                <p className="text-sm text-blue-700">
+                  You have a recently captured flow. Save it to your library.
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                size="sm"
+                variant="outline"
+                className="bg-white"
+                onClick={() => handleRunTest(lastBlueprint)}
+              >
+                Preview
+              </Button>
+              <Button
+                size="sm"
+                className="bg-blue-600 hover:bg-blue-700 text-white border-none"
+                onClick={handleSaveLastBlueprint}
+              >
+                Save to Library
+              </Button>
+            </div>
+          </section>
+        )}
+
+        {categorizedBlueprints.length === 0 && !lastBlueprint ? (
           <div className="flex flex-col items-center justify-center h-[400px] text-center">
             <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
               <VideoIcon className="w-8 h-8 text-gray-400" />
@@ -122,8 +202,14 @@ export const RecordingsPage: React.FC = () => {
               Start by recording a new test flow from the floating trigger on
               any webpage.
             </p>
-            <Button variant="outline" className="mt-6">
-              Learn how to record
+            <Button
+              variant="outline"
+              className="mt-6"
+              onClick={() => {
+                chrome.runtime.sendMessage({ type: MessageType.START_RECORDING });
+              }}
+            >
+              Start Recording
             </Button>
           </div>
         ) : (
@@ -171,7 +257,10 @@ export const RecordingsPage: React.FC = () => {
                               <DropdownMenuItem className="gap-2">
                                 <Share2 className="w-4 h-4" /> Share
                               </DropdownMenuItem>
-                              <DropdownMenuItem className="gap-2 text-red-600 focus:text-red-600">
+                              <DropdownMenuItem
+                                className="gap-2 text-red-600 focus:text-red-600"
+                                onClick={() => handleDelete(blueprint.id)}
+                              >
                                 <Trash2 className="w-4 h-4" /> Delete
                               </DropdownMenuItem>
                             </DropdownMenuContent>
@@ -192,6 +281,7 @@ export const RecordingsPage: React.FC = () => {
                           <Button
                             size="sm"
                             className="flex-1 gap-2 bg-blue-600 hover:bg-blue-700"
+                            onClick={() => handleRunTest(blueprint)}
                           >
                             <Play className="w-3 h-3 fill-current" />
                             Run Test
