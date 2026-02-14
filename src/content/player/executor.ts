@@ -37,7 +37,7 @@ export class Executor {
   private static async handleClick(step: TestStep): Promise<void> {
     const element = await waitForElement(step.selector, this.DEFAULT_TIMEOUT);
     if (!element) {
-      throw new Error(`Element not found for selector: ${step.selector}`);
+      throw new Error(`Click failed: Element not found for selector "${step.selector}" after ${this.DEFAULT_TIMEOUT}ms`);
     }
 
     scrollToElement(element);
@@ -52,11 +52,11 @@ export class Executor {
   private static async handleType(step: TestStep): Promise<void> {
     const element = await waitForElement(step.selector, this.DEFAULT_TIMEOUT);
     if (!element) {
-      throw new Error(`Element not found for selector: ${step.selector}`);
+      throw new Error(`Type failed: Element not found for selector "${step.selector}" after ${this.DEFAULT_TIMEOUT}ms`);
     }
 
-    if (!step.value) {
-      throw new Error(`Missing value for 'type' action in step: ${step.description}`);
+    if (step.value === undefined) {
+      throw new Error(`Type failed: Missing value for 'type' action in step: ${step.description}`);
     }
 
     scrollToElement(element);
@@ -74,20 +74,20 @@ export class Executor {
 
     console.log(`[Player] Navigating to: ${step.value}`);
     window.location.href = step.value;
-    
-    // The content script will be reloaded, so we don't need to do anything else here.
-    // The background script should handle re-injection and resumption.
-    return new Promise(() => {}); // Wait forever to block further execution on this page
   }
 
   private static async handleSelect(step: TestStep): Promise<void> {
     const element = await waitForElement(step.selector, this.DEFAULT_TIMEOUT);
-    if (!(element instanceof HTMLSelectElement)) {
-      throw new Error(`Element is not a select dropdown: ${step.selector}`);
+    if (!element) {
+      throw new Error(`Select failed: Element not found for selector "${step.selector}" after ${this.DEFAULT_TIMEOUT}ms`);
     }
 
-    if (!step.value) {
-      throw new Error(`Missing value for 'select' action`);
+    if (!(element instanceof HTMLSelectElement)) {
+      throw new Error(`Select failed: Element is not a select dropdown: ${step.selector}`);
+    }
+
+    if (step.value === undefined) {
+      throw new Error(`Select failed: Missing value for 'select' action`);
     }
 
     scrollToElement(element);
@@ -104,7 +104,7 @@ export class Executor {
     // Simple assertion: check if element exists and is visible
     const element = await waitForElement(step.selector, this.DEFAULT_TIMEOUT);
     if (!element) {
-      throw new Error(`Assertion failed: Element not found: ${step.selector}`);
+      throw new Error(`Assertion failed: Element not found for selector "${step.selector}" after ${this.DEFAULT_TIMEOUT}ms`);
     }
 
     scrollToElement(element);

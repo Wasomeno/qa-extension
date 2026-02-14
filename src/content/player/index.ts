@@ -100,23 +100,38 @@ class PlayerEngine {
     const step = this.state.blueprint.steps[this.state.currentStepIndex];
     
     try {
-      // Notify background about current step
+      // Notify background about current step starting
       chrome.runtime.sendMessage({
         type: MessageType.PLAYBACK_STATUS_UPDATE,
-        data: { ...this.state }
+        data: { 
+          ...this.state,
+          stepStatus: 'started',
+          stepDescription: step.description
+        }
       });
 
-      await Executor.executeStep(step);
-      
-      // If it was a navigation, the page will reload and checkAutoResume will pick it up
+      // Special handling for navigation: save state BEFORE navigating
       if (step.action === 'navigate') {
         this.state.currentStepIndex++;
         await this.saveState();
+        await Executor.executeStep(step);
         return;
       }
 
+      await Executor.executeStep(step);
+
       this.state.currentStepIndex++;
       await this.saveState();
+      
+      // Notify background about current step completion
+      chrome.runtime.sendMessage({
+        type: MessageType.PLAYBACK_STATUS_UPDATE,
+        data: { 
+          ...this.state,
+          stepStatus: 'completed',
+          stepDescription: step.description
+        }
+      });
       
       // Brief delay between steps
       setTimeout(() => this.runNextStep(), 1000);
