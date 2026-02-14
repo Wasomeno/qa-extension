@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { EventLogger } from './event-logger';
+import { MessageType } from '@/types/messages';
 
 interface RecorderUIProps {
   shadowHostId: string;
@@ -8,19 +9,58 @@ interface RecorderUIProps {
 const RecorderUI: React.FC<RecorderUIProps> = ({ shadowHostId }) => {
   const [isRecording, setIsRecording] = useState(false);
   const [events, setEvents] = useState<any[]>([]);
+  const eventsRef = useRef<any[]>([]);
+  
+  // Sync ref with state
+  useEffect(() => {
+    eventsRef.current = events;
+  }, [events]);
+
   const [logger] = useState(() => new EventLogger(shadowHostId, (event) => {
     setEvents(prev => [...prev, event]);
   }));
 
+  useEffect(() => {
+    // Check initial state from storage
+    chrome.storage.local.get(['isRecording'], (result) => {
+      if (result.isRecording) {
+        logger.start();
+        setIsRecording(true);
+      }
+    });
+
+    const handleMessage = (message: any, sender: any, sendResponse: any) => {
+      if (message.type === MessageType.START_RECORDING) {
+        logger.start();
+        setIsRecording(true);
+        setEvents([]);
+        sendResponse?.({ success: true });
+      } else if (message.type === MessageType.STOP_RECORDING) {
+        logger.stop();
+        setIsRecording(false);
+        // Return events to background/popup
+        sendResponse?.({ success: true, events: eventsRef.current });
+      }
+      return true;
+    };
+
+    chrome.runtime.onMessage.addListener(handleMessage);
+    return () => chrome.runtime.onMessage.removeListener(handleMessage);
+  }, [logger]);
+
   const toggleRecording = () => {
-    if (isRecording) {
-      logger.stop();
-      setIsRecording(false);
-    } else {
+    const newState = !isRecording;
+    if (newState) {
       logger.start();
       setIsRecording(true);
       setEvents([]);
+      chrome.runtime.sendMessage({ type: MessageType.START_RECORDING });
+    } else {
+      logger.stop();
+      setIsRecording(false);
+      chrome.runtime.sendMessage({ type: MessageType.STOP_RECORDING });
     }
+    chrome.storage.local.set({ isRecording: newState });
   };
 
   return (

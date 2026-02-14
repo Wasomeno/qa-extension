@@ -327,7 +327,13 @@ class SimpleTrigger {
         return true;
       }
 
-      // Recording-related messages are no longer supported
+      // Allow recording-related messages to pass through to other listeners
+      if (
+        message.type === MessageType.START_RECORDING ||
+        message.type === MessageType.STOP_RECORDING
+      ) {
+        return false; // Don't block, let other listeners handle it
+      }
     });
   }
 

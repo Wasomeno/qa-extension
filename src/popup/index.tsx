@@ -14,6 +14,10 @@ import {
   FiCheckCircle,
   FiCamera,
   FiFileText,
+  FiPlay,
+  FiSquare,
+  FiVideo,
+  FiActivity,
 } from 'react-icons/fi';
 import { Loader } from 'lucide-react';
 
@@ -31,6 +35,8 @@ interface PopupState {
     title?: string;
     timestamp: number;
   }>;
+  isRecording: boolean;
+  lastBlueprint: any | null;
   error: string | null;
   success: string | null;
 }
@@ -44,9 +50,35 @@ const PopupApp: React.FC = () => {
     isAuthenticated: false,
     connectionStatus: 'connecting',
     recentScreenshots: [],
+    isRecording: false,
+    lastBlueprint: null,
     error: null,
     success: null,
   });
+
+  useEffect(() => {
+    // Initial sync
+    chrome.storage.local.get(['isRecording', 'lastBlueprint'], (result) => {
+      setState(prev => ({
+        ...prev,
+        isRecording: !!result.isRecording,
+        lastBlueprint: result.lastBlueprint || null,
+      }));
+    });
+
+    // Listen for storage changes
+    const handleStorageChange = (changes: { [key: string]: chrome.storage.StorageChange }) => {
+      if (changes.isRecording) {
+        setState(prev => ({ ...prev, isRecording: !!changes.isRecording.newValue }));
+      }
+      if (changes.lastBlueprint) {
+        setState(prev => ({ ...prev, lastBlueprint: changes.lastBlueprint.newValue }));
+      }
+    };
+
+    chrome.storage.onChanged.addListener(handleStorageChange);
+    return () => chrome.storage.onChanged.removeListener(handleStorageChange);
+  }, []);
 
   console.log('🎯 Initial state set:', state.currentView);
 
@@ -59,7 +91,6 @@ const PopupApp: React.FC = () => {
   const initializationCompleted = useRef(false);
   const keepaliveRef = useRef<chrome.runtime.Port | null>(null);
 
-  // Removed eager keepalive port from popup to avoid MV3 race
   useEffect(() => {
     return () => {
       try {
@@ -69,21 +100,11 @@ const PopupApp: React.FC = () => {
     };
   }, []);
 
-  // Legacy OAuth helpers removed — background handles OAuth and writes session.
-
   const checkConnection = async (): Promise<void> => {
-    try {
-      setState(prev => ({
-        ...prev,
-        connectionStatus: 'connecting',
-      }));
-    } catch (error) {
-      console.warn('Connection check failed:', error);
-      setState(prev => ({
-        ...prev,
-        connectionStatus: 'disconnected',
-      }));
-    }
+    setState(prev => ({
+      ...prev,
+      connectionStatus: 'connecting',
+    }));
   };
 
   const setFloatingTriggerVisibility = async (
@@ -374,6 +395,45 @@ const PopupApp: React.FC = () => {
     });
   };
 
+  const handleToggleRecording = async (): Promise<void> => {
+    try {
+      const type = state.isRecording ? MessageType.STOP_RECORDING : MessageType.START_RECORDING;
+      chrome.runtime.sendMessage({ type }, (response) => {
+        if (chrome.runtime.lastError) {
+          setState(prev => ({ ...prev, error: 'Failed to communicate with background service' }));
+          return;
+        }
+        if (response && !response.success) {
+          setState(prev => ({ ...prev, error: response.error || 'Failed to toggle recording' }));
+        }
+      });
+    } catch (error) {
+      console.error('Toggle recording error:', error);
+    }
+  };
+
+  const handleRunTest = async (): Promise<void> => {
+    if (!state.lastBlueprint) return;
+    try {
+      chrome.runtime.sendMessage({
+        type: MessageType.START_PLAYBACK,
+        data: { blueprint: state.lastBlueprint }
+      }, (response) => {
+        if (chrome.runtime.lastError) {
+          setState(prev => ({ ...prev, error: 'Failed to communicate with background service' }));
+          return;
+        }
+        if (response && !response.success) {
+          setState(prev => ({ ...prev, error: response.error || 'Failed to start playback' }));
+        } else {
+          window.close(); // Close popup to see playback
+        }
+      });
+    } catch (error) {
+      console.error('Run test error:', error);
+    }
+  };
+
   const handleFallbackCapture = async (tab: chrome.tabs.Tab): Promise<void> => {
     await withFloatingTriggerHidden(tab, async () => {
       try {
@@ -435,8 +495,6 @@ const PopupApp: React.FC = () => {
       currentView: 'dashboard',
     }));
   };
-
-  // Removed screenshot timestamp formatting
 
   const clearMessage = (): void => {
     setState(prev => ({
@@ -504,34 +562,9 @@ const PopupApp: React.FC = () => {
                 <motion.button
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
-                  // onClick={async () => {
-                  //   setIsLoading(true);
-                  //   const r = await startGitLab();
-                  //   if (!r.success) {
-                  //     setState(prev => ({
-                  //       ...prev,
-                  //       error: oAuthError || 'Failed to initiate GitLab OAuth',
-                  //     }));
-                  //   } else {
-                  //     setState(prev => ({
-                  //       ...prev,
-                  //       success:
-                  //         'OAuth window opened. Please complete authentication...',
-                  //     }));
-                  //   }
-                  //   setIsLoading(false);
-                  // }}
-                  // disabled={isLoading || oAuthLoading}
                   className="w-full glass-button glass-glow-blue p-4 flex items-center justify-center gap-3 font-medium"
                 >
-                  {/*{isLoading || oAuthLoading ? (
-                    <FiRefreshCw className="animate-spin text-lg" />
-                  ) : (
-                    <FiGitlab className="text-lg text-orange-400" />
-                  )}
-                  {isLoading || oAuthLoading
-                    ? 'Connecting...'
-                    : 'Sign in with GitLab'}*/}
+                  Sign in with GitLab
                 </motion.button>
               </div>
 
@@ -672,77 +705,60 @@ const PopupApp: React.FC = () => {
         </div>
       )}
 
-      {/* Recent Screenshots removed */}
-      {false && state.recentScreenshots.length > 0 && (
-        <div className="relative z-10 p-4">
-          <h3 className="font-medium text-gray-900 mb-3">Recent Screenshots</h3>
-          <div className="space-y-2">
-            {state.recentScreenshots.map((screenshot, index) => (
-              <div
-                key={index}
-                className="glass-card flex items-center justify-between p-3 hover:glass-shimmer transition-all duration-300"
-              >
-                <div className="flex items-center gap-3 flex-1">
-                  <img
-                    src={screenshot.screenshot}
-                    alt="Screenshot preview"
-                    className="w-12 h-12 object-cover rounded border"
-                  />
-                  <div className="flex-1 min-w-0">
-                    <div className="font-medium text-gray-900 truncate">
-                      {screenshot.title || 'Untitled Page'}
-                    </div>
-                    <div className="text-sm text-gray-600 flex items-center gap-2">
-                      <span>
-                        {new Date(screenshot.timestamp).toLocaleString()}
-                      </span>
-                      {screenshot.url && (
-                        <>
-                          <span>•</span>
-                          <span className="truncate max-w-32">
-                            {new URL(screenshot.url).hostname}
-                          </span>
-                        </>
-                      )}
-                    </div>
-                  </div>
-                </div>
-                <div className="flex gap-1">
-                  <button
-                    onClick={() => {
-                      // Open screenshot in new tab
-                      const newTab = window.open();
-                      if (newTab) {
-                        newTab.document.write(`
-                          <html>
-                            <head><title>Screenshot - ${screenshot.title}</title></head>
-                            <body style="margin:0;padding:20px;background:#f5f5f5;">
-                              <img src="${screenshot.screenshot}" style="max-width:100%;height:auto;border:1px solid #ddd;background:white;" />
-                            </body>
-                          </html>
-                        `);
-                      }
-                    }}
-                    className="p-2 rounded-md text-gray-600 hover:text-gray-900 hover:bg-gray-200 transition-colors"
-                    title="View full screenshot"
-                  >
-                    <FiCamera />
-                  </button>
-                  <button
-                    onClick={() => {
-                      // Issue creation removed
-                    }}
-                    className="p-2 rounded-md text-gray-600 hover:text-gray-900 hover:bg-gray-200 transition-colors"
-                    title="Create issue from screenshot"
-                  >
-                    <FiFileText />
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
+      {/* Teach & Run Section */}
+      <div className="relative z-10 px-4 mt-6">
+        <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3 ml-1">
+          Teach & Run
+        </h3>
+        <div className="grid grid-cols-2 gap-3">
+          <motion.button
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            onClick={handleToggleRecording}
+            className={`flex flex-col items-center justify-center p-4 rounded-2xl glass-card transition-all ${
+              state.isRecording ? 'glass-glow-red border-red-200' : 'hover:glass-shimmer'
+            }`}
+          >
+            {state.isRecording ? (
+              <FiSquare className="w-6 h-6 text-red-600 mb-2" />
+            ) : (
+              <FiVideo className="w-6 h-6 text-blue-600 mb-2" />
+            )}
+            <span className="text-xs font-semibold text-gray-900">
+              {state.isRecording ? 'Stop Recording' : 'Start Recording'}
+            </span>
+          </motion.button>
+
+          <motion.button
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            onClick={handleRunTest}
+            disabled={!state.lastBlueprint || state.isRecording}
+            className={`flex flex-col items-center justify-center p-4 rounded-2xl glass-card transition-all ${
+              !state.lastBlueprint || state.isRecording
+                ? 'opacity-50 cursor-not-allowed'
+                : 'hover:glass-shimmer'
+            }`}
+          >
+            <FiPlay className={`w-6 h-6 mb-2 ${!state.lastBlueprint || state.isRecording ? 'text-gray-400' : 'text-green-600'}`} />
+            <span className={`text-xs font-semibold ${!state.lastBlueprint || state.isRecording ? 'text-gray-400' : 'text-gray-900'}`}>
+              Run Last Test
+            </span>
+          </motion.button>
         </div>
-      )}
+        
+        {state.lastBlueprint && (
+          <div className="mt-3 p-3 rounded-xl bg-gray-50 border border-gray-100 flex items-center gap-3">
+            <div className="w-8 h-8 rounded-lg bg-green-100 flex items-center justify-center">
+              <FiActivity className="text-green-600 w-4 h-4" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="text-[10px] font-bold text-gray-400 uppercase tracking-tight">Latest Blueprint</div>
+              <div className="text-xs font-medium text-gray-900 truncate">{state.lastBlueprint.name}</div>
+            </div>
+          </div>
+        )}
+      </div>
 
       {/* Footer */}
       <div className="relative z-10 glass-nav flex items-center justify-between p-4 mt-auto">

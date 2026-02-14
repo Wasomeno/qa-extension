@@ -4,9 +4,11 @@ import {
   BackgroundFetchRequest,
 } from '../types/messages';
 import { AIProcessor } from '../services/ai-processor';
+import { RawEvent } from '../types/recording';
 
 class BackgroundService {
   private aiProcessor: AIProcessor;
+  private recordingEvents: RawEvent[] = [];
 
   constructor() {
     console.log('BackgroundService constructor called');
@@ -71,8 +73,7 @@ class BackgroundService {
         try {
           if (!msg || msg.type !== MessageType.BACKGROUND_FETCH) return;
           _reqId = msg.reqId;
-          const { url, init, responseType, includeHeaders } = (msg.data ||
-            {}) as any;
+          const { url, init, responseType, includeHeaders } = msg.data as BackgroundFetchRequest;
 
           if (!url) {
             port.postMessage({
@@ -309,6 +310,19 @@ class BackgroundService {
         }
         break;
 
+      case MessageType.TRACK_INTERACTION:
+        if (message.data) {
+          this.recordingEvents.push(message.data);
+          // Also persist to session storage for recovery
+          chrome.storage.session.get(['currentRecording'], (result) => {
+            const recording = result.currentRecording || { events: [] };
+            recording.events.push(message.data);
+            chrome.storage.session.set({ currentRecording: recording });
+          });
+        }
+        sendResponse({ success: true });
+        break;
+
       default:
       // Forward to content script if needed or ignore
     }
@@ -351,6 +365,21 @@ class BackgroundService {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     if (!tab?.id) throw new Error('No active tab');
 
+    this.recordingEvents = [];
+    await chrome.storage.session.remove('currentRecording');
+    await chrome.storage.local.remove('activePlayback');
+    await chrome.storage.local.set({ isRecording: true });
+
+    // Inject recorder.js if not already present
+    try {
+      await chrome.scripting.executeScript({
+        target: { tabId: tab.id },
+        files: ['recorder.js'],
+      });
+    } catch (e) {
+      console.warn('Failed to inject recorder.js, it might already be there:', e);
+    }
+
     const offscreenPath = 'offscreen.html';
 
     // Check if offscreen document already exists using getContexts
@@ -374,9 +403,49 @@ class BackgroundService {
       type: MessageType.START_RECORDING,
       data: { streamId },
     });
+
+    // Also notify the content script to start logging
+    chrome.tabs.sendMessage(tab.id, { type: MessageType.START_RECORDING });
   }
 
   private async stopRecording() {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    await chrome.storage.local.set({ isRecording: false });
+
+    // Tell content script to stop and get final events
+    let events = this.recordingEvents;
+    if (tab?.id) {
+      try {
+        const response = await new Promise<any>((resolve) => {
+          chrome.tabs.sendMessage(
+            tab.id!,
+            { type: MessageType.STOP_RECORDING },
+            (reply) => {
+              if (chrome.runtime.lastError) resolve(null);
+              else resolve(reply);
+            }
+          );
+        });
+        if (response?.events) {
+          events = response.events;
+        }
+      } catch (e) {
+        console.warn('Failed to get events from content script:', e);
+      }
+    }
+
+    // Generate blueprint if we have events
+    if (events.length > 0) {
+      try {
+        console.log('[Background] Generating blueprint from', events.length, 'events');
+        const blueprint = await this.aiProcessor.generateBlueprint(events);
+        await chrome.storage.local.set({ lastBlueprint: blueprint });
+        this.broadcast({ type: 'BLUEPRINT_GENERATED', data: { blueprint } });
+      } catch (e) {
+        console.error('Failed to generate blueprint:', e);
+      }
+    }
+
     chrome.runtime.sendMessage({
       type: MessageType.STOP_RECORDING,
     });
@@ -390,6 +459,9 @@ class BackgroundService {
         await chrome.offscreen.closeDocument();
       }
     }, 1000);
+
+    this.recordingEvents = [];
+    await chrome.storage.session.remove('currentRecording');
   }
 }
 
