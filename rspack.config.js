@@ -18,6 +18,7 @@ module.exports = (env, argv) => {
       'content-simple-test': './src/content-simple-test.js',
       popup: './src/popup/index.tsx',
       options: './src/options/index.tsx',
+      offscreen: './src/offscreen/index.ts',
       'shadow-dom-styles': './src/styles/shadow-dom.css',
     },
     output: {
@@ -125,6 +126,11 @@ module.exports = (env, argv) => {
         template: './src/options/options.html',
         filename: 'options.html',
         chunks: ['options'],
+      }),
+      new rspack.HtmlRspackPlugin({
+        template: './src/offscreen/offscreen.html',
+        filename: 'offscreen.html',
+        chunks: ['offscreen'],
       }),
       new rspack.CopyRspackPlugin({
         patterns: [

@@ -291,6 +291,24 @@ class BackgroundService {
         sendResponse({ success: true });
         break;
 
+      case MessageType.START_RECORDING:
+        try {
+          await this.startRecording();
+          sendResponse({ success: true });
+        } catch (e: any) {
+          sendResponse({ success: false, error: e?.message });
+        }
+        break;
+
+      case MessageType.STOP_RECORDING:
+        try {
+          await this.stopRecording();
+          sendResponse({ success: true });
+        } catch (e: any) {
+          sendResponse({ success: false, error: e?.message });
+        }
+        break;
+
       default:
       // Forward to content script if needed or ignore
     }
@@ -327,6 +345,51 @@ class BackgroundService {
         type: MessageType.OPEN_ISSUE_CREATOR,
       });
     }
+  }
+
+  private async startRecording() {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (!tab?.id) throw new Error('No active tab');
+
+    const offscreenPath = 'offscreen.html';
+
+    // Check if offscreen document already exists using getContexts
+    const existingContexts = await (chrome.runtime as any).getContexts({
+      contextTypes: ['OFFSCREEN_DOCUMENT'],
+    });
+
+    if (existingContexts.length === 0) {
+      await chrome.offscreen.createDocument({
+        url: offscreenPath,
+        reasons: [chrome.offscreen.Reason.USER_MEDIA],
+        justification: 'Recording tab for test evidence',
+      });
+    }
+
+    const streamId = await chrome.tabCapture.getMediaStreamId({
+      targetTabId: tab.id,
+    });
+
+    chrome.runtime.sendMessage({
+      type: MessageType.START_RECORDING,
+      data: { streamId },
+    });
+  }
+
+  private async stopRecording() {
+    chrome.runtime.sendMessage({
+      type: MessageType.STOP_RECORDING,
+    });
+
+    // We wait a bit before closing the document to ensure the download starts
+    setTimeout(async () => {
+      const existingContexts = await (chrome.runtime as any).getContexts({
+        contextTypes: ['OFFSCREEN_DOCUMENT'],
+      });
+      if (existingContexts.length > 0) {
+        await chrome.offscreen.closeDocument();
+      }
+    }, 1000);
   }
 }
 

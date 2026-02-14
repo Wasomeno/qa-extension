@@ -11,7 +11,9 @@
     "tabs",
     "cookies",
     "contextMenus",
-    "notifications"
+    "notifications",
+    "offscreen",
+    "tabCapture"
   ],
   "host_permissions": [
     "<all_urls>",
