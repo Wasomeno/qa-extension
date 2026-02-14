@@ -12,6 +12,8 @@ declare global {
       NODE_ENV?: string;
     };
   };
+
+  const __GOOGLE_API_KEY__: string;
 }
 
 // Chrome extension API augmentations

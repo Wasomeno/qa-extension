@@ -1,3 +1,5 @@
+import { RawEvent, TestBlueprint } from './recording';
+
 export enum MessageType {
   CREATE_ISSUE = 'CREATE_ISSUE',
   GET_USER_DATA = 'GET_USER_DATA',
@@ -25,12 +27,21 @@ export enum MessageType {
   GET_MERGE_REQUESTS = 'GET_MERGE_REQUESTS',
   START_RECORDING = 'START_RECORDING',
   STOP_RECORDING = 'STOP_RECORDING',
+  GENERATE_BLUEPRINT = 'GENERATE_BLUEPRINT',
 }
 
 export interface ExtensionMessage {
   type: MessageType;
   data?: any;
   requestId?: string;
+}
+
+export interface GenerateBlueprintRequest {
+  events: RawEvent[];
+}
+
+export interface GenerateBlueprintResponse {
+  blueprint: TestBlueprint;
 }
 
 export interface MessageResponse {

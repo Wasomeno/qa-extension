@@ -3,10 +3,14 @@ import {
   MessageType,
   BackgroundFetchRequest,
 } from '../types/messages';
+import { AIProcessor } from '../services/ai-processor';
 
 class BackgroundService {
+  private aiProcessor: AIProcessor;
+
   constructor() {
     console.log('BackgroundService constructor called');
+    this.aiProcessor = new AIProcessor(__GOOGLE_API_KEY__);
     this.setupListeners();
     console.log('BackgroundService listeners set up');
   }
@@ -186,6 +190,20 @@ class BackgroundService {
       case MessageType.OPEN_ISSUE_CREATOR:
         await this.openIssueCreator();
         sendResponse({ success: true });
+        break;
+
+      case MessageType.GENERATE_BLUEPRINT:
+        try {
+          const { events } = message.data || {};
+          if (!events || !Array.isArray(events)) {
+            sendResponse({ success: false, error: 'Missing or invalid events' });
+            return;
+          }
+          const blueprint = await this.aiProcessor.generateBlueprint(events);
+          sendResponse({ success: true, data: { blueprint } });
+        } catch (e: any) {
+          sendResponse({ success: false, error: e?.message || 'AI processing failed' });
+        }
         break;
 
       default:

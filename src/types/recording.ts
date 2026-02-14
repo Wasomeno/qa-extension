@@ -18,3 +18,17 @@ export interface RecordingSession {
   createdAt: number;
   events: RawEvent[];
 }
+
+export interface TestStep {
+  action: 'click' | 'type' | 'navigate' | 'select' | 'assert';
+  selector: string;
+  value?: string;
+  description: string;
+}
+
+export interface TestBlueprint {
+  name: string;
+  description: string;
+  steps: TestStep[];
+  parameters: string[];
+}
