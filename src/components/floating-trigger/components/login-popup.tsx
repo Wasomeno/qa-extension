@@ -38,7 +38,6 @@ const LoginPopup: React.FC<LoginPopupProps> = ({ onClose, onLoginSuccess }) => {
         onClose();
       }
     } catch (error) {
-      console.error('Login error', error);
     }
   };
 

@@ -17,6 +17,7 @@ import { CompactRecordingsList } from '@/pages/recordings/components/compact-lis
 import { getGitlabLoginSession } from '@/api/auth';
 import { MessageType } from '@/types/messages';
 import { useSessionUser } from '@/hooks/use-session-user';
+import { ViewType } from '@/types/navigation';
 
 interface FloatingTriggerProps {
   onClose?: () => void;
@@ -43,11 +44,12 @@ const FloatingTriggerInner: React.FC<FloatingTriggerProps> = ({ onClose }) => {
     y: number;
   } | null>(null);
   const [selectedIssue, setSelectedIssue] = useState<any | null>(null);
+  const [initialView, setInitialView] = useState<ViewType>('dashboard');
   const [hiddenReason, setHiddenReason] = useState<'auto' | 'manual' | null>(
     null
   );
   const [isHovered, setIsHovered] = useState<boolean>(false);
-  const popupContainerRef = useRef<HTMLDivElement>(null);
+  const [popupContainer, setPopupContainer] = useState<HTMLDivElement | null>(null);
 
   const opacity = activeFeature === 'menu' && !isHovered ? 0.3 : 1;
 
@@ -151,16 +153,26 @@ const FloatingTriggerInner: React.FC<FloatingTriggerProps> = ({ onClose }) => {
 
     setPopupPosition({ x: popupX, y: popupY });
     setActiveFeature(action);
+    if (action === 'menu') {
+      setInitialView('dashboard');
+    }
   };
 
   const handleClose = () => {
     setActiveFeature(null);
     setPopupPosition(null);
     setSelectedIssue(null);
+    setInitialView('dashboard');
   };
 
   const handleIssueSelect = (issue: any) => {
     setSelectedIssue(issue);
+    setInitialView('issues');
+    setActiveFeature('menu');
+  };
+
+  const handleViewAllRecordings = () => {
+    setInitialView('recordings');
     setActiveFeature('menu');
   };
 
@@ -170,7 +182,7 @@ const FloatingTriggerInner: React.FC<FloatingTriggerProps> = ({ onClose }) => {
         return (
           <CompactIssueCreator
             onClose={handleClose}
-            portalContainer={popupContainerRef.current}
+            portalContainer={popupContainer}
           />
         );
       case 'issues':
@@ -178,7 +190,7 @@ const FloatingTriggerInner: React.FC<FloatingTriggerProps> = ({ onClose }) => {
           <CompactIssueList
             onClose={handleClose}
             onSelect={handleIssueSelect}
-            portalContainer={popupContainerRef.current}
+            portalContainer={popupContainer}
           />
         );
       case 'pinned':
@@ -186,7 +198,7 @@ const FloatingTriggerInner: React.FC<FloatingTriggerProps> = ({ onClose }) => {
           <CompactPinnedIssues
             onClose={handleClose}
             onSelect={handleIssueSelect}
-            portalContainer={popupContainerRef.current}
+            portalContainer={popupContainer}
           />
         );
       case 'login':
@@ -200,7 +212,8 @@ const FloatingTriggerInner: React.FC<FloatingTriggerProps> = ({ onClose }) => {
         return (
           <CompactRecordingsList
             onClose={handleClose}
-            portalContainer={popupContainerRef.current}
+            onViewAll={handleViewAllRecordings}
+            portalContainer={popupContainer}
           />
         );
       default:
@@ -224,7 +237,8 @@ const FloatingTriggerInner: React.FC<FloatingTriggerProps> = ({ onClose }) => {
         <PopupWrapper
           position={popupPosition}
           onClose={handleClose}
-          containerRef={popupContainerRef}
+          containerRef={{ current: popupContainer } as any}
+          onContainerRef={(el) => setPopupContainer(el)}
           width={360}
         >
           {renderPopupContent()}
@@ -236,6 +250,7 @@ const FloatingTriggerInner: React.FC<FloatingTriggerProps> = ({ onClose }) => {
         isOpen={activeFeature === 'menu'}
         onClose={handleClose}
         initialIssue={selectedIssue}
+        initialView={initialView}
       />
     </>
   );

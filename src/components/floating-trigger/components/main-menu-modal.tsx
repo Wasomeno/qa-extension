@@ -61,12 +61,14 @@ interface MainMenuModalProps {
   isOpen: boolean;
   onClose: () => void;
   initialIssue?: any;
+  initialView?: ViewType;
 }
 
 const MainMenuInner: React.FC<MainMenuModalProps> = ({
   isOpen,
   onClose,
   initialIssue,
+  initialView,
 }) => {
   const { current, reset, push } = useNavigation();
   const keyboardIsolation = useKeyboardIsolation();
@@ -89,12 +91,16 @@ const MainMenuInner: React.FC<MainMenuModalProps> = ({
     }
   }, [onClose]);
 
-  // Switch to issues view if initialIssue is provided
+  // Handle initial state when modal opens
   React.useEffect(() => {
-    if (isOpen && initialIssue) {
-      reset('issues', initialIssue);
+    if (isOpen) {
+      if (initialIssue) {
+        reset('issues', initialIssue);
+      } else if (initialView) {
+        reset(initialView);
+      }
     }
-  }, [isOpen, initialIssue, reset]);
+  }, [isOpen, initialIssue, initialView, reset]);
 
   const handleNavigateToIssue = (issue: any) => {
     push('issue-detail', issue);
@@ -149,6 +155,7 @@ const MainMenuInner: React.FC<MainMenuModalProps> = ({
           backgroundColor: 'rgba(0, 0, 0, 0.4)',
           backdropFilter: 'blur(4px)',
           WebkitBackdropFilter: 'blur(4px)',
+          pointerEvents: 'auto',
         }}
       />
 
@@ -294,7 +301,7 @@ const MainMenuModal: React.FC<MainMenuModalProps> = (props) => {
   return (
     <AnimatePresence>
       {props.isOpen && (
-        <NavigationProvider initialView="dashboard">
+        <NavigationProvider initialView={props.initialView || "dashboard"}>
           <MainMenuInner {...props} />
         </NavigationProvider>
       )}

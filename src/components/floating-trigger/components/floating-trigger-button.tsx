@@ -266,14 +266,14 @@ const FloatingTriggerButton: React.FC<FloatingTriggerButtonProps> = ({
                           handleActionClick(e, 'record', pinnedIconRef)
                         }
                         className="p-2 rounded-full hover:bg-black/5 transition-colors pointer-events-auto active:scale-95"
-                        aria-label="Automation Tests Recordings"
+                        aria-label="Automation Tests"
                       >
                         <Video className="w-5 h-5 text-gray-700" />
                       </motion.button>
                     </TooltipTrigger>
                     {!hasActivePopup && (
                       <TooltipContent side="top" className="mb-2">
-                        <p>Automation Tests Recordings</p>
+                        <p>Automation Tests</p>
                       </TooltipContent>
                     )}
                   </Tooltip>
