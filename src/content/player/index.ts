@@ -34,7 +34,7 @@ class PlayerEngine {
           this.stopPlayback();
           sendResponse({ success: true });
           break;
-        case 'PING':
+        case MessageType.PING:
           sendResponse({ success: true, data: 'PONG_PLAYER' });
           break;
       }
@@ -46,7 +46,6 @@ class PlayerEngine {
     try {
       const result = await chrome.storage.local.get(['activePlayback']);
       if (result.activePlayback && result.activePlayback.isActive) {
-        console.log('[Player] Auto-resuming playback...', result.activePlayback);
         this.state = result.activePlayback;
         
         // If the page was just reloaded (e.g. after navigate), continue from current index
@@ -55,12 +54,10 @@ class PlayerEngine {
         }
       }
     } catch (error) {
-      console.error('[Player] Failed to check auto-resume:', error);
     }
   }
 
   private async startPlayback(blueprint: TestBlueprint, stepIndex: number = 0) {
-    console.log('[Player] Starting playback', blueprint.name);
     this.state = {
       isActive: true,
       blueprint,
@@ -72,7 +69,6 @@ class PlayerEngine {
   }
 
   private async stopPlayback(status: PlaybackState['status'] = 'idle', error?: string) {
-    console.log('[Player] Stopping playback', { status, error });
     this.state.isActive = false;
     this.state.status = status;
     this.state.error = error;
@@ -137,7 +133,6 @@ class PlayerEngine {
       setTimeout(() => this.runNextStep(), 1000);
       
     } catch (error: any) {
-      console.error('[Player] Step execution failed:', error);
       this.stopPlayback('failed', error.message);
     }
   }
@@ -145,7 +140,6 @@ class PlayerEngine {
 
 // Initialize the engine
 if (!(window as any).__QA_PLAYER_INITIALIZED__) {
-  console.log('[Player] Initializing Player Engine...');
   new PlayerEngine();
   (window as any).__QA_PLAYER_INITIALIZED__ = true;
 }

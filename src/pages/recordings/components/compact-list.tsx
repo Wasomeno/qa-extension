@@ -1,45 +1,68 @@
-import React, { useState } from 'react';
-import { 
-  Video as VideoIcon, 
-  Play, 
-  Trash2, 
-  Plus, 
+import React, { useState, useCallback } from 'react';
+import {
+  Video as VideoIcon,
+  Play,
+  Trash2,
+  Plus,
   Clock,
   ExternalLink,
-  PlusCircle
+  PlusCircle,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { 
+import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
+} from '@/components/ui/select';
 import { useQuery } from '@tanstack/react-query';
 import { getProjects } from '@/api/project';
 import { storageService } from '@/services/storage';
+import { videoStorage } from '@/services/video-storage';
 import { TestBlueprint } from '@/types/recording';
 import { MessageType } from '@/types/messages';
+import { isRestrictedUrl } from '@/utils/domain-matcher';
 
 interface CompactRecordingsListProps {
   onClose: () => void;
+  onViewAll?: () => void;
   portalContainer?: HTMLDivElement | null;
 }
 
-export const CompactRecordingsList: React.FC<CompactRecordingsListProps> = ({ 
+export const CompactRecordingsList: React.FC<CompactRecordingsListProps> = ({
   onClose,
-  portalContainer 
+  onViewAll,
+  portalContainer,
 }) => {
   const [selectedProjectId, setSelectedProjectId] = useState<string>('all');
+  const [error, setError] = useState<string | null>(null);
+  const isPageRestricted = isRestrictedUrl(window.location.href);
+  const containerRef = React.useRef<HTMLDivElement>(null);
+  const [portalReady, setPortalReady] = useState(false);
+
+  React.useEffect(() => {
+    setPortalReady(true);
+  }, []);
+
+  // Use containerRef as portal container if portalContainer is null (for Shadow DOM compatibility)
+  const getPortalContainer = useCallback((): HTMLElement | undefined => {
+    if (portalContainer) return portalContainer;
+    if (containerRef.current) return containerRef.current;
+    return undefined;
+  }, [portalContainer, portalReady]);
 
   const { data: projectsData } = useQuery({
     queryKey: ['projects'],
     queryFn: getProjects,
   });
 
-  const { data: recordings = [], isLoading } = useQuery({
+  const {
+    data: recordings = [],
+    isLoading,
+    refetch: refetchRecordings,
+  } = useQuery({
     queryKey: ['recordings-blueprints'],
     queryFn: async () => {
       const data = await storageService.get('test-blueprints');
@@ -47,20 +70,108 @@ export const CompactRecordingsList: React.FC<CompactRecordingsListProps> = ({
     },
   });
 
+  const { data: lastBlueprint, refetch: refetchLastBlueprint } = useQuery({
+    queryKey: ['last-blueprint'],
+    queryFn: async () => {
+      return await storageService.get('lastBlueprint');
+    },
+  });
+
+  React.useEffect(() => {
+    const handleMessage = (message: any) => {
+      if (
+        message.type === 'BLUEPRINT_GENERATED' ||
+        message.type === 'BLUEPRINT_PROCESSING'
+      ) {
+        refetchLastBlueprint();
+      }
+    };
+    chrome.runtime.onMessage.addListener(handleMessage);
+    return () => chrome.runtime.onMessage.removeListener(handleMessage);
+  }, [refetchLastBlueprint]);
+
+  // Sync with storage changes for robustness
+  React.useEffect(() => {
+    const handleStorageChange = (changes: {
+      [key: string]: chrome.storage.StorageChange;
+    }) => {
+      if (changes['test-blueprints']) {
+        refetchRecordings();
+      }
+      if (changes['lastBlueprint']) {
+        refetchLastBlueprint();
+      }
+    };
+    chrome.storage.onChanged.addListener(handleStorageChange);
+    return () => chrome.storage.onChanged.removeListener(handleStorageChange);
+  }, [refetchRecordings, refetchLastBlueprint]);
+
+  const handleSaveDraft = () => {
+    if (!lastBlueprint) return;
+    try {
+      chrome.runtime.sendMessage(
+        {
+          type: MessageType.SAVE_BLUEPRINT,
+          data: { blueprint: lastBlueprint },
+        },
+        response => {
+          if (chrome.runtime.lastError) {
+            setError('Failed to save draft. Connection lost.');
+            return;
+          }
+          if (response?.success) {
+            refetchRecordings();
+            refetchLastBlueprint();
+          } else {
+            setError(response?.error || 'Failed to save draft');
+          }
+        }
+      );
+    } catch (e: any) {
+      setError(e.message || 'Failed to save draft');
+    }
+  };
+
   const projects = projectsData?.data?.projects || [];
 
-  const filteredRecordings = recordings.filter(rec => 
-    selectedProjectId === 'all' || rec.projectId?.toString() === selectedProjectId
-  ).slice(0, 5);
+  const filteredRecordings = recordings
+    .filter(
+      rec =>
+        selectedProjectId === 'all' ||
+        rec.projectId?.toString() === selectedProjectId
+    )
+    .slice(0, 5);
 
   const handleStartRecording = () => {
+    setError(null);
     if (typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
-      chrome.runtime.sendMessage({ 
-        type: MessageType.START_RECORDING,
-        projectId: selectedProjectId !== 'all' ? parseInt(selectedProjectId) : undefined
-      });
+      chrome.runtime.sendMessage(
+        {
+          type: MessageType.START_RECORDING,
+          data: {
+            projectId:
+              selectedProjectId !== 'all'
+                ? parseInt(selectedProjectId)
+                : undefined,
+          },
+        },
+        response => {
+          if (chrome.runtime.lastError) {
+            setError('Communication error. Please refresh the page.');
+            return;
+          }
+
+          if (response?.success) {
+            onClose();
+          } else {
+            const errorMsg = response?.error || 'Failed to start recording';
+            setError(errorMsg);
+          }
+        }
+      );
+    } else {
+      onClose();
     }
-    onClose();
   };
 
   const handleRunTest = (blueprint: TestBlueprint) => {
@@ -71,7 +182,12 @@ export const CompactRecordingsList: React.FC<CompactRecordingsListProps> = ({
     onClose();
   };
 
-  const handleDelete = (id: string) => {
+  const handleDelete = async (id: string) => {
+    try {
+      await videoStorage.deleteVideo(id);
+    } catch (e) {
+    }
+    
     chrome.runtime.sendMessage({
       type: MessageType.DELETE_BLUEPRINT,
       data: { id },
@@ -79,23 +195,25 @@ export const CompactRecordingsList: React.FC<CompactRecordingsListProps> = ({
   };
 
   return (
-    <div 
+    <div
+      ref={containerRef}
       className="flex flex-col h-[380px] w-full bg-white"
+      onMouseDown={e => e.stopPropagation()}
+      onMouseUp={e => e.stopPropagation()}
+      onClick={e => e.stopPropagation()}
+      onPointerDown={e => e.stopPropagation()}
+      onPointerUp={e => e.stopPropagation()}
     >
-      <div className="px-4 py-3 border-b bg-gray-50/50 flex items-center justify-between gap-3 shrink-0">
-        <div className="flex items-center gap-2">
-          <VideoIcon className="w-4 h-4 text-red-500" />
-          <h3 className="font-semibold text-gray-900 text-sm whitespace-nowrap m-0 p-0 border-none bg-transparent">
-            Recent
-          </h3>
-        </div>
-        
+      <div className="px-4 py-3 border-b bg-gray-50/50 flex items-center justify-end gap-3 shrink-0">
         <div className="flex items-center gap-2 flex-1 justify-end min-w-0">
-          <Select value={selectedProjectId} onValueChange={setSelectedProjectId}>
+          <Select
+            value={selectedProjectId}
+            onValueChange={setSelectedProjectId}
+          >
             <SelectTrigger className="h-8 text-[11px] w-[130px] bg-white border-gray-200 focus:ring-0">
               <SelectValue placeholder="Project" />
             </SelectTrigger>
-            <SelectContent container={portalContainer}>
+            <SelectContent container={getPortalContainer()}>
               <SelectItem value="all">All Projects</SelectItem>
               {projects.map(p => (
                 <SelectItem key={p.id} value={p.id.toString()}>
@@ -105,17 +223,99 @@ export const CompactRecordingsList: React.FC<CompactRecordingsListProps> = ({
             </SelectContent>
           </Select>
 
-          <Button 
-            variant="default" 
-            size="sm" 
+          <Button
+            variant="default"
+            size="sm"
             onClick={handleStartRecording}
-            className="h-8 px-2.5 text-xs gap-1.5 bg-red-600 hover:bg-red-700 text-white border-none shrink-0 shadow-sm flex items-center"
+            disabled={isPageRestricted}
+            title={
+              isPageRestricted
+                ? 'Browser internal pages cannot be recorded'
+                : 'Start recording'
+            }
+            className="h-8 px-2.5 text-xs gap-1.5 border-none shrink-0 shadow-sm flex items-center disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Plus className="w-3.5 h-3.5" />
-            <span>REC</span>
+            Add
           </Button>
         </div>
       </div>
+
+      {error && (
+        <div className="px-4 py-2 bg-red-50 border-b border-red-100">
+          <p className="text-[11px] text-red-600 font-medium leading-tight">
+            {error}
+          </p>
+        </div>
+      )}
+
+      {lastBlueprint && (
+        <div
+          className={`px-4 py-3 border-b flex items-center justify-between gap-3 ${
+            lastBlueprint.status === 'processing'
+              ? 'bg-yellow-50 border-yellow-100'
+              : lastBlueprint.status === 'failed'
+                ? 'bg-red-50 border-red-100'
+                : 'bg-blue-50 border-blue-100'
+          }`}
+        >
+          <div className="min-w-0">
+            <p
+              className={`text-[11px] font-bold uppercase tracking-tight ${
+                lastBlueprint.status === 'processing'
+                  ? 'text-yellow-700'
+                  : lastBlueprint.status === 'failed'
+                    ? 'text-red-700'
+                    : 'text-blue-700'
+              }`}
+            >
+              {lastBlueprint.status === 'processing'
+                ? 'Processing Recording...'
+                : lastBlueprint.status === 'failed'
+                  ? 'Processing Failed'
+                  : 'Recent Draft'}
+            </p>
+            <p className="text-xs font-medium text-gray-900 truncate">
+              {lastBlueprint.status === 'failed'
+                ? lastBlueprint.error || 'AI generation failed'
+                : lastBlueprint.name}
+            </p>
+          </div>
+          <div className="flex gap-1.5 shrink-0">
+            {lastBlueprint.status !== 'processing' &&
+              lastBlueprint.status !== 'failed' && (
+                <>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 text-[10px] px-2 hover:bg-blue-100 text-blue-700"
+                    onClick={() => handleRunTest(lastBlueprint)}
+                  >
+                    Preview
+                  </Button>
+                  <Button
+                    variant="default"
+                    size="sm"
+                    className="h-7 text-[10px] px-2 bg-blue-600 hover:bg-blue-700 text-white border-none"
+                    onClick={handleSaveDraft}
+                  >
+                    Save
+                  </Button>
+                </>
+              )}
+            {lastBlueprint.status === 'failed' && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 text-[10px] px-2 hover:bg-red-100 text-red-700"
+                onClick={() => chrome.storage.local.remove('lastBlueprint')}
+              >
+                Clear
+              </Button>
+            )}
+          </div>
+        </div>
+      )}
 
       <ScrollArea className="flex-1 overflow-auto">
         {isLoading ? (
@@ -132,13 +332,23 @@ export const CompactRecordingsList: React.FC<CompactRecordingsListProps> = ({
             <div className="w-12 h-12 bg-gray-50 rounded-full flex items-center justify-center mb-4">
               <VideoIcon className="w-6 h-6 text-gray-300" />
             </div>
-            <p className="text-sm font-medium text-gray-900 mb-1 border-none bg-transparent">No recordings found</p>
-            <p className="text-xs text-gray-400 mb-6 leading-relaxed max-w-[200px] mx-auto border-none bg-transparent">Select a project or start a new recording to see results here.</p>
-            <Button 
-              variant="outline" 
-              size="sm" 
+            <p className="text-sm font-medium text-gray-900 mb-1 border-none bg-transparent">
+              No recordings found
+            </p>
+            <p className="text-xs text-gray-400 mb-6 leading-relaxed max-w-[200px] mx-auto border-none bg-transparent">
+              Select a project or start a new recording to see results here.
+            </p>
+            <Button
+              variant="outline"
+              size="sm"
               onClick={handleStartRecording}
-              className="text-xs h-9 gap-2 border-gray-200 hover:bg-gray-50 px-4"
+              disabled={isPageRestricted}
+              title={
+                isPageRestricted
+                  ? 'Browser internal pages cannot be recorded'
+                  : 'Start first recording'
+              }
+              className="text-xs h-9 gap-2 border-gray-200 hover:bg-gray-50 px-4 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <PlusCircle className="w-3.5 h-3.5 text-red-500" />
               Start first recording
@@ -146,32 +356,39 @@ export const CompactRecordingsList: React.FC<CompactRecordingsListProps> = ({
           </div>
         ) : (
           <div className="divide-y divide-gray-50">
-            {filteredRecordings.map((rec) => (
-              <div 
+            {filteredRecordings.map(rec => (
+              <div
                 key={rec.id}
                 className="px-4 py-3 hover:bg-gray-50/80 transition-colors group cursor-pointer"
+                onClick={() => {
+                  const url = chrome.runtime.getURL(`recording-detail.html?id=${rec.id}`);
+                  chrome.runtime.sendMessage({
+                    type: MessageType.OPEN_URL,
+                    data: { url }
+                  });
+                }}
               >
                 <div className="flex items-center justify-between mb-1.5">
                   <span className="font-medium text-sm text-gray-900 truncate pr-2 group-hover:text-red-600 transition-colors">
                     {rec.name}
                   </span>
                   <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <Button 
-                      variant="ghost" 
-                      size="icon" 
+                    <Button
+                      variant="ghost"
+                      size="icon"
                       className="h-7 w-7 hover:bg-green-50 hover:text-green-600"
-                      onClick={(e) => {
+                      onClick={e => {
                         e.stopPropagation();
                         handleRunTest(rec);
                       }}
                     >
                       <Play className="w-3.5 h-3.5 fill-current" />
                     </Button>
-                    <Button 
-                      variant="ghost" 
-                      size="icon" 
+                    <Button
+                      variant="ghost"
+                      size="icon"
                       className="h-7 w-7 hover:bg-red-50 hover:text-red-600"
-                      onClick={(e) => {
+                      onClick={e => {
                         e.stopPropagation();
                         handleDelete(rec.id);
                       }}
@@ -195,14 +412,18 @@ export const CompactRecordingsList: React.FC<CompactRecordingsListProps> = ({
           </div>
         )}
       </ScrollArea>
-      
+
       <div className="p-2.5 border-t bg-gray-50/50 shrink-0">
-        <Button 
-          variant="ghost" 
-          size="sm" 
+        <Button
+          variant="ghost"
+          size="sm"
           className="w-full h-8 text-xs text-gray-500 gap-2 hover:text-gray-900 hover:bg-white border border-transparent hover:border-gray-200 shadow-none flex items-center justify-center"
           onClick={() => {
-            onClose();
+            if (onViewAll) {
+              onViewAll();
+            } else {
+              onClose();
+            }
           }}
         >
           <span>View all recordings</span>

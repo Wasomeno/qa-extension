@@ -34,4 +34,7 @@ export interface TestBlueprint {
   projectId?: number;
   steps: TestStep[];
   parameters: string[];
+  status?: 'processing' | 'ready' | 'failed';
+  error?: string;
+  hasVideo?: boolean;
 }

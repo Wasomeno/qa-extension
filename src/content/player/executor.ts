@@ -11,8 +11,6 @@ export class Executor {
   private static readonly DEFAULT_TIMEOUT = 10000;
 
   public static async executeStep(step: TestStep): Promise<void> {
-    console.log(`[Player] Executing step: ${step.description}`, step);
-
     switch (step.action) {
       case 'navigate':
         await this.handleNavigate(step);
@@ -72,7 +70,6 @@ export class Executor {
       throw new Error(`Missing URL for 'navigate' action`);
     }
 
-    console.log(`[Player] Navigating to: ${step.value}`);
     window.location.href = step.value;
   }
 
@@ -109,7 +106,5 @@ export class Executor {
 
     scrollToElement(element);
     highlightElement(element, { color: '#51cf66', duration: 1000 }); // Green for success
-    
-    console.log(`[Player] Assertion passed for: ${step.selector}`);
   }
 }

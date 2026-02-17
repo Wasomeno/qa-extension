@@ -14,8 +14,10 @@ import {
 import { useQuery } from '@tanstack/react-query';
 import { getProjects } from '@/api/project';
 import { storageService } from '@/services/storage';
+import { videoStorage } from '@/services/video-storage';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { useNavigation } from '@/contexts/navigation-context';
 import {
   Card,
   CardContent,
@@ -36,6 +38,7 @@ import { MessageType } from '@/types/messages';
 
 export const RecordingsPage: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
+  const { push } = useNavigation();
 
   const { data: blueprints = [], refetch: refetchBlueprints } = useQuery({
     queryKey: ['recordings-blueprints'],
@@ -67,6 +70,12 @@ export const RecordingsPage: React.FC = () => {
   };
 
   const handleDelete = async (id: string) => {
+    // Delete from IndexedDB first
+    try {
+      await videoStorage.deleteVideo(id);
+    } catch (error) {
+    }
+
     chrome.runtime.sendMessage(
       {
         type: MessageType.DELETE_BLUEPRINT,
@@ -123,12 +132,9 @@ export const RecordingsPage: React.FC = () => {
     <div className="flex flex-col h-full bg-gray-50/50">
       <header className="px-6 py-4 border-b bg-white flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-semibold text-gray-900 flex items-center gap-2">
-            <VideoIcon className="w-5 h-5 text-red-500" />
-            Test Recordings
-          </h1>
-          <p className="text-sm text-gray-500">
-            Manage and execute your automated test flows
+          <h1 className="text-2xl font-bold text-gray-900">Automation Tests</h1>
+          <p className="text-sm text-gray-500 mt-1">
+            Manage your automated test flows
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -156,36 +162,102 @@ export const RecordingsPage: React.FC = () => {
 
       <ScrollArea className="flex-1 px-6 py-6">
         {lastBlueprint && (
-          <section className="mb-8 p-4 bg-blue-50 border border-blue-100 rounded-lg flex items-center justify-between">
+          <section
+            className={`mb-8 p-4 border rounded-lg flex items-center justify-between ${
+              lastBlueprint.status === 'processing'
+                ? 'bg-yellow-50 border-yellow-100'
+                : lastBlueprint.status === 'failed'
+                  ? 'bg-red-50 border-red-100'
+                  : 'bg-blue-50 border-blue-100'
+            }`}
+          >
             <div className="flex items-center gap-4">
-              <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
-                <VideoIcon className="w-5 h-5 text-blue-600" />
+              <div
+                className={`w-10 h-10 rounded-full flex items-center justify-center ${
+                  lastBlueprint.status === 'processing'
+                    ? 'bg-yellow-100'
+                    : lastBlueprint.status === 'failed'
+                      ? 'bg-red-100'
+                      : 'bg-blue-100'
+                }`}
+              >
+                <VideoIcon
+                  className={`w-5 h-5 ${
+                    lastBlueprint.status === 'processing'
+                      ? 'text-yellow-600'
+                      : lastBlueprint.status === 'failed'
+                        ? 'text-red-600'
+                        : 'text-blue-600'
+                  }`}
+                />
               </div>
               <div>
-                <h3 className="font-semibold text-blue-900">
-                  New Recording Ready
+                <h3
+                  className={`font-semibold ${
+                    lastBlueprint.status === 'processing'
+                      ? 'text-yellow-900'
+                      : lastBlueprint.status === 'failed'
+                        ? 'text-red-900'
+                        : 'text-blue-900'
+                  }`}
+                >
+                  {lastBlueprint.status === 'processing'
+                    ? 'Processing Recording...'
+                    : lastBlueprint.status === 'failed'
+                      ? 'Recording Failed'
+                      : 'New Recording Ready'}
                 </h3>
-                <p className="text-sm text-blue-700">
-                  You have a recently captured flow. Save it to your library.
+                <p
+                  className={`text-sm ${
+                    lastBlueprint.status === 'processing'
+                      ? 'text-yellow-700'
+                      : lastBlueprint.status === 'failed'
+                        ? 'text-red-700'
+                        : 'text-blue-700'
+                  }`}
+                >
+                  {lastBlueprint.status === 'processing'
+                    ? 'We are generating your test steps using AI...'
+                    : lastBlueprint.status === 'failed'
+                      ? `Error: ${lastBlueprint.error || 'Failed to generate blueprint'}`
+                      : 'You have a recently captured flow. Save it to your library.'}
                 </p>
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <Button
-                size="sm"
-                variant="outline"
-                className="bg-white"
-                onClick={() => handleRunTest(lastBlueprint)}
-              >
-                Preview
-              </Button>
-              <Button
-                size="sm"
-                className="bg-blue-600 hover:bg-blue-700 text-white border-none"
-                onClick={handleSaveLastBlueprint}
-              >
-                Save to Library
-              </Button>
+              {lastBlueprint.status === 'ready' && (
+                <>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="bg-white"
+                    onClick={() => handleRunTest(lastBlueprint)}
+                  >
+                    Preview
+                  </Button>
+                  <Button
+                    size="sm"
+                    className="bg-blue-600 hover:bg-blue-700 text-white border-none"
+                    onClick={handleSaveLastBlueprint}
+                  >
+                    Save to Library
+                  </Button>
+                </>
+              )}
+              {lastBlueprint.status === 'failed' && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="text-red-600 hover:bg-red-100"
+                  onClick={() =>
+                    storageService
+                      .remove('lastBlueprint')
+                      .then(() => refetchLastBlueprint())
+                  }
+                >
+                  Dismiss
+                </Button>
+              )}
             </div>
           </section>
         )}
@@ -206,7 +278,9 @@ export const RecordingsPage: React.FC = () => {
               variant="outline"
               className="mt-6"
               onClick={() => {
-                chrome.runtime.sendMessage({ type: MessageType.START_RECORDING });
+                chrome.runtime.sendMessage({
+                  type: MessageType.START_RECORDING,
+                });
               }}
             >
               Start Recording
@@ -286,7 +360,17 @@ export const RecordingsPage: React.FC = () => {
                             <Play className="w-3 h-3 fill-current" />
                             Run Test
                           </Button>
-                          <Button size="sm" variant="outline">
+                          <Button 
+                            size="sm" 
+                            variant="outline"
+                            onClick={() => {
+                              const url = chrome.runtime.getURL(`recording-detail.html?id=${blueprint.id}`);
+                              chrome.runtime.sendMessage({
+                                type: MessageType.OPEN_URL,
+                                data: { url }
+                              });
+                            }}
+                          >
                             View Details
                           </Button>
                         </div>

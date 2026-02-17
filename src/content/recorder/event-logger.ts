@@ -16,23 +16,21 @@ export class EventLogger {
   public start() {
     if (this.isRecording) return;
     this.isRecording = true;
+    console.log(`[EventLogger] Started listening for interactions in frame: ${window.location.href}`);
 
     window.addEventListener('click', this.handleEvent, true);
     window.addEventListener('input', this.handleEvent, true);
     window.addEventListener('change', this.handleEvent, true);
-    
-    console.log('⏺️ Recorder: Event listeners attached');
   }
 
   public stop() {
     if (!this.isRecording) return;
     this.isRecording = false;
+    console.log(`[EventLogger] Stopped listening for interactions in frame: ${window.location.href}`);
 
     window.removeEventListener('click', this.handleEvent, true);
     window.removeEventListener('input', this.handleEvent, true);
     window.removeEventListener('change', this.handleEvent, true);
-    
-    console.log('⏹️ Recorder: Event listeners removed');
   }
 
   private handleEvent(event: Event) {
@@ -40,6 +38,8 @@ export class EventLogger {
 
     const target = event.target as HTMLElement;
     if (!target || this.isEventFromShadowDOM(target)) return;
+
+    console.log(`[EventLogger] Captured ${event.type} on ${target.tagName.toLowerCase()}`);
 
     const interactionEvent: RawEvent = {
       type: event.type as any,

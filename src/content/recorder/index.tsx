@@ -1,4 +1,3 @@
-import React from 'react';
 import { createRoot } from 'react-dom/client';
 import { shadowDOMManager } from '@/utils/shadow-dom';
 import { loadShadowDOMCSS } from '@/utils/css-loader';
@@ -7,27 +6,38 @@ import RecorderUI from './RecorderUI';
 const SHADOW_HOST_ID = 'qa-recorder-root';
 
 async function initializeRecorder() {
-  console.log('🚀 Recorder: Initializing...');
+  if ((window as any).__QA_RECORDER_INITIALIZED__) return;
+  (window as any).__QA_RECORDER_INITIALIZED__ = true;
 
   try {
-    // 1. Load Shadow DOM CSS
-    const css = await loadShadowDOMCSS();
+    // Only render the UI in the top frame to avoid duplicates
+    if (window === window.top) {
+      // 1. Create Shadow DOM instance immediately
+      const instance = shadowDOMManager.create({
+        hostId: SHADOW_HOST_ID,
+        shadowMode: 'open',
+        applyTokensFromDocument: false,
+      });
 
-    // 2. Create Shadow DOM instance
-    const instance = shadowDOMManager.create({
-      hostId: SHADOW_HOST_ID,
-      shadowMode: 'open',
-      css,
-      applyTokensFromDocument: false, // Ensure isolation from page variables
-    });
+      if (!instance) return;
 
-    // 3. Mount React application
-    const root = createRoot(instance.container);
-    root.render(<RecorderUI shadowHostId={SHADOW_HOST_ID} />);
+      // 2. Mount React application immediately
+      const container = instance.container;
+      const root = createRoot(container);
+      root.render(<RecorderUI shadowHostId={SHADOW_HOST_ID} />);
 
-    console.log('✅ Recorder: Initialized and mounted');
+      // 3. Load CSS in the background
+      loadShadowDOMCSS()
+        .then(css => {
+          if (instance.root) {
+            const style = document.createElement('style');
+            style.textContent = css;
+            instance.root.appendChild(style);
+          }
+        })
+        .catch(() => {});
+    }
   } catch (error) {
-    console.error('❌ Recorder: Failed to initialize:', error);
   }
 }
 
