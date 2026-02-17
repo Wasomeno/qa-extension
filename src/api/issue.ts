@@ -386,7 +386,6 @@ export async function createIssueWithChild(
   projectId: number,
   request: CreateIssueWithChildRequest
 ) {
-  console.log('REQUEST', request);
   return api.post<void>(`/projects/${projectId}/issues-with-child`, {
     body: JSON.stringify(request),
   });

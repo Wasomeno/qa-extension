@@ -78,12 +78,9 @@ export const BoardsPage: React.FC<BoardsPageProps> = ({
         queryClient.invalidateQueries({ queryKey: ['project-boards'] });
       }
     } catch (e) {
-      console.error(e);
       toast.error('Failed to move issue');
     }
   };
-
-  console.log('BOARDS', boards);
 
   // Map API data to UI model
   const activeProject = projects.find(p => p.id === activeProjectId);

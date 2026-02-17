@@ -174,7 +174,6 @@ export const IssueDetailPage: React.FC<IssueDetailPageProps> = ({
   const [status, setStatus] = useState<string>(
     issue.state === 'closed' ? 'closed' : 'opened'
   );
-  console.log(issue);
 
   const comments = useGetIssueComments(issue.project_id, issue.iid);
 
@@ -279,7 +278,6 @@ export const IssueDetailPage: React.FC<IssueDetailPageProps> = ({
       queryClient.invalidateQueries({ queryKey: ['issue', issueId] });
       setEditingField(null);
     } catch (error) {
-      console.error('Failed to update issue:', error);
       toast.error('Failed to update issue');
     } finally {
       setIsSaving(false);
@@ -321,9 +319,6 @@ export const IssueDetailPage: React.FC<IssueDetailPageProps> = ({
           }))
     );
   };
-
-  console.log('ISSUE DATA', issue);
-  console.log('DETAIL ISSUE', comments.data);
 
   return (
     <motion.div

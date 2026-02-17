@@ -105,7 +105,6 @@ const CompactIssueCreator: React.FC<CompactIssueCreatorProps> = ({
       setSuccess('Issue created successfully');
     },
     onError: (err: any) => {
-      console.error('Failed to create issue:', err);
       setError(
         'Failed to create issue. Please check your network and try again.'
       );
@@ -333,14 +332,6 @@ const CompactIssueCreator: React.FC<CompactIssueCreatorProps> = ({
       onPointerUp={e => e.stopPropagation()}
       {...keyboardIsolation}
     >
-      {/* Close button - top right */}
-      <button
-        onClick={onClose}
-        className="absolute top-2 right-2 p-1 hover:bg-gray-100 rounded-full transition-colors z-10"
-      >
-        <X className="w-4 h-4 text-gray-400 hover:text-gray-600" />
-      </button>
-
       {/* Status banners */}
       {(error || success) && (
         <div className="px-3 pt-3">

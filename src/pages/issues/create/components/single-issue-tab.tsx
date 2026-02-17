@@ -30,7 +30,6 @@ export const SingleIssueTab: React.FC<SingleIssueTabProps> = ({
       setFormState(DEFAULT_FORM_STATE);
     },
     onError: error => {
-      console.error('Failed to create issue:', error);
       toast.error('Failed to create issue. Please try again.');
     },
   });

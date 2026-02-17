@@ -53,6 +53,20 @@ const CompactIssueList: React.FC<CompactIssueListProps> = ({
   onSelect,
   portalContainer,
 }) => {
+  const containerRef = React.useRef<HTMLDivElement>(null);
+  const [portalReady, setPortalReady] = useState(false);
+
+  React.useEffect(() => {
+    setPortalReady(true);
+  }, []);
+
+  // Use containerRef as portal container if portalContainer is null (for Shadow DOM compatibility)
+  const getPortalContainer = useCallback((): HTMLElement | undefined => {
+    if (portalContainer) return portalContainer;
+    if (containerRef.current) return containerRef.current;
+    return undefined;
+  }, [portalContainer, portalReady]);
+
   // Filter state
   const [filters, setFilters] = useState<FilterState>(INITIAL_FILTERS);
   const debouncedSearch = useDebounce(filters.search, 500);
@@ -85,7 +99,15 @@ const CompactIssueList: React.FC<CompactIssueListProps> = ({
   );
 
   return (
-    <div className="flex flex-col h-[380px] bg-white">
+    <div
+      ref={containerRef}
+      className="flex flex-col h-[380px] bg-white"
+      onMouseDown={e => e.stopPropagation()}
+      onMouseUp={e => e.stopPropagation()}
+      onClick={e => e.stopPropagation()}
+      onPointerDown={e => e.stopPropagation()}
+      onPointerUp={e => e.stopPropagation()}
+    >
       {/* Filters */}
       <CompactFilters
         filters={filters}
@@ -95,7 +117,7 @@ const CompactIssueList: React.FC<CompactIssueListProps> = ({
         onToggleLabel={name => toggleArrayFilter('labels', name)}
         onToggleStatus={status => toggleArrayFilter('statuses', status)}
         projectLabels={{}}
-        portalContainer={portalContainer}
+        portalContainer={getPortalContainer() ?? null}
         isLoading={false}
       />
 

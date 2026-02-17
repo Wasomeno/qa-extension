@@ -37,14 +37,6 @@ const CompactPinnedList: React.FC<CompactPinnedListProps> = ({
 
   return (
     <div className="flex flex-col h-[360px] relative">
-      {/* Close Button - Absolute Top Right */}
-      <button
-        onClick={onClose}
-        className="absolute top-2 right-2 p-1.5 hover:bg-gray-100 rounded-full transition-colors z-20 bg-white/80 backdrop-blur-sm shadow-sm border border-gray-100"
-      >
-        <X className="w-4 h-4 text-gray-500" />
-      </button>
-
       {/* List */}
       <ScrollArea className="flex-1 pt-8">
         <div className="p-3 space-y-3">

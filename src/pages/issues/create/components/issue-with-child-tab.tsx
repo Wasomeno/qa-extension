@@ -41,7 +41,6 @@ export const IssueWithChildTab: React.FC<IssueWithChildTabProps> = ({
       setChildIssues([{ id: uuidv4(), ...DEFAULT_FORM_STATE }]);
     },
     onError: error => {
-      console.error('Failed to create issues:', error);
       toast.error('Failed to create issues. Please try again.');
     },
   });
