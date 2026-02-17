@@ -25,7 +25,6 @@ export const useSessionUser = () => {
         setLoading(false);
       });
     } else {
-      console.warn('chrome.storage.session is not available in this context');
       setLoading(false);
     }
   }, []);
@@ -64,7 +63,6 @@ export const useSessionUser = () => {
         return response.data;
       }
     } catch (err) {
-      console.error('Failed to sync user session:', err);
     } finally {
       setLoading(false);
     }

@@ -10,8 +10,6 @@ export async function loadShadowDOMCSS(): Promise<string> {
     }
     return await response.text();
   } catch (error) {
-    console.warn('Failed to load shadow DOM CSS bundle, using fallback styles:', error);
-    
     // Fallback minimal styles
     return `
       :host {
@@ -23,7 +21,7 @@ export async function loadShadowDOMCSS(): Promise<string> {
         -webkit-text-size-adjust: 100%;
         text-size-adjust: 100%;
         color-scheme: light;
-        contain: layout style;
+        contain: style;
         --qa-fg: #0b1220;
         --qa-border: rgba(11, 18, 32, 0.12);
         --qa-glass: rgba(255, 255, 255, 0.15);
@@ -31,20 +29,27 @@ export async function loadShadowDOMCSS(): Promise<string> {
       }
       * { box-sizing: border-box; }
       .glass-panel {
-        background: var(--qa-glass);
-        backdrop-filter: blur(16px);
-        -webkit-backdrop-filter: blur(16px);
+        background: white;
         border: 1px solid var(--qa-border);
         box-shadow: 0 8px 32px rgba(0,0,0,0.12);
         border-radius: 16px;
       }
       .fixed { position: fixed !important; }
-      .z-50 { z-index: 50 !important; }
-      .rounded-full { border-radius: 9999px !important; }
-      .bg-blue-500 { background-color: #3b82f6 !important; }
+      .bottom-6 { bottom: 1.5rem !important; }
+      .right-6 { right: 1.5rem !important; }
+      .flex { display: flex !important; }
+      .flex-col { flex-direction: column !important; }
+      .items-end { align-items: flex-end !important; }
+      .gap-2 { gap: 0.5rem !important; }
+      .pointer-events-auto { pointer-events: auto !important; }
+      .bg-red-600 { background-color: #dc2626 !important; }
       .text-white { color: #ffffff !important; }
-      .p-4 { padding: 1rem !important; }
-      .shadow-xl { box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1) !important; }
+      .rounded-full { border-radius: 9999px !important; }
+      .px-4 { padding-left: 1rem !important; padding-right: 1rem !important; }
+      .py-2 { padding-top: 0.5rem !important; padding-bottom: 0.5rem !important; }
+      .shadow-lg { box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05) !important; }
+      .font-semibold { font-weight: 600 !important; }
+      .text-sm { font-size: 0.875rem !important; }
     `;
   }
 }

@@ -42,8 +42,6 @@ interface PopupState {
 }
 
 const PopupApp: React.FC = () => {
-  console.log('🎯 PopupApp component mounting...');
-
   const [state, setState] = useState<PopupState>({
     currentView: 'loading',
     user: null,
@@ -79,8 +77,6 @@ const PopupApp: React.FC = () => {
     chrome.storage.onChanged.addListener(handleStorageChange);
     return () => chrome.storage.onChanged.removeListener(handleStorageChange);
   }, []);
-
-  console.log('🎯 Initial state set:', state.currentView);
 
   const [loginForm, setLoginForm] = useState({
     email: '',
@@ -134,10 +130,6 @@ const PopupApp: React.FC = () => {
           }
         );
       } catch (error) {
-        console.warn(
-          'Popup: Failed to toggle floating trigger visibility',
-          error
-        );
         resolve(false);
       }
     });
@@ -152,7 +144,6 @@ const PopupApp: React.FC = () => {
       try {
         hid = await setFloatingTriggerVisibility(tab.id, false, 'auto');
       } catch (error) {
-        console.warn('Popup: Failed to hide floating trigger', error);
       }
     }
 
@@ -163,7 +154,6 @@ const PopupApp: React.FC = () => {
         try {
           await setFloatingTriggerVisibility(tab.id, true, 'auto');
         } catch (error) {
-          console.warn('Popup: Failed to restore floating trigger', error);
         }
       }
     }
@@ -241,7 +231,6 @@ const PopupApp: React.FC = () => {
         });
         contentScriptAvailable = !!response;
       } catch (error) {
-        console.log('Content script not available, injecting...');
       }
 
       if (!contentScriptAvailable) {
@@ -281,7 +270,6 @@ const PopupApp: React.FC = () => {
           }
           await new Promise(resolve => setTimeout(resolve, 100));
         } catch (injectionError) {
-          console.log('Content script injection failed:', injectionError);
           setState(prev => ({
             ...prev,
             error: 'Unable to inject content script on this page',
@@ -315,15 +303,10 @@ const PopupApp: React.FC = () => {
             }));
           }
         } catch (messageError) {
-          console.error(
-            'Message sending failed, trying fallback:',
-            messageError
-          );
           await handleSimpleScreenshotCapture(tab);
         }
       });
     } catch (error) {
-      console.error('Quick capture error:', error);
       setState(prev => ({
         ...prev,
         error: 'Failed to capture screenshot',
@@ -336,8 +319,6 @@ const PopupApp: React.FC = () => {
   ): Promise<void> => {
     await withFloatingTriggerHidden(tab, async () => {
       try {
-        console.log('Attempting simple screenshot capture...');
-
         const response = await new Promise<any>(resolve => {
           chrome.runtime.sendMessage(
             { type: MessageType.CAPTURE_SCREENSHOT },
@@ -349,23 +330,14 @@ const PopupApp: React.FC = () => {
         });
 
         if (response && response.success) {
-          console.log('Simple screenshot captured, saving manually...');
-
           setState(prev => ({
             ...prev,
             success: 'Screenshot captured and saved as draft!',
           }));
         } else {
-          console.log(
-            'Simple capture returned no success, trying direct capture...'
-          );
           await handleDirectCapture(tab);
         }
       } catch (error) {
-        console.error('Simple screenshot capture failed:', error);
-        console.log(
-          'Simple capture failed with exception, trying direct capture...'
-        );
         await handleDirectCapture(tab);
       }
     });
@@ -374,17 +346,13 @@ const PopupApp: React.FC = () => {
   const handleDirectCapture = async (tab: chrome.tabs.Tab): Promise<void> => {
     await withFloatingTriggerHidden(tab, async () => {
       try {
-        console.log('Attempting direct capture without background script...');
-
         await chrome.tabs.captureVisibleTab();
-        console.log('Direct screenshot captured successfully');
 
         setState(prev => ({
           ...prev,
           success: 'Screenshot captured and saved as draft!',
         }));
       } catch (error) {
-        console.error('Direct capture failed:', error);
         setState(prev => ({
           ...prev,
           error: `Screenshot capture failed: ${
@@ -408,7 +376,6 @@ const PopupApp: React.FC = () => {
         }
       });
     } catch (error) {
-      console.error('Toggle recording error:', error);
     }
   };
 
@@ -430,15 +397,12 @@ const PopupApp: React.FC = () => {
         }
       });
     } catch (error) {
-      console.error('Run test error:', error);
     }
   };
 
   const handleFallbackCapture = async (tab: chrome.tabs.Tab): Promise<void> => {
     await withFloatingTriggerHidden(tab, async () => {
       try {
-        console.log('Attempting fallback capture for tab:', tab.id, tab.url);
-
         const response = await new Promise<any>(resolve => {
           chrome.runtime.sendMessage(
             {
@@ -452,8 +416,6 @@ const PopupApp: React.FC = () => {
           );
         });
 
-        console.log('Fallback capture response:', response);
-
         if (response && response.success) {
           setState(prev => ({
             ...prev,
@@ -463,15 +425,12 @@ const PopupApp: React.FC = () => {
           const errorMsg =
             response?.error ||
             'Failed to capture screenshot using fallback method';
-          console.error('Fallback capture failed with error:', errorMsg);
           setState(prev => ({
             ...prev,
             error: errorMsg,
           }));
         }
       } catch (error) {
-        console.error('Fallback capture exception:', error);
-        console.log('Trying direct capture as last resort...');
         await handleDirectCapture(tab);
       }
     });
@@ -790,15 +749,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
       const root = createRoot(container);
       root.render(<PopupApp />);
-      console.log('Popup React app initialized successfully');
     } catch (error) {
-      console.error('Failed to initialize popup React app:', error);
       // Show error message
       container.innerHTML =
         '<div class="error">Failed to load extension. Please refresh.</div>';
     }
   } else {
-    console.error('Popup root element not found');
   }
 });
 
@@ -826,9 +782,7 @@ if (document.readyState === 'loading') {
 
       const root = createRoot(container);
       root.render(<PopupApp />);
-      console.log('Popup React app initialized immediately');
     } catch (error) {
-      console.error('Failed to initialize popup React app immediately:', error);
     }
   }
 }

@@ -9,7 +9,8 @@ export type ViewType =
   | 'agent'
   | 'recordings'
   | 'login'
-  | 'loading';
+  | 'loading'
+  | 'recording-detail';
 
 export interface NavigationState<T = any> {
   view: ViewType;

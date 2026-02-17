@@ -12,7 +12,6 @@ export function extractDomain(url: string): string | null {
     const urlObj = new URL(url);
     return urlObj.hostname;
   } catch (error) {
-    console.warn('Failed to extract domain from URL:', url, error);
     return null;
   }
 }
@@ -42,6 +41,49 @@ export function isValidDomain(domain: string): boolean {
     localhostRegex.test(trimmed) ||
     ipRegex.test(trimmed)
   );
+}
+
+/**
+ * Check if a URL is restricted (browser internal page or Chrome Web Store)
+ * @param url - URL to check
+ * @returns true if restricted, false otherwise
+ */
+export function isRestrictedUrl(url: string | undefined): boolean {
+  if (!url) return false;
+
+  const restrictedProtocols = [
+    'chrome:',
+    'chrome-extension:',
+    'edge:',
+    'moz-extension:',
+    'about:',
+    'devtools:',
+    'view-source:',
+    'brave:',
+    'opera:',
+  ];
+
+  try {
+    const urlObj = new URL(url);
+    if (restrictedProtocols.includes(urlObj.protocol)) {
+      return true;
+    }
+
+    const hostname = urlObj.hostname;
+    if (
+      hostname === 'chrome.google.com' ||
+      hostname === 'chromewebstore.google.com'
+    ) {
+      return true;
+    }
+  } catch {
+    // If URL parsing fails, check startsWith as fallback
+    if (restrictedProtocols.some(p => url.startsWith(p))) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 /**

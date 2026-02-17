@@ -22,7 +22,6 @@ export function useLogout() {
       queryClient.clear();
     },
     onError: (error) => {
-      console.error('Logout mutation failed:', error);
     },
   });
 }

@@ -30,14 +30,14 @@ export class ShadowDOMManager {
 
     // Check if instance already exists
     if (this.instances.has(hostId)) {
-      throw new Error(`Shadow DOM instance with id "${hostId}" already exists`);
+      this.destroy(hostId);
     }
 
     // Create shadow host with full viewport dimensions
     const host = document.createElement('div');
     host.id = hostId;
     host.style.cssText =
-      'position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 999999; pointer-events: none; overflow: visible;';
+      'position: fixed !important; top: 0 !important; left: 0 !important; width: 100vw !important; height: 100vh !important; z-index: 2147483647 !important; pointer-events: none !important; overflow: visible !important; display: block !important; visibility: visible !important; background: transparent !important;';
 
     // Attach shadow root
     const root = host.attachShadow({ mode: shadowMode });
@@ -148,9 +148,10 @@ export class ShadowDOMManager {
       this.injectCSS(root, css);
     }
 
-    // Create container for React
+    // Create container for React with explicit sizing
     const container = document.createElement('div');
-    container.style.cssText = 'pointer-events: auto;';
+    container.style.cssText = 
+      'position: absolute !important; top: 0 !important; left: 0 !important; width: 100% !important; height: 100% !important; pointer-events: none !important; display: block !important; visibility: visible !important;';
     root.appendChild(container);
 
     // Create instance
@@ -165,7 +166,10 @@ export class ShadowDOMManager {
     this.instances.set(hostId, instance);
 
     // Append to DOM
-    document.body.appendChild(host);
+    const parent = document.body || document.documentElement;
+    if (parent) {
+      parent.appendChild(host);
+    }
 
     return instance;
   }

@@ -13,7 +13,7 @@
     "contextMenus",
     "notifications",
     "offscreen",
-    "tabCapture"
+    "desktopCapture"
   ],
   "host_permissions": [
     "<all_urls>",
@@ -23,9 +23,9 @@
   "content_scripts": [
     {
       "matches": ["<all_urls>"],
-      "js": ["content.js"],
+      "js": ["content.js", "recorder.js", "player.js"],
       "run_at": "document_end",
-      "all_frames": false,
+      "all_frames": true,
       "match_about_blank": false
     }
   ],
@@ -48,6 +48,10 @@
         "assets/log-loom-logo.png",
         "assets/*",
         "styles/*",
+        "video-viewer.html",
+        "video-viewer.js",
+        "recording-detail.html",
+        "recording-detail.js",
         "*.js",
         "*.css"
       ],

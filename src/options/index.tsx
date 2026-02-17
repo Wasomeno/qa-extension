@@ -85,7 +85,6 @@ const OptionsApp: React.FC = () => {
         setState(prev => ({ ...prev, isLoading: false }));
       }, 500);
     } catch (error) {
-      console.error('Failed to load initial data:', error);
       setState(prev => ({
         ...prev,
         error: 'Failed to load settings',
@@ -1192,7 +1191,6 @@ if (container) {
   const root = createRoot(container);
   root.render(<OptionsApp />);
 } else {
-  console.error('Options root element not found');
 }
 
 export default OptionsApp;

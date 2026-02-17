@@ -25,24 +25,20 @@ class SimpleTrigger {
         : '';
     const isMac = /mac|darwin/.test(platform);
 
-    if (
-      isMac &&
-      event.metaKey &&
-      event.shiftKey &&
-      !event.ctrlKey &&
-      !event.altKey
-    ) {
-      // Only trigger if it's a modifier key itself (not another key with modifiers)
-      const isModifierOnly = event.key === 'Meta' || event.key === 'Shift';
-      if (isModifierOnly) {
-        console.log(
-          'QA Extension: Cmd+Shift detected, making popup nearly invisible'
-        );
-        void this.setFloatingTriggerOpacity(0.1);
-        return;
-      }
-    }
-
+          if (
+            isMac &&
+            event.metaKey &&
+            event.shiftKey &&
+            !event.ctrlKey &&
+            !event.altKey
+          ) {
+            // Only trigger if it's a modifier key itself (not another key with modifiers)
+            const isModifierOnly = event.key === 'Meta' || event.key === 'Shift';
+            if (isModifierOnly) {
+              void this.setFloatingTriggerOpacity(0.1);
+              return;
+            }
+          }
     if (this.isNativeScreenshotShortcut(event)) {
       this.handleNativeScreenshot();
     }
@@ -109,7 +105,6 @@ class SimpleTrigger {
         (e.key === 'H' || e.key === 'h')
       ) {
         e.preventDefault();
-        console.log('QA Extension: Manual screenshot hide triggered');
         void this.handleNativeScreenshot();
       }
     });
@@ -128,9 +123,7 @@ class SimpleTrigger {
         passive: true,
       });
       this.screenshotListenersAttached = true;
-      console.log('QA Extension: Screenshot shortcut listener registered');
     } catch (error) {
-      console.warn('QA Extension: Failed to attach screenshot listener', error);
     }
   }
 
@@ -149,7 +142,6 @@ class SimpleTrigger {
         await this.activate();
       }
     } catch (error) {
-      console.warn('QA Extension: Toggle shortcut failed', error);
     }
   }
 
@@ -191,36 +183,21 @@ class SimpleTrigger {
           detail: { opacity },
         })
       );
-      console.log(`QA Extension: Set popup opacity to ${opacity}`);
     } catch (error) {
-      console.warn('QA Extension: Failed to set popup opacity', error);
     }
   }
 
   private handleNativeScreenshot(): void {
-    console.log(
-      'QA Extension: Handling native screenshot - hiding floating trigger'
-    );
     if (this.hiddenReason === 'manual') {
-      console.log('QA Extension: Skipping auto-hide due to manual hide state');
       return;
     }
     void this.setFloatingTriggerVisibility(false, 'auto')
       .then(success => {
         if (success) {
-          console.log(
-            'QA Extension: Successfully hid floating trigger, scheduling restore'
-          );
           this.scheduleScreenshotRestore();
-        } else {
-          console.log('QA Extension: Failed to hide floating trigger');
         }
       })
       .catch(error => {
-        console.warn(
-          'QA Extension: Failed to hide floating trigger for screenshot',
-          error
-        );
       });
   }
 
@@ -233,18 +210,10 @@ class SimpleTrigger {
           try {
             await this.setFloatingTriggerVisibility(true, 'auto');
           } catch (error) {
-            console.warn(
-              'QA Extension: Failed to restore floating trigger after screenshot',
-              error
-            );
           }
         }
       }, this.SCREENSHOT_RESTORE_DELAY);
     } catch (error) {
-      console.warn(
-        'QA Extension: Failed to schedule floating trigger restore',
-        error
-      );
     }
   }
 
@@ -271,7 +240,6 @@ class SimpleTrigger {
         true
       );
     } catch (error) {
-      console.warn('QA Extension: Failed to detach screenshot listener', error);
     } finally {
       this.screenshotListenersAttached = false;
     }
@@ -299,10 +267,6 @@ class SimpleTrigger {
             sendResponse({ success: result, data: { visible: targetVisible } });
           })
           .catch(error => {
-            console.error(
-              'QA Extension: Failed to toggle floating trigger visibility',
-              error
-            );
             sendResponse({
               success: false,
               error:
@@ -359,7 +323,6 @@ class SimpleTrigger {
         data: pageContext,
       };
     } catch (error) {
-      console.error('Failed to create issue from context:', error);
       return {
         success: false,
         error:
@@ -379,7 +342,6 @@ class SimpleTrigger {
         return this.floatingTriggerContainer.ownerDocument.defaultView;
       }
     } catch (error) {
-      console.warn('QA Extension: Failed to resolve host window', error);
     }
     return window;
   }
@@ -425,10 +387,6 @@ class SimpleTrigger {
 
       return true;
     } catch (error) {
-      console.warn(
-        'QA Extension: Error dispatching floating trigger visibility event',
-        error
-      );
       return false;
     }
   }
@@ -436,7 +394,6 @@ class SimpleTrigger {
   private async activate(): Promise<void> {
     // Check whitelist before activating
     if (!(await this.isUrlAllowedByWhitelist())) {
-      console.log('QA Extension: Activation blocked - URL not whitelisted');
       return;
     }
 
@@ -460,10 +417,6 @@ class SimpleTrigger {
     try {
       return true;
     } catch (error) {
-      console.warn(
-        'QA Extension: Failed to check whitelist in activate()',
-        error
-      );
       // Fail safely - don't activate if we can't check whitelist
       return false;
     }
@@ -503,7 +456,6 @@ class SimpleTrigger {
       // so no global CSS injection is necessary.
 
       if (useIframe) {
-        console.log('QA Extension: Using iframe host for floating trigger');
         // Create isolated iframe host
         this.iframeHost = createIframeHost({
           id: 'qa-floating-trigger-iframe',
@@ -524,8 +476,7 @@ class SimpleTrigger {
         this.floatingTriggerContainer = mount as any;
         this.floatingTriggerRoot = createRoot(mount);
       } else {
-        console.log('QA Extension: Using Shadow DOM host for floating trigger');
-        // Create Shadow DOM instance
+        // Create Shadow DOM host
         this.shadowDOMInstance = shadowDOMManager.create({
           hostId: 'qa-floating-trigger-root',
           shadowMode: 'closed',
@@ -549,10 +500,7 @@ class SimpleTrigger {
           onClose: () => this.removeFloatingTrigger(),
         })
       );
-
-      console.log('QA Extension: Floating trigger injected successfully');
     } catch (error) {
-      console.error('QA Extension: Failed to inject floating trigger:', error);
     }
   }
 
@@ -595,6 +543,4 @@ if (!(window as any).__QA_EXTENSION_INITIALIZED__) {
   window.addEventListener('beforeunload', () => {
     simpleTrigger.destroy();
   });
-
-  console.log('QA Extension: Simple trigger initialized');
 }

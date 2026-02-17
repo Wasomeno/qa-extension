@@ -69,13 +69,11 @@ export async function bridgeFetch<T = any>(
       const { signal, ...safeInit } = initAny;
       const safeReq = { ...req, init: safeInit };
 
-      console.log('[Bridge] Sending background fetch request for', req.url);
       const reply = await sendMessageWithRetry(
         { type: MessageType.BACKGROUND_FETCH, data: safeReq },
         8,
         200
       );
-      console.log('[Bridge] Got reply:', reply);
 
       if (reply && (reply as any).success) {
         return (reply as any).data as BackgroundFetchResponse<T>;
@@ -83,7 +81,6 @@ export async function bridgeFetch<T = any>(
         throw new Error((reply as any)?.error || 'Unknown background error');
       }
     } catch (e: any) {
-      console.error('[Bridge] Background fetch failed:', e);
       return {
         ok: false,
         status: 0,

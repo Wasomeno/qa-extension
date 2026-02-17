@@ -142,7 +142,6 @@ export function findElement(selector: string): Element | null {
   try {
     return document.querySelector(selector);
   } catch (error) {
-    console.warn('Invalid selector:', selector, error);
     return null;
   }
 }
