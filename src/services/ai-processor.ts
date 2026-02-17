@@ -16,7 +16,7 @@ export class AIProcessor {
 
     try {
       const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${this.apiKey}`,
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${this.apiKey}`,
         {
           method: 'POST',
           headers: {
@@ -55,7 +55,6 @@ export class AIProcessor {
 
       return JSON.parse(text) as TestBlueprint;
     } catch (error) {
-      console.error('AI Processor Error:', error);
       throw error;
     }
   }
@@ -70,8 +69,8 @@ export class AIProcessor {
       url: e.url,
     }));
 
-    return `You are a test automation expert. Convert the following raw browser recording events into a clean, structured, and parameterized test blueprint. 
-Analyze the events to identify the main user flow and group them into logical steps. 
+    return `You are a test automation expert. Convert the following raw browser recording events into a clean, structured, and parameterized test blueprint.
+Analyze the events to identify the main user flow and group them into logical steps.
 Parameterize dynamic values like usernames, search queries, or form inputs using the \${parameterName} syntax.
 
 Input Events:

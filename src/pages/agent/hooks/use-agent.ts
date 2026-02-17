@@ -12,7 +12,7 @@ export const useAgent = () => {
       id: 'init',
       role: 'assistant',
       content:
-        "Hello! I'm your GitLab QA Agent. I can help you create issues, search projects, or answer questions about your repository.",
+        "Hello! I'm your GitLab QA Agent. I can help you create issues, search projects, or run recorded automation tests and match them against your expectations.",
       timestamp: Date.now(),
     },
   ]);
@@ -27,7 +27,7 @@ export const useAgent = () => {
           msg.id === 'init'
             ? {
                 ...msg,
-                content: `Hello ${user.name}! I'm your GitLab QA Agent. I can help you create issues, search projects, or answer questions about your repository. What can I help you with?`,
+                content: `Hello ${user.name}! I'm your GitLab QA Agent. I can help you create issues, search projects, or run recorded automation tests. I can even match the results against your expectations! What can I help you with?`,
               }
             : msg
         )
@@ -38,7 +38,6 @@ export const useAgent = () => {
   // Initialize agent on mount
   useEffect(() => {
     if (!__GOOGLE_API_KEY__) {
-      console.error('GOOGLE_API_KEY is not defined in the environment');
       setMessages(prev => [
         ...prev,
         {
@@ -57,7 +56,6 @@ export const useAgent = () => {
         googleApiKey: __GOOGLE_API_KEY__,
       });
     } catch (e) {
-      console.error('Failed to initialize agent', e);
     }
   }, []);
 

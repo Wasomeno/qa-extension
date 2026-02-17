@@ -7,6 +7,7 @@ import {
   getProjectIssues,
 } from '@/api/issue';
 import { getProjects } from '@/api/project';
+import { MessageType } from '@/types/messages';
 
 export interface AgentConfig {
   googleApiKey: string;
@@ -61,7 +62,6 @@ export class QAAgent {
         });
       }
 
-      console.log('[QA Agent] Fetching:', url);
       const response = await bridgeFetch({
         url,
         init: {
@@ -70,8 +70,6 @@ export class QAAgent {
         },
         responseType: 'text',
       });
-
-      console.log('[QA Agent] Raw Response:', response);
 
       if (!response.ok) {
         throw new Error(response.statusText || 'Network error');
@@ -152,6 +150,25 @@ export class QAAgent {
               properties: {},
             },
           },
+          {
+            name: 'listRecordedTests',
+            description: 'List all recorded automation tests (blueprints) available to run.',
+            parameters: {
+              type: Type.OBJECT,
+              properties: {},
+            },
+          },
+          {
+            name: 'runRecordedTest',
+            description: 'Run a recorded automation test. ALWAYS ask the user for the expected result BEFORE running this tool. This tool will wait for the test to complete in a new tab and return the actual outcome.',
+            parameters: {
+              type: Type.OBJECT,
+              properties: {
+                testId: { type: Type.STRING, description: 'The ID of the recorded test to run.' },
+              },
+              required: ['testId'],
+            },
+          },
         ],
       },
     ];
@@ -179,10 +196,6 @@ export class QAAgent {
 
     if (currentTokens <= this.maxHistoryTokens) return;
 
-    console.log(
-      `[QA Agent] Trimming history: ${currentTokens} tokens exceeds limit of ${this.maxHistoryTokens}`
-    );
-
     // Always keep the system message/initial prompt if it's there (history[0])
     // And always keep the most recent N messages
     while (currentTokens > this.maxHistoryTokens && this.history.length > 3) {
@@ -198,7 +211,6 @@ export class QAAgent {
     const elapsed = now - this.lastRequestTime;
     if (elapsed < this.minRequestDelay) {
       const waitTime = this.minRequestDelay - elapsed;
-      console.log(`[QA Agent] Throttling: waiting ${waitTime}ms`);
       await new Promise(resolve => setTimeout(resolve, waitTime));
     }
     this.lastRequestTime = Date.now();
@@ -219,9 +231,6 @@ export class QAAgent {
           error.status === 429 ||
           error.message?.includes('Too Many Requests'))
       ) {
-        console.warn(
-          `[QA Agent] Rate limited (429). Retrying in ${delay / 1000}s... (${retries} retries left)`
-        );
         await new Promise(resolve => setTimeout(resolve, delay));
         return this.safeGenerateContent(options, retries - 1, delay * 2);
       }
@@ -237,11 +246,6 @@ export class QAAgent {
     this.trimHistory();
 
     try {
-      console.log('[QA Agent] Sending request to Gemini...', {
-        model: this.modelName,
-        historyLength: this.history.length,
-      });
-
       let response = await this.safeGenerateContent({
         model: this.modelName,
         contents: this.history,
@@ -257,7 +261,6 @@ export class QAAgent {
 
       while (functionCalls && functionCalls.length > 0) {
         if (currentStep >= MAX_STEPS) {
-          console.warn(`[QA Agent] Max steps (${MAX_STEPS}) reached.`);
           yield {
             type: 'error',
             message: 'Agent reached maximum function call limit.',
@@ -277,7 +280,6 @@ export class QAAgent {
           const callId = Math.random().toString(36).substring(7);
           const safeArgs = args || {};
 
-          console.log(`[QA Agent] Tool Call: ${name}`, safeArgs);
           yield { type: 'tool_call', tool: name, args: safeArgs, id: callId };
 
           let result: any;
@@ -314,11 +316,56 @@ export class QAAgent {
               case 'listGitLabProjects':
                 result = await getProjects();
                 break;
+              case 'listRecordedTests':
+                result = await new Promise((resolve) => {
+                  chrome.runtime.sendMessage({ type: MessageType.GET_RECORDED_TESTS }, (response) => {
+                    if (chrome.runtime.lastError) {
+                      resolve({ error: chrome.runtime.lastError.message });
+                    } else {
+                      // Return a simplified list for the LLM
+                      const tests = response.data || [];
+                      resolve(tests.map((t: any) => ({
+                        id: t.id,
+                        name: t.name,
+                        description: t.description,
+                        stepsCount: t.steps?.length || 0,
+                        baseUrl: t.baseUrl
+                      })));
+                    }
+                  });
+                });
+                break;
+              case 'runRecordedTest':
+                // 1. Get the full blueprint first
+                const blueprintsResult: any = await new Promise((resolve) => {
+                  chrome.runtime.sendMessage({ type: MessageType.GET_RECORDED_TESTS }, (response) => {
+                    resolve(response.data || []);
+                  });
+                });
+                
+                const blueprint = blueprintsResult.find((b: any) => b.id === safeArgs.testId);
+                if (!blueprint) {
+                  throw new Error(`Test with ID ${safeArgs.testId} not found.`);
+                }
+
+                // 2. Start playback and wait for completion
+                result = await new Promise((resolve) => {
+                  chrome.runtime.sendMessage({ 
+                    type: MessageType.START_PLAYBACK, 
+                    data: { blueprint, waitForCompletion: true } 
+                  }, (response) => {
+                    if (chrome.runtime.lastError) {
+                      resolve({ error: chrome.runtime.lastError.message });
+                    } else {
+                      resolve(response);
+                    }
+                  });
+                });
+                break;
               default:
                 throw new Error(`Unknown tool: ${name}`);
             }
 
-            console.log(`[QA Agent] Tool Result:`, result);
             yield { type: 'tool_result', tool: name, result, id: callId };
 
             this.history.push({
@@ -333,7 +380,6 @@ export class QAAgent {
               ],
             });
           } catch (error: any) {
-            console.error(`[QA Agent] Tool Error (${name}):`, error);
             const errorResult = { error: error.message || 'Unknown error' };
             yield {
               type: 'tool_result',
@@ -372,12 +418,10 @@ export class QAAgent {
         if (response.candidates?.[0]?.content) {
           this.history.push(response.candidates[0].content);
         }
-        console.log('[QA Agent] Final Response:', responseText);
         yield { type: 'text', content: responseText };
         yield { type: 'done', content: responseText };
       }
     } catch (error: any) {
-      console.error('[QA Agent] Error in chat:', error);
       yield { type: 'error', message: error.message || 'An error occurred.' };
     }
   }

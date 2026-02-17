@@ -8,7 +8,6 @@ async function main() {
   const googleApiKey = process.env.GOOGLE_API_KEY;
 
   if (!googleApiKey) {
-    console.error('Error: GOOGLE_API_KEY must be set in .env');
     process.exit(1);
   }
 
@@ -20,9 +19,6 @@ async function main() {
     input: process.stdin,
     output: process.stdout,
   });
-
-  console.log('Connected to GitLab via backend. Ask me anything.');
-  console.log('-----------------------------------');
 
   const prompt = () => {
     rl.question('QA Agent > ', async input => {
@@ -59,7 +55,6 @@ async function main() {
         }
         process.stdout.write('\n');
       } catch (error) {
-        console.error('\nError:', error);
       }
 
       prompt();
