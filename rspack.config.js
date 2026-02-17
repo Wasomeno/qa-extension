@@ -15,10 +15,13 @@ module.exports = (env, argv) => {
       content: './src/content/simple-trigger.ts',
       recorder: './src/content/recorder/index.tsx',
       player: './src/content/player/index.ts',
-      'content-simple-test': './src/content-simple-test.js',
+      picker: './src/background/picker.ts',
+
       popup: './src/popup/index.tsx',
       options: './src/options/index.tsx',
       offscreen: './src/offscreen/index.ts',
+      'video-viewer': './src/pages/recordings/video-viewer.ts',
+      'recording-detail': './src/pages/recordings/standalone.tsx',
       'shadow-dom-styles': './src/styles/shadow-dom.css',
     },
     output: {
@@ -132,6 +135,21 @@ module.exports = (env, argv) => {
         filename: 'offscreen.html',
         chunks: ['offscreen'],
       }),
+      new rspack.HtmlRspackPlugin({
+        template: './src/pages/recordings/video-viewer.html',
+        filename: 'video-viewer.html',
+        chunks: ['video-viewer'],
+      }),
+      new rspack.HtmlRspackPlugin({
+        template: './src/pages/recordings/standalone.html',
+        filename: 'recording-detail.html',
+        chunks: ['recording-detail'],
+      }),
+      new rspack.HtmlRspackPlugin({
+        template: './src/background/picker.html',
+        filename: 'picker.html',
+        chunks: ['picker'],
+      }),
       new rspack.CopyRspackPlugin({
         patterns: [
           {
@@ -210,19 +228,7 @@ module.exports = (env, argv) => {
             to: 'assets',
             noErrorOnMissing: true,
           },
-          {
-            from: './src/test-content.js',
-            to: 'test-content.js',
-          },
           // Scripts for recording removed
-          {
-            from: './src/test-minimal.js',
-            to: 'test-minimal.js',
-          },
-          {
-            from: './src/content-standalone.js',
-            to: 'content-standalone.js',
-          },
         ],
       }),
     ],
@@ -233,16 +239,26 @@ module.exports = (env, argv) => {
     optimization: {
       splitChunks: {
         chunks(chunk) {
-          // Disable code splitting for content script and background (SW must be single file)
-          return chunk.name !== 'content' && chunk.name !== 'background';
+          // Disable code splitting for content scripts and background (SW must be single file)
+          return (
+            chunk.name !== 'content' &&
+            chunk.name !== 'background' &&
+            chunk.name !== 'recorder' &&
+            chunk.name !== 'player'
+          );
         },
         cacheGroups: {
           vendor: {
             test: /[\/]node_modules[\/]/,
             name: 'vendor',
             chunks(chunk) {
-              // Only create vendor chunk for popup and options, not content or background
-              return chunk.name !== 'content' && chunk.name !== 'background';
+              // Only create vendor chunk for popup and options
+              return (
+                chunk.name !== 'content' &&
+                chunk.name !== 'background' &&
+                chunk.name !== 'recorder' &&
+                chunk.name !== 'player'
+              );
             },
           },
         },
