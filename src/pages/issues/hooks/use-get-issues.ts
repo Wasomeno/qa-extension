@@ -14,7 +14,16 @@ export function useGetIssues(filters?: Partial<IssueFilterState>) {
   const { data: currentUser } = useGetLoggedInUser();
 
   const query = useQuery({
-    queryKey: ['issues', filters, currentUser?.id],
+    queryKey: [
+      'issues',
+      filters?.search,
+      filters?.projectId,
+      filters?.status,
+      filters?.labels,
+      filters?.issueIds,
+      filters?.quickFilters,
+      currentUser?.id,
+    ],
     queryFn: () => {
       // If issueIds is provided but empty, return empty result immediately to avoid fetching all issues
       if (filters?.issueIds && filters.issueIds.length === 0) {
@@ -36,25 +45,13 @@ export function useGetIssues(filters?: Partial<IssueFilterState>) {
       }
 
       let assigneeId: number | string | null | undefined = undefined;
-      // "Assigned to Me" takes precedence over unassigned check if both were somehow true (UI should prevent this)
       if (filters.quickFilters?.assignedToMe && currentUser) {
         assigneeId = currentUser.id;
       } else if (filters.quickFilters?.unassigned) {
-        assigneeId = null; // Assuming backend handles null/0 for unassigned
-      } else if (currentUser && !filters.issueIds) {
-        // Default to current user if not explicitly unassigned or filtered otherwise
-        // BUT skip this default if we are looking for specific issue IDs (e.g. child tasks)
-        assigneeId = currentUser.id;
+        assigneeId = 'None';
       }
 
       let authorId: number | string | undefined = undefined;
-      // Backend requires author_id. Default to current user if available.
-      // Skip default author filter if we are fetching specific IDs
-      if (currentUser && !filters.issueIds) {
-        authorId = currentUser.id;
-      }
-
-      // If specific "Created by Me" toggle exists
       if (filters.quickFilters?.createdByMe && currentUser) {
         authorId = currentUser.id;
       }
