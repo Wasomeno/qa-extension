@@ -112,7 +112,7 @@ export const ActivityItem: React.FC<ActivityItemProps> = ({
             </span>
           </div>
 
-          <h4 className="text-sm font-medium text-gray-700 leading-snug line-clamp-1 group-hover:text-blue-600 transition-colors">
+          <h4 className="text-sm font-medium text-gray-700 leading-snug line-clamp-1 group-hover:text-theme-text transition-colors">
             {activity.title}
           </h4>
 
@@ -141,7 +141,7 @@ export const ActivityItem: React.FC<ActivityItemProps> = ({
               target="_blank"
               rel="noopener noreferrer"
               onClick={e => e.stopPropagation()}
-              className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1 text-[10px] text-gray-400 hover:text-blue-500 font-semibold"
+              className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1 text-[10px] text-gray-400 hover:text-theme-text font-semibold"
             >
               GitLab <ExternalLink className="w-2.5 h-2.5" />
             </a>
