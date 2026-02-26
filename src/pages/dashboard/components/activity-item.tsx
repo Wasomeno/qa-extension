@@ -26,25 +26,25 @@ export const ActivityItem: React.FC<ActivityItemProps> = ({
         return {
           label: 'commented on',
           icon: MessageSquare,
-          color: 'text-blue-500',
-          bg: 'bg-blue-50',
-          border: 'border-blue-100',
+          color: 'text-secondary-900',
+          bg: 'bg-secondary-100',
+          border: 'border-secondary-200',
         };
       case 'system_note':
         return {
           label: 'updated status',
           icon: Settings2,
-          color: 'text-purple-500',
-          bg: 'bg-purple-50',
-          border: 'border-purple-100',
+          color: 'text-secondary-700',
+          bg: 'bg-secondary-50',
+          border: 'border-secondary-100',
         };
       case 'issue_update':
         return {
           label: 'updated',
           icon: RefreshCw,
-          color: 'text-orange-500',
-          bg: 'bg-orange-50',
-          border: 'border-orange-100',
+          color: 'text-secondary-500',
+          bg: 'bg-gray-50',
+          border: 'border-gray-100',
         };
       default:
         return {
