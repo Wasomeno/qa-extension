@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { getDashboardStats } from '@/api/dashboard';
 import { ActivityItem } from './components/activity-item';
 import { ActivityItemSkeleton } from './components/activity-item-skeleton';
+import { StatCard } from './components/stat-card';
 import { IssueDetailPage } from '../issues/detail';
 import { AnimatePresence } from 'framer-motion';
 import { Issue } from '@/api/issue';
@@ -49,6 +50,24 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
           <p className="text-sm text-gray-500 mt-1">
             Overview of your QA activities and recent team updates.
           </p>
+        </div>
+
+        <div className="grid grid-cols-3 gap-6">
+          <StatCard
+            title="Active Issues"
+            value={stats?.recent_activities?.length?.toString() || '0'}
+            color="text-theme-text"
+          />
+          <StatCard
+            title="Projects"
+            value="--"
+            color="text-secondary-500"
+          />
+          <StatCard
+            title="Recent Activity"
+            value={stats?.recent_activities?.length?.toString() || '0'}
+            color="text-secondary-700"
+          />
         </div>
 
         <div className="flex items-center justify-between border-b border-gray-100 pb-4">
