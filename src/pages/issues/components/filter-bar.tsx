@@ -1,5 +1,5 @@
 import React from 'react';
-import { Search, Filter } from 'lucide-react';
+import { Search, Filter, User } from 'lucide-react';
 import { IssueFilterState } from '@/types/issues';
 import { Input } from '@/components/ui/input';
 import { SearchablePicker } from './searchable-picker';
@@ -34,6 +34,11 @@ export const IssueFilterBar: React.FC<IssueFilterBarProps> = ({
   labelOptions,
   portalContainer,
 }) => {
+  const assigneeOptions: Option[] = [
+    { label: 'Me', value: 'ME' },
+    { label: 'Unassigned', value: 'None' },
+  ];
+
   return (
     <div className="flex flex-col gap-4">
       {/* Search Input Row */}
@@ -53,25 +58,39 @@ export const IssueFilterBar: React.FC<IssueFilterBarProps> = ({
       </div>
 
       {/* Filters Grid Row */}
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {/* Project Filter */}
         <SearchablePicker
+          multiple
           options={projectOptions}
-          value={filters.projectId}
-          onSelect={val => onFilterChange('projectId', String(val))}
+          value={filters.projectIds}
+          onSelect={val => onFilterChange('projectIds', val as string[])}
           placeholder="All Projects"
           searchPlaceholder="Search projects…"
-          allOption={{ label: 'All Projects', value: 'ALL' }}
+          portalContainer={portalContainer}
+          className="w-full"
+        />
+
+        {/* Assignee Filter */}
+        <SearchablePicker
+          multiple
+          options={assigneeOptions}
+          value={filters.assigneeIds || ['ALL']}
+          onSelect={val => onFilterChange('assigneeIds', val as (string | number)[])}
+          placeholder="All Assignees"
+          searchPlaceholder="Search assignees…"
+          allOption={{ label: 'All Assignees', value: 'ALL' }}
           portalContainer={portalContainer}
           className="w-full"
         />
 
         {/* Label Filter */}
         <SearchablePicker
+          multiple
           options={labelOptions}
-          value={filters.labels?.[0] || 'ALL'}
+          value={filters.labels || ['ALL']}
           onSelect={val =>
-            onFilterChange('labels', val === 'ALL' ? [] : [String(val)])
+            onFilterChange('labels', val as string[])
           }
           placeholder="All Labels"
           searchPlaceholder="Search labels…"
