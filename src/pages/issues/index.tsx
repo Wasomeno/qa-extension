@@ -24,9 +24,10 @@ export const IssuesPage: React.FC<IssuesPageProps> = ({
   const { current, push, pop } = useNavigation();
   const [filters, setFilters] = useState<IssueFilterState>({
     search: '',
-    projectId: 'ALL',
+    projectIds: [],
     status: 'ALL',
     labels: [],
+    assigneeIds: ['ALL'],
     sort: 'UPDATED',
     quickFilters: {
       assignedToMe: false,
@@ -48,7 +49,10 @@ export const IssuesPage: React.FC<IssuesPageProps> = ({
 
   // Fetch filter options
   const projects = useGetProjects();
-  const labels = useGetLabels(filters.projectId);
+  // For labels, we use the first project if only one is selected, otherwise 'ALL'
+  const labels = useGetLabels(
+    filters.projectIds.length === 1 ? filters.projectIds[0] : 'ALL'
+  );
 
   const issues = useGetIssues(memoizedFilters);
   const { togglePin, isPinned } = usePinnedIssues();
@@ -120,7 +124,7 @@ export const IssuesPage: React.FC<IssuesPageProps> = ({
         <IssueList
           issues={issues.data}
           isLoading={issues.isLoading}
-          isProjectFiltered={filters.projectId !== 'ALL'}
+          isProjectFiltered={filters.projectIds.length === 1}
           onIssueClick={issue => push('issue-detail', issue)}
           onPin={togglePin}
           isPinned={isPinned}
