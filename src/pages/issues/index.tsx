@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { AnimatePresence } from 'framer-motion';
 import { IssueFilterState } from '@/types/issues';
+import { useDebounce } from '@/utils/useDebounce';
 import { IssueDetailPage } from './detail';
 import { IssueFilterBar } from './components/filter-bar';
 import { IssueList } from './components/issue-list';
@@ -38,11 +39,18 @@ export const IssuesPage: React.FC<IssuesPageProps> = ({
     },
   });
 
+  const debouncedSearch = useDebounce(filters.search, 300);
+
+  const memoizedFilters = useMemo(() => ({
+    ...filters,
+    search: debouncedSearch,
+  }), [filters, debouncedSearch]);
+
   // Fetch filter options
   const projects = useGetProjects();
   const labels = useGetLabels(filters.projectId);
 
-  const issues = useGetIssues(filters);
+  const issues = useGetIssues(memoizedFilters);
   const { togglePin, isPinned } = usePinnedIssues();
 
   // Map options
@@ -69,7 +77,10 @@ export const IssuesPage: React.FC<IssuesPageProps> = ({
     setFilters(prev => ({ ...prev, [key]: value }));
   };
 
-  const selectedIssue = current.view === 'issue-detail' ? (current.params as Issue) : (initialIssue || null);
+  const selectedIssue =
+    current.view === 'issue-detail'
+      ? (current.params as Issue)
+      : initialIssue || null;
 
   // If an issue is selected, show the detail page instead of the list
   if (selectedIssue) {
@@ -110,7 +121,7 @@ export const IssuesPage: React.FC<IssuesPageProps> = ({
           issues={issues.data}
           isLoading={issues.isLoading}
           isProjectFiltered={filters.projectId !== 'ALL'}
-          onIssueClick={(issue) => push('issue-detail', issue)}
+          onIssueClick={issue => push('issue-detail', issue)}
           onPin={togglePin}
           isPinned={isPinned}
         />
