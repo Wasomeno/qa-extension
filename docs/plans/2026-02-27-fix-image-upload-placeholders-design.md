@@ -14,6 +14,10 @@ The image upload loading placeholders were invisible because the extension compo
 - **Inline Styles:** Updated the custom `MarkdownIt` image renderer to use inline CSS for the upload placeholder, removing dependency on external Tailwind classes.
 - **UI Simplification:** Removed the non-functional `pastingImage` state and the blocking overlay in favor of the inline placeholder.
 
+### 3. Cursor Height Fix
+- Changed upload placeholders from `display: inline-block` to `display: block`.
+- This prevents the browser from stretching the text caret to the height of the placeholder when the cursor is adjacent to it, ensuring the cursor height matches the text size.
+
 ## Verification Results
 - Ran `npm run typecheck`: Verified `description-editor.tsx` is type-safe.
 - Verified that `ChildIssueFormFields` (which uses `DescriptionEditor`) also benefits from these fixes.

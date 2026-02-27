@@ -80,7 +80,7 @@ const uploadPlugin = new Plugin({
       if (action && action.add) {
         const widget = document.createElement('div');
         widget.className =
-          'relative inline-block rounded-lg overflow-hidden border border-gray-200 my-2 animate-in fade-in zoom-in duration-300 tiptap-upload-widget';
+          'relative block rounded-lg overflow-hidden border border-gray-200 my-2 animate-in fade-in zoom-in duration-300 tiptap-upload-widget';
         widget.style.maxWidth = '100%';
 
         const img = document.createElement('img');
@@ -649,7 +649,7 @@ export const DescriptionEditor = ({
           animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
         }
         .tiptap-upload-widget {
-          display: inline-block;
+          display: block;
           position: relative;
           border-radius: 0.5rem;
           overflow: hidden;
