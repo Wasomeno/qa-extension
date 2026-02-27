@@ -157,12 +157,12 @@ const CompactIssueCreator: React.FC<CompactIssueCreatorProps> = ({
 
       if (src.startsWith('blob:')) {
         const alt = token.content || 'Uploading...';
-        return `<div class="md-upload-placeholder" style="position: relative; display: block; border-radius: 8px; overflow: hidden; border: 1px solid #e5e7eb; margin: 8px 0; background: #f9fafb;">
+        return `<div class="md-upload-placeholder" style="position: relative; display: inline-block; max-width: 100%; border-radius: 8px; overflow: hidden; border: 1px solid #e5e7eb; margin: 8px 0; background: #f9fafb;">
             <img src="${src}" style="filter: blur(12px) grayscale(100%); max-width: 100%; height: auto; opacity: 0.4; display: block;" />
-            <div style="position: absolute; inset: 0; display: flex; align-items: center; justify-center: center; background: rgba(0,0,0,0.03);">
+            <div style="position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.03);">
               <div style="background: rgba(255,255,255,0.9); padding: 4px 8px; border-radius: 4px; font-size: 10px; font-weight: 700; color: #111827; box-shadow: 0 1px 2px rgba(0,0,0,0.05); display: flex; align-items: center; gap: 6px; border: 1px solid #f3f4f6;">
                 <svg style="width: 12px; height: 12px; animation: md-spin 1s linear infinite;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M21 12a9 9 0 11-6.219-8.56"></path></svg>
-                ${alt.toUpperCase()}
+                UPLOADING...
               </div>
             </div>
             <style>
@@ -314,7 +314,7 @@ const CompactIssueCreator: React.FC<CompactIssueCreatorProps> = ({
           e.preventDefault();
           const fileName = `image-${Date.now()}.png`;
           const blobUrl = URL.createObjectURL(file);
-          const placeholder = `![rendering...](${blobUrl})`;
+          const placeholder = `![uploading...](${blobUrl})`;
 
           const s = getSel();
           if (!s) return;

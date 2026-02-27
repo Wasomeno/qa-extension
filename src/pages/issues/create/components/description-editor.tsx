@@ -80,8 +80,7 @@ const uploadPlugin = new Plugin({
       if (action && action.add) {
         const widget = document.createElement('div');
         widget.className =
-          'relative block rounded-lg overflow-hidden border border-gray-200 my-2 animate-in fade-in zoom-in duration-300 tiptap-upload-widget';
-        widget.style.maxWidth = '100%';
+          'relative inline-block rounded-lg overflow-hidden border border-gray-200 my-2 animate-in fade-in zoom-in duration-300 tiptap-upload-widget';
 
         const img = document.createElement('img');
         img.src = action.add.src;
@@ -96,7 +95,7 @@ const uploadPlugin = new Plugin({
         badge.className =
           'bg-white/90 px-2 py-1 rounded text-[10px] font-bold text-gray-900 shadow-sm animate-pulse flex items-center gap-1.5 border border-gray-100';
         badge.innerHTML =
-          '<svg class="w-3 h-3 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M21 12a9 9 0 11-6.219-8.56"></path></svg> RENDERING...';
+          '<svg class="w-3 h-3 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M21 12a9 9 0 11-6.219-8.56"></path></svg> UPLOADING...';
         overlay.appendChild(badge);
 
         const cancelBtn = document.createElement('button');
@@ -649,7 +648,8 @@ export const DescriptionEditor = ({
           animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
         }
         .tiptap-upload-widget {
-          display: block;
+          display: inline-block;
+          max-width: 100%;
           position: relative;
           border-radius: 0.5rem;
           overflow: hidden;

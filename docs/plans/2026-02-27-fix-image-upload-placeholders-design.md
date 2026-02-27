@@ -14,9 +14,10 @@ The image upload loading placeholders were invisible because the extension compo
 - **Inline Styles:** Updated the custom `MarkdownIt` image renderer to use inline CSS for the upload placeholder, removing dependency on external Tailwind classes.
 - **UI Simplification:** Removed the non-functional `pastingImage` state and the blocking overlay in favor of the inline placeholder.
 
-### 3. Cursor Height Fix
-- Changed upload placeholders from `display: inline-block` to `display: block`.
-- This prevents the browser from stretching the text caret to the height of the placeholder when the cursor is adjacent to it, ensuring the cursor height matches the text size.
+### 3. Sizing and Terminology Fix
+- Updated loading text from "RENDERING" to "UPLOADING" to better reflect the action.
+- Changed upload placeholders to `display: inline-block` to ensure they only take as much width as the image content.
+- Ensured `max-width: 100%` on the container to prevent overflow while maintaining "shrink-wrap" behavior.
 
 ## Verification Results
 - Ran `npm run typecheck`: Verified `description-editor.tsx` is type-safe.
