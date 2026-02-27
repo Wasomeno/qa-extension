@@ -11,6 +11,37 @@ export const useSessionUser = () => {
   const [user, setUserState] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
+  const setUser = useCallback(async (newUser: User) => {
+    if (chrome.storage && chrome.storage.session) {
+      await chrome.storage.session.set({ [STORAGE_KEY]: newUser });
+    }
+  }, []);
+
+  const clearUser = useCallback(async () => {
+    if (chrome.storage && chrome.storage.session) {
+      await chrome.storage.session.remove(STORAGE_KEY);
+    }
+    setUserState(null);
+  }, []);
+
+  const syncUser = useCallback(async () => {
+    try {
+      setLoading(true);
+      const response = await getCurrentUser();
+      if (response.success && response.data) {
+        await setUser(response.data);
+        return response.data;
+      } else if (response.success === false) {
+        await clearUser();
+      }
+    } catch (err) {
+      // Keep existing state on network error, but we could clear it here too if desired
+    } finally {
+      setLoading(false);
+    }
+    return null;
+  }, [setUser, clearUser]);
+
   // Initial load
   useEffect(() => {
     // Check if chrome.storage.session is available (it might not be in some content script contexts if not configured)
@@ -27,7 +58,7 @@ export const useSessionUser = () => {
     } else {
       setLoading(false);
     }
-  }, []);
+  }, [syncUser]);
 
   // Listen for changes
   useEffect(() => {
@@ -42,39 +73,30 @@ export const useSessionUser = () => {
       }
     };
 
+    const handleMessage = (message: any) => {
+      if (message.type === 'AUTH_SESSION_UPDATED') {
+        syncUser();
+      }
+    };
+
+    const handleFocus = () => {
+      syncUser();
+    };
+
     chrome.storage.onChanged.addListener(handleStorageChange);
+    if (chrome.runtime?.onMessage) {
+      chrome.runtime.onMessage.addListener(handleMessage);
+    }
+    window.addEventListener('focus', handleFocus);
+
     return () => {
       chrome.storage.onChanged.removeListener(handleStorageChange);
-    };
-  }, []);
-
-  const setUser = useCallback(async (newUser: User) => {
-    if (chrome.storage && chrome.storage.session) {
-      await chrome.storage.session.set({ [STORAGE_KEY]: newUser });
-    }
-  }, []);
-
-  const syncUser = useCallback(async () => {
-    try {
-      setLoading(true);
-      const response = await getCurrentUser();
-      if (response.success && response.data) {
-        await setUser(response.data);
-        return response.data;
+      if (chrome.runtime?.onMessage) {
+        chrome.runtime.onMessage.removeListener(handleMessage);
       }
-    } catch (err) {
-    } finally {
-      setLoading(false);
-    }
-    return null;
-  }, [setUser]);
-
-  const clearUser = useCallback(async () => {
-    if (chrome.storage && chrome.storage.session) {
-      await chrome.storage.session.remove(STORAGE_KEY);
-    }
-    setUserState(null);
-  }, []);
+      window.removeEventListener('focus', handleFocus);
+    };
+  }, [syncUser]);
 
   return { user, setUser, syncUser, clearUser, loading };
 };

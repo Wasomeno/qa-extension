@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import {
   ArrowLeft,
@@ -33,6 +33,7 @@ import {
 import { toast } from 'sonner';
 import { useQueryClient } from '@tanstack/react-query';
 import { usePinnedIssues } from '@/hooks/use-pinned-issues';
+import { useGetIssue } from '../hooks/use-get-issue';
 import { useGetIssueComments } from '../hooks/use-get-issue-comments';
 import { ChildIssuesList } from '@/pages/issues/detail/components/child-issues-list';
 import { useIssueCommentMutations } from '@/pages/issues/hooks/use-issue-comment-mutations';
@@ -161,6 +162,12 @@ export const IssueDetailPage: React.FC<IssueDetailPageProps> = ({
   const projectId = issue.project_id;
   const issueId = issue.iid;
 
+  const { data: fetchedIssueData, isLoading: isFetching } = useGetIssue(
+    projectId,
+    issueId
+  );
+  const currentIssue = fetchedIssueData?.data || issue;
+
   // Edit States
   const [editingField, setEditingField] = useState<
     'description' | 'status' | 'assignee' | 'labels' | null
@@ -246,6 +253,43 @@ export const IssueDetailPage: React.FC<IssueDetailPageProps> = ({
     useGetProjectMembers(projectId);
   const { data: labels, isLoading: isLoadingLabels } =
     useGetProjectLabels(projectId);
+
+  useEffect(() => {
+    if (fetchedIssueData?.data) {
+      const data = fetchedIssueData.data;
+      setDescription(data.description);
+      setStatus(data.state === 'closed' ? 'closed' : 'opened');
+      setSelectedAssignee(
+        data.assignees?.[0]
+          ? {
+              id: String(data.assignees[0].id),
+              name: data.assignees[0].name,
+              username: data.assignees[0].username,
+              avatarUrl: data.assignees[0].avatar_url,
+              webUrl: data.assignees[0].web_url,
+              state: data.assignees[0].state,
+            }
+          : undefined
+      );
+      setSelectedLabels(
+        data.label_details
+          ? data.label_details.map(l => ({
+              id: String(l.id),
+              name: l.name,
+              color: l.color,
+              textColor: l.text_color,
+              description: l.description,
+            }))
+          : (data.labels || []).map(l => ({
+              id: String(l),
+              name: String(l),
+              color: '#ccc',
+              textColor: '#000',
+              description: '',
+            }))
+      );
+    }
+  }, [fetchedIssueData]);
 
   const statusStyle = statusConfig[issue.state] || statusConfig.opened;
 
@@ -341,24 +385,24 @@ export const IssueDetailPage: React.FC<IssueDetailPageProps> = ({
             </button>
             <div className="space-y-2">
               <h1 className="text-lg font-semibold text-gray-900 mt-2 leading-snug truncate max-w-[400px]">
-                {issue.title}
+                {currentIssue.title}
               </h1>
               <div className="flex items-center gap-2 text-[10px] text-gray-400 mt-1">
                 <span className="font-medium text-gray-500">
-                  {issue.project_name}
+                  {currentIssue.project_name}
                 </span>
                 <span>•</span>
-                <span>Created by {issue.author.name}</span>
+                <span>Created by {currentIssue.author.name}</span>
                 <span>•</span>
-                <span>{formatDate(issue.created_at)}</span>
+                <span>{formatDate(currentIssue.created_at)}</span>
               </div>
             </div>
           </div>
           <div className="flex items-center gap-2">
             <button
               onClick={() => {
-                if (issue.web_url) {
-                  window.open(issue.web_url, '_blank');
+                if (currentIssue.web_url) {
+                  window.open(currentIssue.web_url, '_blank');
                 }
               }}
               className="p-1.5 hover:bg-gray-100 rounded-lg text-gray-400 hover:text-blue-600 transition-colors"
@@ -367,15 +411,15 @@ export const IssueDetailPage: React.FC<IssueDetailPageProps> = ({
               <ExternalLink className="w-4 h-4" />
             </button>
             <button
-              onClick={() => togglePin(issue)}
+              onClick={() => togglePin(currentIssue)}
               className={cn(
                 'p-1.5 rounded-lg transition-colors',
-                isPinned(issue.iid, issue.project_id)
+                isPinned(currentIssue.iid, currentIssue.project_id)
                   ? 'bg-amber-100 text-amber-500 hover:bg-amber-200'
                   : 'text-gray-400 hover:bg-gray-100 hover:text-gray-900'
               )}
               title={
-                isPinned(issue.iid, issue.project_id)
+                isPinned(currentIssue.iid, currentIssue.project_id)
                   ? 'Unpin Issue'
                   : 'Pin Issue'
               }
@@ -383,7 +427,7 @@ export const IssueDetailPage: React.FC<IssueDetailPageProps> = ({
               <Pin
                 className={cn(
                   'w-4 h-4',
-                  isPinned(issue.iid, issue.project_id) && 'fill-current'
+                  isPinned(currentIssue.iid, currentIssue.project_id) && 'fill-current'
                 )}
               />
             </button>
@@ -403,7 +447,7 @@ export const IssueDetailPage: React.FC<IssueDetailPageProps> = ({
             title="Description"
             isEditing={editingField === 'description'}
             onEdit={() => {
-              setDescription(issue.description);
+              setDescription(currentIssue.description);
               setEditingField('description');
             }}
             onCancel={cancelEdit}
@@ -420,13 +464,21 @@ export const IssueDetailPage: React.FC<IssueDetailPageProps> = ({
           >
             {' '}
             <div className="group relative rounded-lg p-2 hover:bg-gray-50/50 transition-colors -m-2">
-              <MarkdownRenderer content={issue.description} />
+              {isFetching && !currentIssue.description ? (
+                <div className="space-y-2">
+                  <Skeleton className="h-4 w-full" />
+                  <Skeleton className="h-4 w-full" />
+                  <Skeleton className="h-4 w-3/4" />
+                </div>
+              ) : (
+                <MarkdownRenderer content={currentIssue.description} />
+              )}
             </div>
           </EditableSection>
 
           {/* Child Tasks */}
           <ChildIssuesList
-            parentIssue={issue}
+            parentIssue={currentIssue}
             portalContainer={portalContainer}
           />
 
@@ -556,7 +608,9 @@ export const IssueDetailPage: React.FC<IssueDetailPageProps> = ({
 
             {/* New Comment Box */}
             <div className="pt-6 mt-2 border-t border-gray-100">
-              <h3 className="text-sm font-medium mb-3 text-gray-700">Add a comment</h3>
+              <h3 className="text-sm font-medium mb-3 text-gray-700">
+                Add a comment
+              </h3>
               <div className="space-y-2">
                 <DescriptionEditor
                   content={newComment}
@@ -587,7 +641,7 @@ export const IssueDetailPage: React.FC<IssueDetailPageProps> = ({
               title="Status"
               isEditing={editingField === 'status'}
               onEdit={() => {
-                setStatus(issue.state === 'closed' ? 'closed' : 'opened');
+                setStatus(currentIssue.state === 'closed' ? 'closed' : 'opened');
                 setEditingField('status');
               }}
               onCancel={cancelEdit}
@@ -611,11 +665,11 @@ export const IssueDetailPage: React.FC<IssueDetailPageProps> = ({
                 <span
                   className={cn(
                     'text-xs px-2 py-1 rounded-full font-medium',
-                    statusStyle.bg,
-                    statusStyle.color
+                    (statusConfig[currentIssue.state] || statusConfig.opened).bg,
+                    (statusConfig[currentIssue.state] || statusConfig.opened).color
                   )}
                 >
-                  {statusStyle.label}
+                  {(statusConfig[currentIssue.state] || statusConfig.opened).label}
                 </span>
               </div>
             </EditableSection>
@@ -626,14 +680,14 @@ export const IssueDetailPage: React.FC<IssueDetailPageProps> = ({
               isEditing={editingField === 'assignee'}
               onEdit={() => {
                 setSelectedAssignee(
-                  issue.assignees?.[0]
+                  currentIssue.assignees?.[0]
                     ? {
-                        id: String(issue.assignees[0].id),
-                        name: issue.assignees[0].name,
-                        username: issue.assignees[0].username,
-                        avatarUrl: issue.assignees[0].avatar_url,
-                        webUrl: issue.assignees[0].web_url,
-                        state: issue.assignees[0].state,
+                        id: String(currentIssue.assignees[0].id),
+                        name: currentIssue.assignees[0].name,
+                        username: currentIssue.assignees[0].username,
+                        avatarUrl: currentIssue.assignees[0].avatar_url,
+                        webUrl: currentIssue.assignees[0].web_url,
+                        state: currentIssue.assignees[0].state,
                       }
                     : undefined
                 );
@@ -654,15 +708,15 @@ export const IssueDetailPage: React.FC<IssueDetailPageProps> = ({
               }
             >
               <div className="mt-1 flex items-center gap-2">
-                {issue.assignees?.[0] ? (
+                {currentIssue.assignees?.[0] ? (
                   <>
                     <img
-                      src={issue.assignees[0].avatar_url}
+                      src={currentIssue.assignees[0].avatar_url}
                       className="w-5 h-5 rounded-full"
                       alt=""
                     />
                     <span className="text-xs font-medium text-gray-900">
-                      {issue.assignees[0].name}
+                      {currentIssue.assignees[0].name}
                     </span>
                   </>
                 ) : (
@@ -681,17 +735,17 @@ export const IssueDetailPage: React.FC<IssueDetailPageProps> = ({
               isEditing={editingField === 'labels'}
               onEdit={() => {
                 setSelectedLabels(
-                  issue.label_details
-                    ? issue.label_details.map(l => ({
+                  currentIssue.label_details
+                    ? currentIssue.label_details.map(l => ({
                         id: String(l.id),
                         name: l.name,
                         color: l.color,
                         textColor: l.text_color,
                         description: l.description,
                       }))
-                    : (issue.labels || []).map(l => ({
-                        id: l,
-                        name: l,
+                    : (currentIssue.labels || []).map(l => ({
+                        id: String(l),
+                        name: String(l),
                         color: '#ccc',
                         textColor: '#000',
                         description: '',
@@ -723,8 +777,8 @@ export const IssueDetailPage: React.FC<IssueDetailPageProps> = ({
               }
             >
               <div className="mt-2 grid grid-cols-2 gap-2">
-                {issue.label_details && issue.label_details.length > 0 ? (
-                  issue.label_details.map(label => (
+                {currentIssue.label_details && currentIssue.label_details.length > 0 ? (
+                  currentIssue.label_details.map(label => (
                     <div
                       key={label.id}
                       className="col-span-1 text-[10px] px-2 py-0.5 rounded border font-medium truncate"
@@ -737,13 +791,13 @@ export const IssueDetailPage: React.FC<IssueDetailPageProps> = ({
                       {label.name}
                     </div>
                   ))
-                ) : issue.labels && issue.labels.length > 0 ? (
-                  issue.labels.map((label, i) => (
+                ) : currentIssue.labels && currentIssue.labels.length > 0 ? (
+                  currentIssue.labels.map((label, i) => (
                     <div
                       key={i}
                       className="col-span-1 text-[10px] px-2 py-0.5 rounded border font-medium bg-gray-100 text-gray-700 truncate"
                     >
-                      {label}
+                      {String(label)}
                     </div>
                   ))
                 ) : (
@@ -756,15 +810,15 @@ export const IssueDetailPage: React.FC<IssueDetailPageProps> = ({
           </div>
 
           {/* Milestone & Due Date */}
-          {issue.due_date && (
+          {currentIssue.due_date && (
             <div className="bg-white rounded-xl p-4 border border-gray-100 space-y-3">
-              {issue.due_date && (
+              {currentIssue.due_date && (
                 <div>
                   <span className="text-[10px] text-gray-500 font-medium uppercase tracking-wide flex items-center gap-1">
                     <Calendar className="w-3 h-3" /> Due Date
                   </span>
                   <div className="mt-1 text-xs font-medium text-gray-900">
-                    {formatDate(issue.due_date)}
+                    {formatDate(currentIssue.due_date)}
                   </div>
                 </div>
               )}
@@ -772,7 +826,7 @@ export const IssueDetailPage: React.FC<IssueDetailPageProps> = ({
           )}
 
           {/* MR Status */}
-          {issue.merge_requests_count > 0 && (
+          {currentIssue.merge_requests_count > 0 && (
             <div className="bg-white rounded-xl p-4 border border-gray-100">
               <span className="text-[10px] text-gray-500 font-medium uppercase tracking-wide">
                 Merge Requests
@@ -780,7 +834,7 @@ export const IssueDetailPage: React.FC<IssueDetailPageProps> = ({
               <div className="mt-2 flex items-center gap-2">
                 <span className="inline-flex items-center gap-1.5 text-xs px-2 py-1 rounded-full bg-green-100 text-green-700 font-medium">
                   <GitPullRequest className="w-3.5 h-3.5" />
-                  {issue.merge_requests_count} Open
+                  {currentIssue.merge_requests_count} Open
                 </span>
               </div>
             </div>
