@@ -7,6 +7,7 @@ import {
   Clock,
   ExternalLink,
   PlusCircle,
+  Loader2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -17,7 +18,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { getProjects } from '@/api/project';
 import { storageService } from '@/services/storage';
 import { videoStorage } from '@/services/video-storage';
@@ -53,6 +54,8 @@ export const CompactRecordingsList: React.FC<CompactRecordingsListProps> = ({
     return undefined;
   }, [portalContainer, portalReady]);
 
+  const queryClient = useQueryClient();
+
   const { data: projectsData } = useQuery({
     queryKey: ['projects'],
     queryFn: getProjects,
@@ -68,14 +71,22 @@ export const CompactRecordingsList: React.FC<CompactRecordingsListProps> = ({
       const data = await storageService.get('test-blueprints');
       return (data || []) as TestBlueprint[];
     },
+    refetchOnMount: 'always',
   });
 
   const { data: lastBlueprint, refetch: refetchLastBlueprint } = useQuery({
     queryKey: ['last-blueprint'],
     queryFn: async () => {
-      return await storageService.get('lastBlueprint');
+      const data = await storageService.get('lastBlueprint');
+      return data || null;
     },
+    refetchOnMount: 'always',
   });
+
+  React.useEffect(() => {
+    refetchRecordings();
+    refetchLastBlueprint();
+  }, [refetchRecordings, refetchLastBlueprint]);
 
   React.useEffect(() => {
     const handleMessage = (message: any) => {
@@ -109,10 +120,19 @@ export const CompactRecordingsList: React.FC<CompactRecordingsListProps> = ({
   const handleSaveDraft = () => {
     if (!lastBlueprint) return;
     try {
+      // Create a copy of the blueprint with the currently selected project if one is chosen
+      const blueprintToSave = {
+        ...lastBlueprint,
+        projectId:
+          selectedProjectId !== 'all'
+            ? parseInt(selectedProjectId)
+            : lastBlueprint.projectId,
+      };
+
       chrome.runtime.sendMessage(
         {
           type: MessageType.SAVE_BLUEPRINT,
-          data: { blueprint: lastBlueprint },
+          data: { blueprint: blueprintToSave },
         },
         response => {
           if (chrome.runtime.lastError) {
@@ -120,8 +140,8 @@ export const CompactRecordingsList: React.FC<CompactRecordingsListProps> = ({
             return;
           }
           if (response?.success) {
+            queryClient.setQueryData(['last-blueprint'], null);
             refetchRecordings();
-            refetchLastBlueprint();
           } else {
             setError(response?.error || 'Failed to save draft');
           }
@@ -144,40 +164,44 @@ export const CompactRecordingsList: React.FC<CompactRecordingsListProps> = ({
 
   const handleStartRecording = () => {
     setError(null);
-    if (typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
-      chrome.runtime.sendMessage(
-        {
-          type: MessageType.START_RECORDING,
-          data: {
-            projectId:
-              selectedProjectId !== 'all'
-                ? parseInt(selectedProjectId)
-                : undefined,
-          },
-        },
-        response => {
-          if (chrome.runtime.lastError) {
-            setError('Communication error. Please refresh the page.');
-            return;
-          }
+    chrome.runtime.sendMessage({ type: MessageType.CLOSE_MAIN_MENU });
+    
+    setTimeout(() => {
+        if (typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
+          chrome.runtime.sendMessage(
+            {
+              type: MessageType.START_RECORDING,
+              data: {
+                projectId:
+                  selectedProjectId !== 'all'
+                    ? parseInt(selectedProjectId)
+                    : undefined,
+              },
+            },
+            response => {
+              if (chrome.runtime.lastError) {
+                setError('Communication error. Please refresh the page.');
+                return;
+              }
 
-          if (response?.success) {
-            onClose();
-          } else {
-            const errorMsg = response?.error || 'Failed to start recording';
-            setError(errorMsg);
-          }
+              if (response?.success) {
+                onClose();
+              } else {
+                const errorMsg = response?.error || 'Failed to start recording';
+                setError(errorMsg);
+              }
+            }
+          );
+        } else {
+          onClose();
         }
-      );
-    } else {
-      onClose();
-    }
+    }, 300);
   };
 
   const handleRunTest = (blueprint: TestBlueprint) => {
     chrome.runtime.sendMessage({
       type: MessageType.START_PLAYBACK,
-      data: { blueprint },
+      data: { blueprint, active: false },
     });
     onClose();
   };
@@ -185,9 +209,8 @@ export const CompactRecordingsList: React.FC<CompactRecordingsListProps> = ({
   const handleDelete = async (id: string) => {
     try {
       await videoStorage.deleteVideo(id);
-    } catch (e) {
-    }
-    
+    } catch (e) {}
+
     chrome.runtime.sendMessage({
       type: MessageType.DELETE_BLUEPRINT,
       data: { id },
@@ -259,27 +282,34 @@ export const CompactRecordingsList: React.FC<CompactRecordingsListProps> = ({
                 : 'bg-blue-50 border-blue-100'
           }`}
         >
-          <div className="min-w-0">
-            <p
-              className={`text-[11px] font-bold uppercase tracking-tight ${
-                lastBlueprint.status === 'processing'
-                  ? 'text-yellow-700'
+          <div className="flex items-center gap-3 min-w-0">
+            {lastBlueprint.status === 'processing' && (
+              <Loader2 className="w-4 h-4 text-yellow-600 animate-spin shrink-0" />
+            )}
+            <div className="min-w-0">
+              <p
+                className={`text-[11px] font-bold uppercase tracking-tight ${
+                  lastBlueprint.status === 'processing'
+                    ? 'text-yellow-700'
+                    : lastBlueprint.status === 'failed'
+                      ? 'text-red-700'
+                      : 'text-blue-700'
+                }`}
+              >
+                {lastBlueprint.status === 'processing'
+                  ? 'Processing Recording...'
                   : lastBlueprint.status === 'failed'
-                    ? 'text-red-700'
-                    : 'text-blue-700'
-              }`}
-            >
-              {lastBlueprint.status === 'processing'
-                ? 'Processing Recording...'
-                : lastBlueprint.status === 'failed'
-                  ? 'Processing Failed'
-                  : 'Recent Draft'}
-            </p>
-            <p className="text-xs font-medium text-gray-900 truncate">
-              {lastBlueprint.status === 'failed'
-                ? lastBlueprint.error || 'AI generation failed'
-                : lastBlueprint.name}
-            </p>
+                    ? 'Processing Failed'
+                    : 'Recent Draft'}
+              </p>
+              <p className="text-xs font-medium text-gray-900 truncate">
+                {lastBlueprint.status === 'failed'
+                  ? lastBlueprint.error || 'AI generation failed'
+                  : lastBlueprint.status === 'processing'
+                    ? 'AI is analyzing your test steps...'
+                    : lastBlueprint.name}
+              </p>
+            </div>
           </div>
           <div className="flex gap-1.5 shrink-0">
             {lastBlueprint.status !== 'processing' &&
@@ -308,7 +338,10 @@ export const CompactRecordingsList: React.FC<CompactRecordingsListProps> = ({
                 variant="ghost"
                 size="sm"
                 className="h-7 text-[10px] px-2 hover:bg-red-100 text-red-700"
-                onClick={() => chrome.storage.local.remove('lastBlueprint')}
+                onClick={() => {
+                  chrome.storage.local.remove('lastBlueprint');
+                  queryClient.setQueryData(['last-blueprint'], null);
+                }}
               >
                 Clear
               </Button>
@@ -361,10 +394,12 @@ export const CompactRecordingsList: React.FC<CompactRecordingsListProps> = ({
                 key={rec.id}
                 className="px-4 py-3 hover:bg-gray-50/80 transition-colors group cursor-pointer"
                 onClick={() => {
-                  const url = chrome.runtime.getURL(`recording-detail.html?id=${rec.id}`);
+                  const url = chrome.runtime.getURL(
+                    `recording-detail.html?id=${rec.id}`
+                  );
                   chrome.runtime.sendMessage({
                     type: MessageType.OPEN_URL,
-                    data: { url }
+                    data: { url, active: true },
                   });
                 }}
               >

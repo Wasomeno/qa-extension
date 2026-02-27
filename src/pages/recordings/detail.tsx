@@ -1,3 +1,4 @@
+import React, { useState, useEffect } from 'react';
 import {
   ChevronLeft,
   Play,
@@ -19,7 +20,6 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { MessageType } from '@/types/messages';
-import { useState, useEffect } from 'react';
 
 interface RecordingDetailProps {
   blueprint: TestBlueprint;
@@ -34,7 +34,7 @@ export const RecordingDetailPage: React.FC<RecordingDetailProps> = ({
   const handleRunTest = () => {
     chrome.runtime.sendMessage({
       type: MessageType.START_PLAYBACK,
-      data: { blueprint },
+      data: { blueprint, active: false },
     });
   };
 
@@ -49,7 +49,7 @@ export const RecordingDetailPage: React.FC<RecordingDetailProps> = ({
       case 'select':
         return <ListFilter className="w-4 h-4" />;
       case 'assert':
-        return <CheckCircle2 className="w-4 h-4 text-green-500" />;
+        return <CheckCircle2 className="w-4 h-4 text-zinc-600" />;
       default:
         return <Database className="w-4 h-4" />;
     }
@@ -116,19 +116,19 @@ export const RecordingDetailPage: React.FC<RecordingDetailProps> = ({
 
           {/* Metadata */}
           <div className="flex gap-4">
-            <div className="flex-1 p-3 bg-blue-50 rounded-lg border border-blue-100">
-              <div className="text-xs text-blue-600 font-medium mb-1 flex items-center gap-1">
+            <div className="flex-1 p-3 bg-zinc-50 rounded-lg border border-zinc-100">
+              <div className="text-xs text-zinc-500 font-medium mb-1 flex items-center gap-1">
                 <Clock className="w-3 h-3" /> Duration
               </div>
-              <div className="text-sm font-semibold text-blue-900">
+              <div className="text-sm font-semibold text-zinc-900">
                 {blueprint.steps.length} Steps
               </div>
             </div>
-            <div className="flex-1 p-3 bg-purple-50 rounded-lg border border-purple-100">
-              <div className="text-xs text-purple-600 font-medium mb-1 flex items-center gap-1">
+            <div className="flex-1 p-3 bg-zinc-50 rounded-lg border border-zinc-100">
+              <div className="text-xs text-zinc-500 font-medium mb-1 flex items-center gap-1">
                 <Database className="w-3 h-3" /> Project
               </div>
-              <div className="text-sm font-semibold text-purple-900 truncate">
+              <div className="text-sm font-semibold text-zinc-900 truncate">
                 {blueprint.projectId || 'Unassigned'}
               </div>
             </div>

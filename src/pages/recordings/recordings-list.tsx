@@ -1,43 +1,57 @@
 import React, { useState, useMemo } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
   Video as VideoIcon,
-  Play,
-  Trash2,
   Search,
   Plus,
-  Folder,
-  MoreVertical,
-  Download,
-  Share2,
-  Clock,
+  Loader2,
+  LayoutGrid,
+  List as ListIcon,
+  ChevronRight as ChevronRightIcon,
+  Info,
 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { getProjects } from '@/api/project';
 import { storageService } from '@/services/storage';
 import { videoStorage } from '@/services/video-storage';
+import {
+  generatePlaywrightTest,
+  generateTestFilename,
+  exportBlueprintAsJson,
+  generateBlueprintFilename,
+} from '@/lib/test-generator';
+import {
+  downloadTextFile,
+  downloadJsonFile,
+  downloadVideoFile,
+  generateVideoFilename,
+} from '@/lib/download';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Separator } from '@/components/ui/separator';
 import { useNavigation } from '@/contexts/navigation-context';
 import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-} from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { TestBlueprint } from '@/types/recording';
 import { MessageType } from '@/types/messages';
+import { FolderItem } from './components/folder-item';
+import { RecordingItem } from './components/recording-item';
+import { DetailsPanel } from './components/details-panel';
+import { cn } from '@/lib/utils';
 
-export const RecordingsPage: React.FC = () => {
+export const RecordingsPage: React.FC<{
+  portalContainer?: HTMLElement | null;
+}> = ({ portalContainer }) => {
   const [searchQuery, setSearchQuery] = useState('');
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const [currentFolderId, setCurrentFolderId] = useState<number | 'unassigned' | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [showDetails, setShowDetails] = useState(false);
   const { push } = useNavigation();
 
   const { data: blueprints = [], refetch: refetchBlueprints } = useQuery({
@@ -55,7 +69,37 @@ export const RecordingsPage: React.FC = () => {
     },
   });
 
-  const { data: projectsData, isLoading: isLoadingProjects } = useQuery({
+  React.useEffect(() => {
+    const handleMessage = (message: any) => {
+      if (
+        message.type === 'BLUEPRINT_GENERATED' ||
+        message.type === 'BLUEPRINT_PROCESSING' ||
+        message.type === 'BLUEPRINT_SAVED'
+      ) {
+        refetchLastBlueprint();
+        refetchBlueprints();
+      }
+    };
+    chrome.runtime.onMessage.addListener(handleMessage);
+    return () => chrome.runtime.onMessage.removeListener(handleMessage);
+  }, [refetchLastBlueprint, refetchBlueprints]);
+
+  React.useEffect(() => {
+    const handleStorageChange = (changes: {
+      [key: string]: chrome.storage.StorageChange;
+    }) => {
+      if (changes['test-blueprints']) {
+        refetchBlueprints();
+      }
+      if (changes['lastBlueprint']) {
+        refetchLastBlueprint();
+      }
+    };
+    chrome.storage.onChanged.addListener(handleStorageChange);
+    return () => chrome.storage.onChanged.removeListener(handleStorageChange);
+  }, [refetchBlueprints, refetchLastBlueprint]);
+
+  const { data: projectsData } = useQuery({
     queryKey: ['projects'],
     queryFn: getProjects,
   });
@@ -65,16 +109,14 @@ export const RecordingsPage: React.FC = () => {
   const handleRunTest = (blueprint: TestBlueprint) => {
     chrome.runtime.sendMessage({
       type: MessageType.START_PLAYBACK,
-      data: { blueprint },
+      data: { blueprint, active: false },
     });
   };
 
   const handleDelete = async (id: string) => {
-    // Delete from IndexedDB first
     try {
       await videoStorage.deleteVideo(id);
-    } catch (error) {
-    }
+    } catch (error) {}
 
     chrome.runtime.sendMessage(
       {
@@ -83,8 +125,54 @@ export const RecordingsPage: React.FC = () => {
       },
       () => {
         refetchBlueprints();
+        if (selectedId === id) setSelectedId(null);
       }
     );
+  };
+
+  const handleExportPlaywright = (blueprint: TestBlueprint) => {
+    const code = generatePlaywrightTest(blueprint);
+    const filename = generateTestFilename(blueprint);
+    downloadTextFile(code, filename);
+  };
+
+  const handleExportJson = (blueprint: TestBlueprint) => {
+    const filename = generateBlueprintFilename(blueprint);
+    downloadJsonFile(blueprint, filename);
+  };
+
+  const handleExportVideo = (blueprint: TestBlueprint) => {
+    chrome.runtime.sendMessage(
+      { type: MessageType.GET_VIDEO_BLOB, data: { id: blueprint.id } },
+      (response) => {
+        if (response && response.success && response.data && response.data.base64) {
+          const base64 = response.data.base64;
+          const mimeMatch = base64.match(/^data:([^;]+);base64,/);
+          const detectedMime = mimeMatch ? mimeMatch[1] : 'video/mp4';
+          
+          const byteCharacters = atob(base64.split(',')[1] || base64);
+          const byteNumbers = new Array(byteCharacters.length);
+          for (let i = 0; i < byteCharacters.length; i++) {
+            byteNumbers[i] = byteCharacters.charCodeAt(i);
+          }
+          const byteArray = new Uint8Array(byteNumbers);
+          const blob = new Blob([byteArray], { type: detectedMime });
+          const filename = generateVideoFilename(blueprint.name, blueprint.id, detectedMime);
+          downloadVideoFile(blob, filename);
+        }
+      }
+    );
+  };
+
+  const handleRunInAgent = (blueprint: TestBlueprint) => {
+    push('agent', {
+      initialMessage: `I want to run the automation test "${blueprint.name}" (ID: ${blueprint.id}). Please execute it and let me know the result.`,
+    });
+  };
+
+  const handleShareCopyScript = (blueprint: TestBlueprint) => {
+    const code = generatePlaywrightTest(blueprint);
+    navigator.clipboard.writeText(code);
   };
 
   const handleSaveLastBlueprint = async () => {
@@ -101,7 +189,6 @@ export const RecordingsPage: React.FC = () => {
     );
   };
 
-  // Categorize blueprints by project
   const categorizedBlueprints = useMemo(() => {
     const categories: Record<
       number | string,
@@ -122,267 +209,278 @@ export const RecordingsPage: React.FC = () => {
       categories[categoryId].items.push(b);
     });
 
-    // Remove empty categories except maybe unassigned
     return Object.entries(categories).filter(
-      ([id, cat]) => cat.items.length > 0
+      ([id, cat]) => id === 'unassigned' || cat.items.length > 0
     );
   }, [blueprints, projects]);
 
+  const selectedRecording = useMemo(() => {
+    return blueprints.find(b => b.id === selectedId) || null;
+  }, [selectedId, blueprints]);
+
+  const currentProjectName = useMemo(() => {
+    if (currentFolderId === null) return 'All Recordings';
+    if (currentFolderId === 'unassigned') return 'Unassigned';
+    const proj = projects.find(p => p.id === currentFolderId);
+    return proj ? proj.name_with_namespace : 'Unknown Project';
+  }, [currentFolderId, projects]);
+
+  const filteredItems = useMemo(() => {
+    const searchLower = searchQuery.toLowerCase();
+    return blueprints.filter(b => {
+      const matchesSearch = b.name.toLowerCase().includes(searchLower);
+      const matchesFolder = currentFolderId === null || (b.projectId === currentFolderId) || (currentFolderId === 'unassigned' && !b.projectId);
+      return matchesSearch && matchesFolder;
+    });
+  }, [blueprints, currentFolderId, searchQuery]);
+
   return (
-    <div className="flex flex-col h-full bg-gray-50/50">
-      <header className="px-6 py-4 border-b bg-white flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Automation Tests</h1>
-          <p className="text-sm text-gray-500 mt-1">
-            Manage your automated test flows
-          </p>
-        </div>
-        <div className="flex items-center gap-3">
+    <div className="flex flex-col h-full bg-white overflow-hidden relative">
+      {/* Top Header */}
+      <header className="px-6 py-4 border-b flex items-center justify-between shrink-0">
+        <div className="flex items-center gap-4">
+          <h1 className="text-xl font-bold text-gray-900">Recordings</h1>
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
             <Input
-              placeholder="Search recordings..."
-              className="pl-9 w-64 h-9 bg-gray-50 border-gray-200"
+              placeholder="Search in Drive..."
+              className="pl-9 w-80 h-10 bg-gray-100 border-none rounded-lg focus-visible:ring-2 focus-visible:ring-zinc-900"
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
             />
           </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className={cn("h-10 w-10", viewMode === 'list' && "text-zinc-900 bg-zinc-100")}
+                  onClick={() => setViewMode('list')}
+                >
+                  <ListIcon className="w-5 h-5" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>List view</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className={cn("h-10 w-10", viewMode === 'grid' && "text-zinc-900 bg-zinc-100")}
+                  onClick={() => setViewMode('grid')}
+                >
+                  <LayoutGrid className="w-5 h-5" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Grid view</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+          <Separator orientation="vertical" className="h-6 mx-1" />
           <Button
-            size="sm"
-            className="gap-2"
-            onClick={() => {
-              chrome.runtime.sendMessage({ type: MessageType.START_RECORDING });
-            }}
+            variant="ghost"
+            size="icon"
+            className={cn("h-10 w-10", showDetails && "text-zinc-900 bg-zinc-100")}
+            onClick={() => setShowDetails(!showDetails)}
           >
-            <Plus className="w-4 h-4" />
-            New Test
+            <Info className="w-5 h-5" />
           </Button>
         </div>
       </header>
 
-      <ScrollArea className="flex-1 px-6 py-6">
-        {lastBlueprint && (
-          <section
-            className={`mb-8 p-4 border rounded-lg flex items-center justify-between ${
-              lastBlueprint.status === 'processing'
-                ? 'bg-yellow-50 border-yellow-100'
-                : lastBlueprint.status === 'failed'
-                  ? 'bg-red-50 border-red-100'
-                  : 'bg-blue-50 border-blue-100'
-            }`}
-          >
-            <div className="flex items-center gap-4">
-              <div
-                className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                  lastBlueprint.status === 'processing'
-                    ? 'bg-yellow-100'
-                    : lastBlueprint.status === 'failed'
-                      ? 'bg-red-100'
-                      : 'bg-blue-100'
-                }`}
+      {/* Main Container */}
+      <div className="flex flex-1 min-h-0 relative">
+        {/* Content Area */}
+        <div 
+          className="flex-1 flex flex-col min-w-0"
+          onClick={() => setSelectedId(null)}
+        >
+          {/* Breadcrumbs & Actions */}
+          <div className="px-6 py-3 flex items-center justify-between shrink-0 border-b">
+            <div className="flex items-center gap-1 text-sm">
+              <Button 
+                variant="ghost" 
+                className="h-8 px-2 text-gray-600 hover:text-zinc-900 font-medium"
+                onClick={() => setCurrentFolderId(null)}
               >
-                <VideoIcon
-                  className={`w-5 h-5 ${
-                    lastBlueprint.status === 'processing'
-                      ? 'text-yellow-600'
-                      : lastBlueprint.status === 'failed'
-                        ? 'text-red-600'
-                        : 'text-blue-600'
-                  }`}
-                />
-              </div>
-              <div>
-                <h3
-                  className={`font-semibold ${
-                    lastBlueprint.status === 'processing'
-                      ? 'text-yellow-900'
-                      : lastBlueprint.status === 'failed'
-                        ? 'text-red-900'
-                        : 'text-blue-900'
-                  }`}
-                >
-                  {lastBlueprint.status === 'processing'
-                    ? 'Processing Recording...'
-                    : lastBlueprint.status === 'failed'
-                      ? 'Recording Failed'
-                      : 'New Recording Ready'}
-                </h3>
-                <p
-                  className={`text-sm ${
-                    lastBlueprint.status === 'processing'
-                      ? 'text-yellow-700'
-                      : lastBlueprint.status === 'failed'
-                        ? 'text-red-700'
-                        : 'text-blue-700'
-                  }`}
-                >
-                  {lastBlueprint.status === 'processing'
-                    ? 'We are generating your test steps using AI...'
-                    : lastBlueprint.status === 'failed'
-                      ? `Error: ${lastBlueprint.error || 'Failed to generate blueprint'}`
-                      : 'You have a recently captured flow. Save it to your library.'}
-                </p>
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              {lastBlueprint.status === 'ready' && (
+                My Recordings
+              </Button>
+              {currentFolderId !== null && (
                 <>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="bg-white"
-                    onClick={() => handleRunTest(lastBlueprint)}
-                  >
-                    Preview
-                  </Button>
-                  <Button
-                    size="sm"
-                    className="bg-blue-600 hover:bg-blue-700 text-white border-none"
-                    onClick={handleSaveLastBlueprint}
-                  >
-                    Save to Library
-                  </Button>
+                  <ChevronRightIcon className="w-4 h-4 text-gray-400" />
+                  <span className="px-2 text-gray-900 font-medium">{currentProjectName}</span>
                 </>
               )}
-              {lastBlueprint.status === 'failed' && (
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  className="text-red-600 hover:bg-red-100"
-                  onClick={() =>
-                    storageService
-                      .remove('lastBlueprint')
-                      .then(() => refetchLastBlueprint())
-                  }
-                >
-                  Dismiss
-                </Button>
-              )}
             </div>
-          </section>
-        )}
-
-        {categorizedBlueprints.length === 0 && !lastBlueprint ? (
-          <div className="flex flex-col items-center justify-center h-[400px] text-center">
-            <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
-              <VideoIcon className="w-8 h-8 text-gray-400" />
-            </div>
-            <h3 className="text-lg font-medium text-gray-900">
-              No recordings found
-            </h3>
-            <p className="text-gray-500 max-w-sm mt-1">
-              Start by recording a new test flow from the floating trigger on
-              any webpage.
-            </p>
-            <Button
-              variant="outline"
-              className="mt-6"
-              onClick={() => {
-                chrome.runtime.sendMessage({
-                  type: MessageType.START_RECORDING,
-                });
-              }}
+            
+            <Button 
+                className="bg-zinc-900 hover:bg-black text-white rounded-full gap-2 px-4"
+                onClick={() => {
+                    chrome.runtime.sendMessage({ type: MessageType.CLOSE_MAIN_MENU });
+                    setTimeout(() => {
+                        chrome.runtime.sendMessage({
+                            type: MessageType.START_RECORDING,
+                            data: { projectId: currentFolderId === 'unassigned' ? undefined : (currentFolderId || undefined) },
+                        });
+                    }, 300);
+                }}
             >
-              Start Recording
+                <Plus className="w-5 h-5" /> New Recording
             </Button>
           </div>
-        ) : (
-          <div className="space-y-8">
-            {categorizedBlueprints.map(([id, category]) => (
-              <section key={id} className="space-y-4">
-                <div className="flex items-center gap-2">
-                  <Folder className="w-4 h-4 text-blue-500" />
-                  <h2 className="font-semibold text-gray-700">
-                    {category.name}
-                  </h2>
-                  <Badge
-                    variant="secondary"
-                    className="bg-gray-100 text-gray-600 border-none"
-                  >
-                    {category.items.length}
-                  </Badge>
-                </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {category.items.map(blueprint => (
-                    <Card
-                      key={blueprint.id}
-                      className="group hover:shadow-md transition-shadow border-gray-200"
-                    >
-                      <CardHeader className="pb-3">
-                        <div className="flex items-start justify-between">
-                          <CardTitle className="text-base font-semibold group-hover:text-blue-600 transition-colors">
-                            {blueprint.name}
-                          </CardTitle>
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-8 w-8 -mr-2"
-                              >
-                                <MoreVertical className="w-4 h-4" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                              <DropdownMenuItem className="gap-2">
-                                <Download className="w-4 h-4" /> Export
-                              </DropdownMenuItem>
-                              <DropdownMenuItem className="gap-2">
-                                <Share2 className="w-4 h-4" /> Share
-                              </DropdownMenuItem>
-                              <DropdownMenuItem
-                                className="gap-2 text-red-600 focus:text-red-600"
-                                onClick={() => handleDelete(blueprint.id)}
-                              >
-                                <Trash2 className="w-4 h-4" /> Delete
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </div>
-                        <CardDescription className="line-clamp-2">
-                          {blueprint.description || 'No description provided'}
-                        </CardDescription>
-                      </CardHeader>
-                      <CardContent className="pb-4">
-                        <div className="flex items-center gap-4 text-xs text-gray-500 mb-4">
-                          <span className="flex items-center gap-1">
-                            <Clock className="w-3 h-3" />{' '}
-                            {blueprint.steps.length} steps
-                          </span>
-                        </div>
-                        <div className="flex gap-2">
-                          <Button
-                            size="sm"
-                            className="flex-1 gap-2 bg-blue-600 hover:bg-blue-700"
-                            onClick={() => handleRunTest(blueprint)}
-                          >
-                            <Play className="w-3 h-3 fill-current" />
-                            Run Test
-                          </Button>
-                          <Button 
-                            size="sm" 
-                            variant="outline"
-                            onClick={() => {
-                              const url = chrome.runtime.getURL(`recording-detail.html?id=${blueprint.id}`);
-                              chrome.runtime.sendMessage({
-                                type: MessageType.OPEN_URL,
-                                data: { url }
-                              });
-                            }}
-                          >
-                            View Details
-                          </Button>
-                        </div>
-                      </CardContent>
-                    </Card>
+          <ScrollArea 
+            className="flex-1"
+          >
+            <div className="p-6" onClick={(e) => {
+                // Only deselect if clicking exactly on the background, not on items
+                if (e.target === e.currentTarget) {
+                    setSelectedId(null);
+                }
+            }}>
+              {/* Processing Section */}
+              {lastBlueprint && (
+                <section className="mb-8 p-4 bg-zinc-50 border border-zinc-200 rounded-xl flex items-center justify-between">
+                  <div className="flex items-center gap-4">
+                    <div className="w-10 h-10 rounded-full bg-zinc-200 flex items-center justify-center shrink-0">
+                      {lastBlueprint.status === 'processing' ? (
+                        <Loader2 className="w-5 h-5 text-zinc-600 animate-spin" />
+                      ) : (
+                        <VideoIcon className="w-5 h-5 text-zinc-600" />
+                      )}
+                    </div>
+                    <div>
+                      <h3 className="font-semibold text-zinc-900">
+                        {lastBlueprint.status === 'processing' ? 'Processing Recording...' : 'New Recording Ready'}
+                      </h3>
+                      <p className="text-sm text-zinc-600">
+                        {lastBlueprint.status === 'processing' 
+                          ? 'We are generating your test steps using AI...' 
+                          : 'You have a recently captured flow. Save it to your library.'}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {lastBlueprint.status === 'ready' && (
+                      <>
+                        <Button size="sm" variant="outline" className="bg-white" onClick={() => handleRunTest(lastBlueprint)}>
+                          Preview
+                        </Button>
+                        <Button size="sm" className="bg-zinc-900 hover:bg-black text-white border-none" onClick={handleSaveLastBlueprint}>
+                          Save
+                        </Button>
+                      </>
+                    )}
+                  </div>
+                </section>
+              )}
+
+              {/* Folders Section - only show when at root */}
+              {currentFolderId === null && (
+                <section className="mb-8">
+                  <h2 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-4">Folders</h2>
+                  <div className={cn(
+                    viewMode === 'grid' 
+                      ? "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4" 
+                      : "flex flex-col border rounded-lg overflow-hidden"
+                  )}>
+                    {categorizedBlueprints.map(([id, cat]) => (
+                      <FolderItem
+                        key={id}
+                        name={cat.name}
+                        count={cat.items.length}
+                        viewMode={viewMode}
+                        onClick={() => setCurrentFolderId(id === 'unassigned' ? 'unassigned' : Number(id))}
+                      />
+                    ))}
+                  </div>
+                </section>
+              )}
+
+              {/* Recordings Section */}
+              <section>
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-xs font-bold text-gray-500 uppercase tracking-wider">
+                    {currentFolderId === null ? 'All Files' : 'Files'}
+                  </h2>
+                </div>
+                <div className={cn(
+                  viewMode === 'grid' 
+                    ? "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6" 
+                    : "flex flex-col border rounded-lg overflow-hidden bg-white"
+                )}>
+                  {filteredItems.map(item => (
+                    <div key={item.id} onClick={(e) => e.stopPropagation()}>
+                      <RecordingItem
+                        recording={item}
+                        viewMode={viewMode}
+                        isSelected={selectedId === item.id}
+                        onClick={() => {
+                            setSelectedId(item.id);
+                            setShowDetails(true);
+                        }}
+                        onDoubleClick={() => {
+                          const url = chrome.runtime.getURL(`recording-detail.html?id=${item.id}`);
+                          chrome.runtime.sendMessage({ type: MessageType.OPEN_URL, data: { url } });
+                        }}
+                        onRun={(e) => { e.stopPropagation(); handleRunTest(item); }}
+                        onDelete={(e) => { e.stopPropagation(); handleDelete(item.id); }}
+                        onExportPlaywright={(e) => { e.stopPropagation(); handleExportPlaywright(item); }}
+                        onExportJson={(e) => { e.stopPropagation(); handleExportJson(item); }}
+                        onExportVideo={(e) => { e.stopPropagation(); handleExportVideo(item); }}
+                        onRunInAgent={(e) => { e.stopPropagation(); handleRunInAgent(item); }}
+                        onCopyScript={(e) => { e.stopPropagation(); handleShareCopyScript(item); }}
+                        portalContainer={portalContainer}
+                      />
+                    </div>
                   ))}
+                  {filteredItems.length === 0 && (
+                    <div className="col-span-full py-12 flex flex-col items-center justify-center text-gray-400 bg-gray-50/50 rounded-xl border-2 border-dashed border-gray-200">
+                      <VideoIcon className="w-12 h-12 mb-2 opacity-20" />
+                      <p>No recordings found in this folder</p>
+                    </div>
+                  )}
                 </div>
               </section>
-            ))}
-          </div>
-        )}
-      </ScrollArea>
+            </div>
+          </ScrollArea>
+        </div>
+
+        {/* Floating Right Details Panel */}
+        <AnimatePresence>
+          {showDetails && selectedRecording && (
+            <motion.div 
+              initial={{ x: 320, opacity: 0 }}
+              animate={{ x: 0, opacity: 1 }}
+              exit={{ x: 320, opacity: 0 }}
+              transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+              className="absolute right-0 top-0 bottom-0 w-[320px] z-50 shadow-[-10px_0_30px_rgba(0,0,0,0.1)] bg-white border-l"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <DetailsPanel
+                recording={selectedRecording}
+                onClose={() => {
+                    setShowDetails(false);
+                    setSelectedId(null);
+                }}
+                onRun={() => selectedRecording && handleRunTest(selectedRecording)}
+                onRunInAgent={() => selectedRecording && handleRunInAgent(selectedRecording)}
+                onDelete={() => selectedRecording && handleDelete(selectedRecording.id)}
+                onViewDetails={() => {
+                  if (!selectedRecording) return;
+                  const url = chrome.runtime.getURL(`recording-detail.html?id=${selectedRecording.id}`);
+                  chrome.runtime.sendMessage({ type: MessageType.OPEN_URL, data: { url } });
+                }}
+              />
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
     </div>
   );
 };
