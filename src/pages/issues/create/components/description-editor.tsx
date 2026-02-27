@@ -3,6 +3,7 @@ import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Placeholder from '@tiptap/extension-placeholder';
 import Link from '@tiptap/extension-link';
+import Image from '@tiptap/extension-image';
 import Table from '@tiptap/extension-table';
 import TableRow from '@tiptap/extension-table-row';
 import TableCell from '@tiptap/extension-table-cell';
@@ -49,6 +50,13 @@ import {
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
+import { uploadService } from '@/services/upload';
+import { toast } from 'sonner';
+import { Decoration, DecorationSet } from '@tiptap/pm/view';
+import { Plugin } from '@tiptap/pm/state';
+import { X } from 'lucide-react';
+
+import { Extension } from '@tiptap/core';
 
 interface DescriptionEditorProps {
   content: string;
@@ -60,6 +68,76 @@ interface DescriptionEditorProps {
   className?: string;
   portalContainer?: HTMLElement | null;
 }
+
+const uploadPlugin = new Plugin({
+  state: {
+    init() {
+      return DecorationSet.empty;
+    },
+    apply(tr, set) {
+      set = set.map(tr.mapping, tr.doc);
+      const action = tr.getMeta(uploadPlugin);
+      if (action && action.add) {
+        const widget = document.createElement('div');
+        widget.className =
+          'relative inline-block rounded-lg overflow-hidden border border-gray-200 my-2 animate-in fade-in zoom-in duration-300 tiptap-upload-widget';
+        widget.style.maxWidth = '100%';
+
+        const img = document.createElement('img');
+        img.src = action.add.src;
+        img.className = 'blur-md max-w-full h-auto opacity-40 grayscale';
+        widget.appendChild(img);
+
+        const overlay = document.createElement('div');
+        overlay.className =
+          'absolute inset-0 flex flex-col items-center justify-center bg-black/5 gap-2';
+
+        const badge = document.createElement('div');
+        badge.className =
+          'bg-white/90 px-2 py-1 rounded text-[10px] font-bold text-gray-900 shadow-sm animate-pulse flex items-center gap-1.5 border border-gray-100';
+        badge.innerHTML =
+          '<svg class="w-3 h-3 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M21 12a9 9 0 11-6.219-8.56"></path></svg> RENDERING...';
+        overlay.appendChild(badge);
+
+        const cancelBtn = document.createElement('button');
+        cancelBtn.className =
+          'absolute top-2 right-2 h-6 w-6 flex items-center justify-center bg-white/80 hover:bg-white rounded-full shadow-sm text-gray-500 hover:text-red-500 transition-colors pointer-events-auto';
+        cancelBtn.innerHTML =
+          '<svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>';
+        cancelBtn.onclick = e => {
+          e.preventDefault();
+          e.stopPropagation();
+          if (action.add.onCancel) action.add.onCancel();
+        };
+        overlay.appendChild(cancelBtn);
+
+        widget.appendChild(overlay);
+
+        const deco = Decoration.widget(action.add.pos, widget, {
+          id: action.add.id,
+        });
+        set = set.add(tr.doc, [deco]);
+      } else if (action && action.remove) {
+        set = set.remove(
+          set.find(undefined, undefined, spec => spec.id === action.remove.id)
+        );
+      }
+      return set;
+    },
+  },
+  props: {
+    decorations(state) {
+      return this.getState(state);
+    },
+  },
+});
+
+const UploadExtension = Extension.create({
+  name: 'upload',
+  addProseMirrorPlugins() {
+    return [uploadPlugin];
+  },
+});
 
 export const DescriptionEditor = ({
   content,
@@ -83,6 +161,11 @@ export const DescriptionEditor = ({
           class: 'text-blue-600 hover:underline cursor-pointer',
         },
       }),
+      Image.configure({
+        HTMLAttributes: {
+          class: 'rounded-lg border border-gray-200 max-w-full my-2',
+        },
+      }),
       Table.configure({
         resizable: true,
       }),
@@ -90,6 +173,7 @@ export const DescriptionEditor = ({
       TableHeader,
       TableCell,
       Markdown,
+      UploadExtension,
     ],
     content,
     onUpdate: ({ editor }) => {
@@ -103,13 +187,74 @@ export const DescriptionEditor = ({
           className
         ),
       },
+      handlePaste: (view, event) => {
+        const items = Array.from(event.clipboardData?.items || []);
+        const imageItem = items.find(item => item.type.startsWith('image'));
+
+        if (imageItem) {
+          const file = imageItem.getAsFile();
+          if (file) {
+            const id = Math.random().toString(36).substring(7);
+            const pos = view.state.selection.from;
+            const src = URL.createObjectURL(file);
+
+            // Add placeholder decoration
+            const tr = view.state.tr.setMeta(uploadPlugin, {
+              add: {
+                id,
+                pos,
+                src,
+                onCancel: () => {
+                  // Simply remove decoration on cancel
+                  view.dispatch(
+                    view.state.tr.setMeta(uploadPlugin, { remove: { id } })
+                  );
+                  URL.revokeObjectURL(src);
+                },
+              },
+            });
+            view.dispatch(tr);
+
+            const fileName = `image-${Date.now()}.png`;
+            uploadService
+              .uploadFile(file, fileName)
+              .then(url => {
+                const pluginState = view.state.tr.setMeta(uploadPlugin, {
+                  remove: { id },
+                });
+                view.dispatch(
+                  pluginState.replaceSelectionWith(
+                    view.state.schema.nodes.image.create({
+                      src: url,
+                      alt: fileName,
+                    })
+                  )
+                );
+                URL.revokeObjectURL(src);
+              })
+              .catch(() => {
+                view.dispatch(
+                  view.state.tr.setMeta(uploadPlugin, { remove: { id } })
+                );
+                URL.revokeObjectURL(src);
+                toast.error('Failed to upload image');
+              });
+
+            return true;
+          }
+        }
+        return false;
+      },
     },
   });
 
-  // Watch for external content resets (only if editor is empty or explicit reset needed)
+  // Watch for external content resets
   useEffect(() => {
-    if (editor && content && editor.isEmpty) {
-      editor.commands.setContent(content);
+    if (editor && content) {
+      const currentMarkdown = editor.storage.markdown.getMarkdown();
+      if (content !== currentMarkdown) {
+        editor.commands.setContent(content);
+      }
     }
   }, [content, editor]);
 
@@ -486,6 +631,104 @@ export const DescriptionEditor = ({
           left: 0; right: 0; top: 0; bottom: 0;
           background: rgba(200, 200, 255, 0.4);
           pointer-events: none;
+        }
+
+        /* Upload Placeholder Styles (Tailwind Polyfills for Shadow DOM) */
+        @keyframes spin {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
+        }
+        @keyframes pulse {
+          0%, 100% { opacity: 1; }
+          50% { opacity: .5; }
+        }
+        .animate-spin {
+          animation: spin 1s linear infinite;
+        }
+        .animate-pulse {
+          animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+        .tiptap-upload-widget {
+          display: inline-block;
+          position: relative;
+          border-radius: 0.5rem;
+          overflow: hidden;
+          border: 1px solid #e5e7eb;
+          margin-top: 0.5rem;
+          margin-bottom: 0.5rem;
+        }
+        .tiptap-upload-widget .blur-md {
+          filter: blur(12px);
+        }
+        .tiptap-upload-widget .grayscale {
+          filter: grayscale(100%);
+        }
+        .tiptap-upload-widget .inset-0 {
+          position: absolute;
+          top: 0; right: 0; bottom: 0; left: 0;
+        }
+        .tiptap-upload-widget .flex {
+          display: flex;
+        }
+        .tiptap-upload-widget .flex-col {
+          flex-direction: column;
+        }
+        .tiptap-upload-widget .items-center {
+          align-items: center;
+        }
+        .tiptap-upload-widget .justify-center {
+          justify-content: center;
+        }
+        .tiptap-upload-widget .bg-black\\/5 {
+          background-color: rgba(0, 0, 0, 0.05);
+        }
+        .tiptap-upload-widget .bg-white\\/90 {
+          background-color: rgba(255, 255, 255, 0.9);
+        }
+        .tiptap-upload-widget .bg-white\\/80 {
+          background-color: rgba(255, 255, 255, 0.8);
+        }
+        .tiptap-upload-widget .gap-2 {
+          gap: 0.5rem;
+        }
+        .tiptap-upload-widget .gap-1\\.5 {
+          gap: 0.375rem;
+        }
+        .tiptap-upload-widget .shadow-sm {
+          box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+        }
+        .tiptap-upload-widget .text-\\[10px\\] {
+          font-size: 10px;
+        }
+        .tiptap-upload-widget .font-bold {
+          font-weight: 700;
+        }
+        .tiptap-upload-widget .text-gray-900 {
+          color: #111827;
+        }
+        .tiptap-upload-widget .text-gray-500 {
+          color: #6b7280;
+        }
+        .tiptap-upload-widget .border-gray-100 {
+          border-color: #f3f4f6;
+        }
+        .tiptap-upload-widget .w-3 {
+          width: 0.75rem;
+        }
+        .tiptap-upload-widget .h-3 {
+          height: 0.75rem;
+        }
+        .tiptap-upload-widget .w-3\\.5 {
+          width: 0.875rem;
+        }
+        .tiptap-upload-widget .h-3\\.5 {
+          height: 0.875rem;
+        }
+        .tiptap-upload-widget .rounded-full {
+          border-radius: 9999px;
+        }
+        .tiptap-upload-widget .pointer-events-auto {
+          pointer-events: auto;
         }
       `}</style>
 

@@ -54,6 +54,8 @@ import { Portal as TooltipPortal } from '@radix-ui/react-tooltip';
 import { useKeyboardIsolation } from '@/hooks/use-keyboard-isolation';
 import { formatProjectName } from '@/utils/project-formatter';
 import { cn } from '@/lib/utils';
+import { uploadService } from '@/services/upload';
+import { toast } from 'sonner';
 import MarkdownIt from 'markdown-it';
 
 interface CompactIssueCreatorProps {
@@ -128,7 +130,6 @@ const CompactIssueCreator: React.FC<CompactIssueCreatorProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [mdTab, setMdTab] = useState<'write' | 'preview'>('write');
-  const [pastingImage, setPastingImage] = useState(false);
   const [aiLoading, setAiLoading] = useState(false);
 
   // Popover states
@@ -136,12 +137,44 @@ const CompactIssueCreator: React.FC<CompactIssueCreatorProps> = ({
 
   // Markdown renderer
   const md = useMemo(() => {
-    return new MarkdownIt({
+    const instance = new MarkdownIt({
       html: false,
       linkify: true,
       typographer: true,
       breaks: true,
     });
+
+    const defaultImageRenderer =
+      instance.renderer.rules.image ||
+      function (tokens, idx, options, env, self) {
+        return self.renderToken(tokens, idx, options);
+      };
+
+    instance.renderer.rules.image = (tokens, idx, options, env, self) => {
+      const token = tokens[idx];
+      const srcIdx = token.attrIndex('src');
+      const src = token.attrs![srcIdx][1];
+
+      if (src.startsWith('blob:')) {
+        const alt = token.content || 'Uploading...';
+        return `<div class="md-upload-placeholder" style="position: relative; display: inline-block; border-radius: 8px; overflow: hidden; border: 1px solid #e5e7eb; margin: 8px 0; background: #f9fafb;">
+            <img src="${src}" style="filter: blur(12px) grayscale(100%); max-width: 100%; height: auto; opacity: 0.4; display: block;" />
+            <div style="position: absolute; inset: 0; display: flex; align-items: center; justify-center: center; background: rgba(0,0,0,0.03);">
+              <div style="background: rgba(255,255,255,0.9); padding: 4px 8px; border-radius: 4px; font-size: 10px; font-weight: 700; color: #111827; box-shadow: 0 1px 2px rgba(0,0,0,0.05); display: flex; align-items: center; gap: 6px; border: 1px solid #f3f4f6;">
+                <svg style="width: 12px; height: 12px; animation: md-spin 1s linear infinite;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M21 12a9 9 0 11-6.219-8.56"></path></svg>
+                ${alt.toUpperCase()}
+              </div>
+            </div>
+            <style>
+              @keyframes md-spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+            </style>
+          </div>`;
+      }
+
+      return defaultImageRenderer(tokens, idx, options, env, self);
+    };
+
+    return instance;
   }, []);
 
   // Clear success message after delay
@@ -269,6 +302,51 @@ const CompactIssueCreator: React.FC<CompactIssueCreatorProps> = ({
       el.setSelectionRange(caret, caret);
     }, 0);
   }, [getSel]);
+
+  const handlePaste = useCallback(
+    async (e: React.ClipboardEvent) => {
+      const items = Array.from(e.clipboardData.items);
+      const imageItem = items.find(item => item.type.startsWith('image'));
+
+      if (imageItem) {
+        const file = imageItem.getAsFile();
+        if (file) {
+          e.preventDefault();
+          const fileName = `image-${Date.now()}.png`;
+          const blobUrl = URL.createObjectURL(file);
+          const placeholder = `![rendering...](${blobUrl})`;
+
+          const s = getSel();
+          if (!s) return;
+          const { el, v, start, end } = s;
+          const before = v.slice(0, start);
+          const after = v.slice(end);
+          const snippet = `\n${placeholder}\n`;
+          setDescription(before + snippet + after);
+
+          const caret = before.length + snippet.length;
+          setTimeout(() => {
+            el.focus();
+            el.setSelectionRange(caret, caret);
+          }, 0);
+
+          try {
+            const url = await uploadService.uploadFile(file, fileName);
+            setDescription(current =>
+              current.replace(placeholder, `![image](${url})`)
+            );
+            toast.success('Image uploaded');
+          } catch (err) {
+            setDescription(current => current.replace(snippet, ''));
+            toast.error('Failed to upload image');
+          } finally {
+            URL.revokeObjectURL(blobUrl);
+          }
+        }
+      }
+    },
+    [getSel]
+  );
 
   // Project picker state
   const [projectQuery, setProjectQuery] = useState('');
@@ -635,6 +713,7 @@ const CompactIssueCreator: React.FC<CompactIssueCreatorProps> = ({
                   id="description"
                   value={description}
                   onChange={e => setDescription(e.target.value)}
+                  onPaste={handlePaste}
                   placeholder="Describe the issue... (Paste images directly)"
                   className="w-full px-3 py-2 min-h-[100px] max-h-[140px] text-sm resize-none outline-none bg-transparent"
                   disabled={createIssueMutation.isPending}
