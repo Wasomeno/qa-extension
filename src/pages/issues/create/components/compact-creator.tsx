@@ -332,9 +332,39 @@ const CompactIssueCreator: React.FC<CompactIssueCreatorProps> = ({
 
           try {
             const url = await uploadService.uploadFile(file, fileName);
-            setDescription(current =>
-              current.replace(placeholder, `![image](${url})`)
-            );
+            const finalImageMarkdown = `![image](${url})`;
+
+            const el = mdTextareaRef.current;
+            const start = el?.selectionStart ?? 0;
+            const end = el?.selectionEnd ?? 0;
+
+            setDescription(current => {
+              const updated = current.replace(placeholder, finalImageMarkdown);
+
+              // Restore selection after state update
+              if (el) {
+                setTimeout(() => {
+                  const diff = finalImageMarkdown.length - placeholder.length;
+                  const placeholderIdx = current.indexOf(placeholder);
+
+                  let newStart = start;
+                  let newEnd = end;
+
+                  // If cursor was after the placeholder, shift it
+                  if (start > placeholderIdx) {
+                    newStart = Math.max(0, start + diff);
+                  }
+                  if (end > placeholderIdx) {
+                    newEnd = Math.max(0, end + diff);
+                  }
+
+                  el.focus({ preventScroll: true });
+                  el.setSelectionRange(newStart, newEnd);
+                }, 0);
+              }
+
+              return updated;
+            });
             toast.success('Image uploaded');
           } catch (err) {
             setDescription(current => current.replace(snippet, ''));

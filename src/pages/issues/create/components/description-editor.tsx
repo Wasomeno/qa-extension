@@ -218,16 +218,20 @@ export const DescriptionEditor = ({
             uploadService
               .uploadFile(file, fileName)
               .then(url => {
+                const { selection } = view.state;
                 const pluginState = view.state.tr.setMeta(uploadPlugin, {
                   remove: { id },
                 });
                 view.dispatch(
-                  pluginState.replaceSelectionWith(
-                    view.state.schema.nodes.image.create({
-                      src: url,
-                      alt: fileName,
-                    })
-                  )
+                  pluginState
+                    .insert(
+                      pos,
+                      view.state.schema.nodes.image.create({
+                        src: url,
+                        alt: fileName,
+                      })
+                    )
+                    .setSelection(selection.map(pluginState.doc, pluginState.mapping))
                 );
                 URL.revokeObjectURL(src);
               })
@@ -656,6 +660,7 @@ export const DescriptionEditor = ({
           border: 1px solid #e5e7eb;
           margin-top: 0.5rem;
           margin-bottom: 0.5rem;
+          pointer-events: none;
         }
         .tiptap-upload-widget .blur-md {
           filter: blur(12px);
