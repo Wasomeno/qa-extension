@@ -52,8 +52,8 @@ export const PinnedPage: React.FC<PinnedPageProps> = ({ portalContainer }) => {
 
   return (
     <ScrollArea className="h-full">
-      <div className="space-y-8 p-8">
-        <div className="flex items-center justify-between">
+      <div className="flex flex-col h-full p-8 gap-8">
+        <div className="shrink-0 flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold text-gray-900">Pinned Issues</h1>
             <p className="text-sm text-gray-500 mt-1">
@@ -111,7 +111,7 @@ export const PinnedPage: React.FC<PinnedPageProps> = ({ portalContainer }) => {
             ))}
           </div>
         ) : (
-          <div className="text-center py-12 flex flex-col items-center justify-center bg-gray-50/50 rounded-2xl border-2 border-dashed border-gray-200">
+          <div className="flex-1 min-h-[200px] h-full flex flex-col items-center justify-center bg-gray-50/50 rounded-2xl border-2 border-dashed border-gray-200">
             <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
               <Pin className="w-8 h-8 text-gray-300" />
             </div>
