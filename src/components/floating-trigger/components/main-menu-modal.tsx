@@ -310,7 +310,7 @@ const MainMenuInner: React.FC<MainMenuModalProps> = ({
               {/* Content Area */}
               <div className="flex-1 flex flex-col min-w-0 overflow-hidden bg-background relative">
                 {/* Global Refresh Icon */}
-                <div className="absolute top-4 right-4 z-[60]">
+                <div className="absolute bottom-4 right-4 z-[60]">
                   <TooltipProvider>
                     <Tooltip>
                       <TooltipTrigger asChild>
