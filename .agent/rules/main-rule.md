@@ -89,3 +89,9 @@ IF (User Request) IS DETECTED:
 - Use `useQuery` for data fetching.
 - Use `chrome.runtime.sendMessage` for communication.
 - **Strictly** use Shadow DOM for `src/content/` UI elements to prevent style bleeding.
+
+## 🛑 SAFETY & GIT PROTOCOL
+- **CRITICAL:** NEVER use `git reset --hard` or any command that destroys uncommitted local changes or history.
+- **PROTOCOL:** If a tool (like Droid-Shield) blocks a commit or push due to an error, you MUST fix the underlying issue (e.g., sanitize the code, use placeholders, or clarify with the user).
+- **RESTRICTION:** You are FORBIDDEN from removing user changes to bypass errors. Always prioritize preserving the user's work.
+- **VERIFICATION:** Before any git operation, run `git status` to ensure you are not about to overwrite or lose uncommitted work.

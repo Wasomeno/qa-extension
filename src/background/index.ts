@@ -57,7 +57,7 @@ class BackgroundService {
     });
 
     await s3Client.send(command);
-    const publicDomain = process.env.R2_PUBLIC_DOMAIN || 'https://pub-03dd816d26684f7fba942512f600ddf5.r2.dev';
+    const publicDomain = process.env.R2_PUBLIC_DOMAIN || 'YOUR_R2_PUBLIC_DOMAIN_HERE';
     return `${publicDomain}/${fileName}`;
   }
 
