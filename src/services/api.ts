@@ -13,7 +13,7 @@ async function request<T>(
   options: RequestInit = {}
 ): Promise<ApiResponse<T>> {
   try {
-    const url = `http://localhost:3000${endpoint}`;
+    const url = `http://localhost:3000/api${endpoint}`;
 
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',

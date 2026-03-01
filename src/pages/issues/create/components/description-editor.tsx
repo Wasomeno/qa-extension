@@ -280,6 +280,8 @@ export const DescriptionEditor = ({
     return null;
   }
 
+  const publicDomain = process.env.R2_PUBLIC_DOMAIN || 'https://pub-03dd816d26684f7fba942512f600ddf5.r2.dev';
+
   return (
     <div className="border border-gray-200 rounded-xl bg-gray-50 focus-within:bg-white focus-within:ring-2 focus-within:ring-blue-100 transition-all overflow-hidden flex flex-col shadow-sm ">
       {/* Toolbar */}

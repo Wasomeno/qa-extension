@@ -118,6 +118,8 @@ const CompactIssueCreator: React.FC<CompactIssueCreatorProps> = ({
   const [title, setTitle] = useState(initialData.title || '');
   const [selectedProject, setSelectedProject] = useState<any | null>(null);
 
+  const publicDomain = process.env.R2_PUBLIC_DOMAIN || 'https://pub-03dd816d26684f7fba942512f600ddf5.r2.dev';
+
   // Initialize selected project if ID is provided
   useEffect(() => {
     if (initialData.projectId && projects.length > 0 && !selectedProject) {

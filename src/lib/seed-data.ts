@@ -4,6 +4,7 @@ export const SAMPLE_BLUEPRINT: TestBlueprint = {
   id: 'sample-google-search',
   name: 'Sample: Google Search',
   description: 'A simple test that navigates to Google and searches for "Pickle Rick".',
+  baseUrl: 'https://www.google.com',
   // projectId is optional and number, so omitting it or using undefined is fine.
   steps: [
     {

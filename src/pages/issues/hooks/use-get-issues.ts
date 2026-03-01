@@ -1,4 +1,4 @@
-import { getIssues, getProjectIssues, Issue } from '@/api/issue';
+import { getProjectIssues, getIssues, Issue } from '@/api/issue';
 import { useQuery } from '@tanstack/react-query';
 import { IssueFilterState } from '@/types/issues';
 import { useGetLoggedInUser } from '@/hooks/use-get-logged-in-user';
@@ -17,10 +17,11 @@ export function useGetIssues(filters?: Partial<IssueFilterState>) {
     queryKey: [
       'issues',
       filters?.search,
-      filters?.projectId,
+      filters?.projectIds,
       filters?.status,
       filters?.labels,
       filters?.issueIds,
+      filters?.assigneeIds,
       filters?.quickFilters,
       currentUser?.id,
     ],
@@ -41,11 +42,26 @@ export function useGetIssues(filters?: Partial<IssueFilterState>) {
 
       // Add any manually selected labels
       if (filters.labels && filters.labels.length > 0) {
-        labels.push(...filters.labels);
+        const activeLabels = filters.labels.filter(l => l !== 'ALL');
+        labels.push(...activeLabels);
       }
 
       let assigneeId: number | string | null | undefined = undefined;
-      if (filters.quickFilters?.assignedToMe && currentUser) {
+      let assigneeIds: string | undefined = undefined;
+
+      const activeAssigneeIds = (filters.assigneeIds || []).filter(id => id !== 'ALL');
+      if (activeAssigneeIds.length > 0) {
+        const ids = activeAssigneeIds.map(id => {
+          if (id === 'ME' && currentUser) return currentUser.id;
+          return id;
+        });
+
+        if (ids.length === 1) {
+          assigneeId = ids[0];
+        } else {
+          assigneeIds = ids.join(',');
+        }
+      } else if (filters.quickFilters?.assignedToMe && currentUser) {
         assigneeId = currentUser.id;
       } else if (filters.quickFilters?.unassigned) {
         assigneeId = 'None';
@@ -64,6 +80,7 @@ export function useGetIssues(filters?: Partial<IssueFilterState>) {
             : undefined,
         labels: labels.length > 0 ? labels : undefined,
         assignee_id: assigneeId,
+        assignee_ids: assigneeIds,
         author_id: authorId,
       };
 
@@ -71,16 +88,24 @@ export function useGetIssues(filters?: Partial<IssueFilterState>) {
         params.issue_ids = filters.issueIds.join(',');
       }
 
-      if (filters.projectId && filters.projectId !== 'ALL') {
-        return getProjectIssues(Number(filters.projectId), params);
+      const projectIds = (filters.projectIds || []).filter(id => id !== 'ALL');
+      if (projectIds.length > 0) {
+        if (projectIds.length === 1) {
+          return getProjectIssues(Number(projectIds[0]), params);
+        } else {
+          return getIssues({
+            ...params,
+            project_ids: projectIds.join(','),
+          });
+        }
       } else {
         return getIssues({
           ...params,
-          project_id: undefined, // explicit undefined just to match logic, though default is undefined
+          project_id: undefined,
         });
       }
     },
-    enabled: true, // Always enabled, even if no user yet (will just fetch public/all issues)
+    enabled: true,
   });
 
   return {

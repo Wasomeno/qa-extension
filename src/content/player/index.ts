@@ -8,6 +8,8 @@ interface PlaybackState {
   currentStepIndex: number;
   status: 'idle' | 'playing' | 'paused' | 'completed' | 'failed';
   error?: string;
+  variables?: Record<string, string>;
+  playbackTabId?: number;
 }
 
 class PlayerEngine {
@@ -27,7 +29,12 @@ class PlayerEngine {
     chrome.runtime.onMessage.addListener((message: ExtensionMessage, sender, sendResponse) => {
       switch (message.type) {
         case MessageType.START_PLAYBACK:
-          this.startPlayback(message.data.blueprint, message.data.stepIndex || 0);
+          this.startPlayback(
+            message.data.blueprint,
+            message.data.stepIndex || 0,
+            message.data.variables,
+            message.data.playbackTabId
+          );
           sendResponse({ success: true });
           break;
         case MessageType.STOP_PLAYBACK:
@@ -46,6 +53,20 @@ class PlayerEngine {
     try {
       const result = await chrome.storage.local.get(['activePlayback']);
       if (result.activePlayback && result.activePlayback.isActive) {
+        // Validate that this is the correct playback tab
+        const playbackTabId = result.activePlayback.playbackTabId;
+        if (playbackTabId) {
+          // Ask background for current tab ID
+          const response = await new Promise<{ success: boolean; data?: { tabId?: number } }>(resolve => {
+            chrome.runtime.sendMessage({ type: MessageType.GET_TAB_ID }, resolve);
+          });
+          const currentTabId = response?.data?.tabId;
+          if (currentTabId !== playbackTabId) {
+            // This is not the playback tab - skip auto-resume
+            return;
+          }
+        }
+        
         this.state = result.activePlayback;
         
         // If the page was just reloaded (e.g. after navigate), continue from current index
@@ -57,12 +78,27 @@ class PlayerEngine {
     }
   }
 
-  private async startPlayback(blueprint: TestBlueprint, stepIndex: number = 0) {
+  private async startPlayback(
+    blueprint: TestBlueprint,
+    stepIndex: number = 0,
+    variables: Record<string, string> = {},
+    playbackTabId?: number
+  ) {
+    if (this.state.isActive && 
+        this.state.status === 'playing' && 
+        this.state.blueprint?.id === blueprint.id &&
+        this.state.currentStepIndex === stepIndex) {
+      console.log('[Player] Playback already active at this step, skipping re-start');
+      return;
+    }
+
     this.state = {
       isActive: true,
       blueprint,
       currentStepIndex: stepIndex,
-      status: 'playing'
+      status: 'playing',
+      variables,
+      playbackTabId
     };
     await this.saveState();
     this.runNextStep();
@@ -85,6 +121,16 @@ class PlayerEngine {
     await chrome.storage.local.set({ activePlayback: this.state });
   }
 
+  private resolveParameters(text: string | undefined): string | undefined {
+    if (!text || !this.state.variables) return text;
+    
+    let resolved = text;
+    for (const [key, value] of Object.entries(this.state.variables)) {
+      resolved = resolved.replace(new RegExp(`\\$\\{${key}\\}`, 'g'), value);
+    }
+    return resolved;
+  }
+
   private async runNextStep() {
     if (!this.state.isActive || !this.state.blueprint) return;
 
@@ -93,7 +139,13 @@ class PlayerEngine {
       return;
     }
 
-    const step = this.state.blueprint.steps[this.state.currentStepIndex];
+    const originalStep = this.state.blueprint.steps[this.state.currentStepIndex];
+    // Resolve parameters in a clone to avoid mutating the original blueprint in state
+    const step = { 
+      ...originalStep, 
+      value: this.resolveParameters(originalStep.value),
+      expectedValue: this.resolveParameters(originalStep.expectedValue)
+    };
     
     try {
       // Notify background about current step starting
@@ -102,7 +154,8 @@ class PlayerEngine {
         data: { 
           ...this.state,
           stepStatus: 'started',
-          stepDescription: step.description
+          stepDescription: step.description,
+          expectedValue: step.expectedValue || step.value
         }
       });
 
@@ -114,7 +167,9 @@ class PlayerEngine {
         return;
       }
 
-      await Executor.executeStep(step);
+      await Executor.waitForPageSettled();
+
+      const actualValue = await Executor.executeStep(step);
 
       this.state.currentStepIndex++;
       await this.saveState();
@@ -125,11 +180,16 @@ class PlayerEngine {
         data: { 
           ...this.state,
           stepStatus: 'completed',
-          stepDescription: step.description
+          stepDescription: step.description,
+          actualValue,
+          expectedValue: step.expectedValue || step.value
         }
       });
       
-      // Brief delay between steps
+      // Wait for any UI updates or network requests triggered by the action
+      await Executor.waitForPageSettled(5000, 300);
+
+      // Brief delay between steps to allow for visual confirmation and animations
       setTimeout(() => this.runNextStep(), 1000);
       
     } catch (error: any) {

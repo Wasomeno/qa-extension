@@ -9,11 +9,17 @@ import {
   SquareKanban,
   Bot,
   Video as VideoIcon,
+  RefreshCw,
 } from 'lucide-react';
+import { useQueryClient, useIsFetching } from '@tanstack/react-query';
+import { cn } from '@/lib/utils';
 import { useKeyboardIsolation } from '@/hooks/use-keyboard-isolation';
 import { useSessionUser } from '@/hooks/use-session-user';
 import { MessageType } from '@/types/messages';
-import { NavigationProvider, useNavigation } from '@/contexts/navigation-context';
+import {
+  NavigationProvider,
+  useNavigation,
+} from '@/contexts/navigation-context';
 import { ViewType } from '@/types/navigation';
 
 // Updated imports from new page structure
@@ -40,6 +46,13 @@ import {
   SidebarTrigger,
   SidebarRail,
 } from '@/components/ui/sidebar';
+
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 
 interface MenuItem {
   id: ViewType;
@@ -71,17 +84,33 @@ const MainMenuInner: React.FC<MainMenuModalProps> = ({
   initialView,
 }) => {
   const { current, reset, push } = useNavigation();
+  const queryClient = useQueryClient();
+  const isFetching = useIsFetching();
   const keyboardIsolation = useKeyboardIsolation();
   const [container, setContainer] = useState<HTMLDivElement | null>(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const { user } = useSessionUser();
 
-  // Close modal on logout
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    await queryClient.invalidateQueries();
+  };
+
+  // Reset isRefreshing when data finishes fetching
+  React.useEffect(() => {
+    if (isFetching === 0 && isRefreshing) {
+      setIsRefreshing(false);
+    }
+  }, [isFetching, isRefreshing]);
+
+  // Close modal on logout or external trigger
   React.useEffect(() => {
     if (typeof chrome !== 'undefined' && chrome.runtime?.onMessage) {
       const handleMessage = (message: any) => {
         if (
           message.type === MessageType.AUTH_LOGOUT ||
-          (message.type === MessageType.AUTH_SESSION_UPDATED && !message.data)
+          (message.type === MessageType.AUTH_SESSION_UPDATED && !message.data) ||
+          message.type === MessageType.CLOSE_MAIN_MENU
         ) {
           onClose();
         }
@@ -96,11 +125,11 @@ const MainMenuInner: React.FC<MainMenuModalProps> = ({
     if (isOpen) {
       if (initialIssue) {
         reset('issues', initialIssue);
-      } else if (initialView) {
+      } else if (initialView && initialView !== 'dashboard') {
         reset(initialView);
       }
     }
-  }, [isOpen, initialIssue, initialView, reset]);
+  }, [isOpen, initialIssue, initialView]);
 
   const handleNavigateToIssue = (issue: any) => {
     push('issue-detail', issue);
@@ -132,9 +161,9 @@ const MainMenuInner: React.FC<MainMenuModalProps> = ({
       case 'profile':
         return <ProfilePage portalContainer={container} />;
       case 'agent':
-        return <AgentPage />;
+        return <AgentPage portalContainer={container} />;
       case 'recordings':
-        return <RecordingsPage />;
+        return <RecordingsPage portalContainer={container} />;
       default:
         return <DashboardPage />;
     }
@@ -183,6 +212,7 @@ const MainMenuInner: React.FC<MainMenuModalProps> = ({
           <SidebarProvider
             style={{ minHeight: '100%' }}
             className="h-full w-full !min-h-0"
+            portalContainer={container}
           >
             <div className="flex h-full w-full">
               <Sidebar
@@ -196,13 +226,11 @@ const MainMenuInner: React.FC<MainMenuModalProps> = ({
                         src={
                           typeof chrome !== 'undefined' &&
                           chrome.runtime?.getURL
-                            ? chrome.runtime.getURL(
-                                'assets/log-loom-logo.png'
-                              )
+                            ? chrome.runtime.getURL('assets/flowg-logo.png')
                             : ''
                         }
-                        alt="LogLoom"
-                        className="h-16 w-auto object-cover"
+                        alt="FlowG"
+                        className="h-6 object-cover"
                       />
                     </div>
                     <SidebarTrigger className="ml-auto" />
@@ -214,8 +242,10 @@ const MainMenuInner: React.FC<MainMenuModalProps> = ({
                       <SidebarMenu className="space-y-1">
                         {MENU_ITEMS.map(item => {
                           const Icon = item.icon;
-                          const isActive = current.view === item.id || 
-                            (item.id === 'issues' && current.view === 'issue-detail');
+                          const isActive =
+                            current.view === item.id ||
+                            (item.id === 'issues' &&
+                              current.view === 'issue-detail');
 
                           return (
                             <SidebarMenuItem key={item.id}>
@@ -278,7 +308,29 @@ const MainMenuInner: React.FC<MainMenuModalProps> = ({
               </Sidebar>
 
               {/* Content Area */}
-              <div className="flex-1 flex flex-col min-w-0 overflow-hidden bg-background">
+              <div className="flex-1 flex flex-col min-w-0 overflow-hidden bg-background relative">
+                {/* Global Refresh Icon */}
+                <div className="absolute top-4 right-4 z-[60]">
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button
+                          onClick={handleRefresh}
+                          className="p-2 hover:bg-gray-100 rounded-full transition-colors text-gray-500 hover:text-gray-900"
+                        >
+                          <RefreshCw
+                            className={cn(
+                              'w-4 h-4',
+                              isRefreshing && 'animate-spin'
+                            )}
+                          />
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent side="left">Refresh data</TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                </div>
+
                 <motion.div
                   key={current.view}
                   initial={{ opacity: 0, x: 10 }}
@@ -297,18 +349,14 @@ const MainMenuInner: React.FC<MainMenuModalProps> = ({
   );
 };
 
-const MainMenuModal: React.FC<MainMenuModalProps> = (props) => {
+const MainMenuModal: React.FC<MainMenuModalProps> = props => {
   return (
-    <AnimatePresence>
-      {props.isOpen && (
-        <NavigationProvider initialView={props.initialView || "dashboard"}>
-          <MainMenuInner {...props} />
-        </NavigationProvider>
-      )}
-    </AnimatePresence>
+    <NavigationProvider initialView={props.initialView || 'dashboard'}>
+      <AnimatePresence>
+        {props.isOpen && <MainMenuInner {...props} />}
+      </AnimatePresence>
+    </NavigationProvider>
   );
 };
 
 export default MainMenuModal;
-
-

@@ -7,5 +7,7 @@ export function useGetIssue(projectId: number, id: number) {
     queryFn: () => getIssue(projectId, id),
   });
 
+  console.log('DATA', query.data);
+
   return { ...query };
 }

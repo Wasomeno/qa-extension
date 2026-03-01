@@ -36,6 +36,7 @@ interface FloatingTriggerButtonProps {
   ) => void;
   hasActivePopup?: boolean;
   isLoggedIn?: boolean;
+  tooltipContainer?: HTMLElement | null;
 }
 
 const containerVariants = {
@@ -88,10 +89,12 @@ const FloatingTriggerButton: React.FC<FloatingTriggerButtonProps> = ({
   onActionClick,
   hasActivePopup = false,
   isLoggedIn = false,
+  tooltipContainer,
 }) => {
   const keyboardIsolation = useKeyboardIsolation();
   const rootRef = React.useRef<HTMLDivElement>(null);
   const [isHovered, setIsHovered] = React.useState(false);
+  const [hoveredAction, setHoveredAction] = React.useState<string | null>(null);
   const [isPopoverOpen, setIsPopoverOpen] = React.useState(false);
   const createIconRef = React.useRef<HTMLButtonElement>(null);
   const listIconRef = React.useRef<HTMLButtonElement>(null);
@@ -145,7 +148,10 @@ const FloatingTriggerButton: React.FC<FloatingTriggerButtonProps> = ({
         ref={rootRef}
         initial={false}
         onMouseEnter={() => setIsHovered(true)}
-        onMouseLeave={() => setIsHovered(false)}
+        onMouseLeave={() => {
+          setIsHovered(false);
+          setHoveredAction(null);
+        }}
         className="fixed bg-white/95 backdrop-blur-xs border border-black/5 shadow-sm"
         style={{
           display: hidden ? 'none' : undefined,
@@ -163,7 +169,7 @@ const FloatingTriggerButton: React.FC<FloatingTriggerButtonProps> = ({
         }}
         transition={{
           type: 'spring',
-          stiffness: 230,
+          stiffness: 260,
           damping: 25,
           mass: 0.8,
         }}
@@ -186,17 +192,33 @@ const FloatingTriggerButton: React.FC<FloatingTriggerButtonProps> = ({
                       <motion.button
                         ref={loginIconRef}
                         variants={iconVariants}
+                        whileHover={{ scale: 1.05 }}
+                        whileTap={{ scale: 0.95 }}
+                        onMouseEnter={() => setHoveredAction('login')}
+                        onMouseLeave={() => setHoveredAction(null)}
                         onClick={e =>
                           handleActionClick(e, 'login', loginIconRef)
                         }
-                        className="p-2 rounded-full hover:bg-black/5 transition-colors pointer-events-auto active:scale-95"
+                        className="relative flex items-center justify-center p-2 rounded-full pointer-events-auto"
                         aria-label="Login"
                       >
-                        <LogIn className="w-5 h-5 text-gray-700" />
+                        {hoveredAction === 'login' && (
+                          <motion.div
+                            layoutId="action-highlight"
+                            className="absolute inset-0 bg-black/5 rounded-full"
+                            initial={false}
+                            transition={{
+                              type: 'spring',
+                              bounce: 0.2,
+                              duration: 0.6,
+                            }}
+                          />
+                        )}
+                        <LogIn className="relative z-10 w-5 h-5 text-gray-700\" />
                       </motion.button>
                     </TooltipTrigger>
                     {!hasActivePopup && (
-                      <TooltipContent side="top" className="mb-2">
+                      <TooltipContent side="top" className="mb-2" container={tooltipContainer}>
                         <p>Login</p>
                       </TooltipContent>
                     )}
@@ -218,17 +240,33 @@ const FloatingTriggerButton: React.FC<FloatingTriggerButtonProps> = ({
                       <motion.button
                         ref={createIconRef}
                         variants={iconVariants}
+                        whileHover={{ scale: 1.05 }}
+                        whileTap={{ scale: 0.95 }}
+                        onMouseEnter={() => setHoveredAction('issue')}
+                        onMouseLeave={() => setHoveredAction(null)}
                         onClick={e =>
                           handleActionClick(e, 'issue', createIconRef)
                         }
-                        className="p-2 rounded-full hover:bg-black/5 transition-colors pointer-events-auto active:scale-95"
+                        className="relative flex items-center justify-center p-2 rounded-full pointer-events-auto"
                         aria-label="Create Issue"
                       >
-                        <PlusCircle className="w-5 h-5 text-gray-700" />
+                        {hoveredAction === 'issue' && (
+                          <motion.div
+                            layoutId="action-highlight"
+                            className="absolute inset-0 bg-black/5 rounded-full"
+                            initial={false}
+                            transition={{
+                              type: 'spring',
+                              bounce: 0.2,
+                              duration: 0.6,
+                            }}
+                          />
+                        )}
+                        <PlusCircle className="relative z-10 w-5 h-5 text-gray-700\" />
                       </motion.button>
                     </TooltipTrigger>
                     {!hasActivePopup && (
-                      <TooltipContent side="top" className="mb-2">
+                      <TooltipContent side="top" className="mb-2" container={tooltipContainer}>
                         <p>Create Issue</p>
                       </TooltipContent>
                     )}
@@ -240,17 +278,33 @@ const FloatingTriggerButton: React.FC<FloatingTriggerButtonProps> = ({
                       <motion.button
                         ref={pinnedIconRef}
                         variants={iconVariants}
+                        whileHover={{ scale: 1.05 }}
+                        whileTap={{ scale: 0.95 }}
+                        onMouseEnter={() => setHoveredAction('pinned')}
+                        onMouseLeave={() => setHoveredAction(null)}
                         onClick={e =>
                           handleActionClick(e, 'pinned', pinnedIconRef)
                         }
-                        className="p-2 rounded-full hover:bg-black/5 transition-colors pointer-events-auto active:scale-95"
+                        className="relative flex items-center justify-center p-2 rounded-full pointer-events-auto"
                         aria-label="Pinned Issues"
                       >
-                        <Pin className="w-5 h-5 text-gray-700" />
+                        {hoveredAction === 'pinned' && (
+                          <motion.div
+                            layoutId="action-highlight"
+                            className="absolute inset-0 bg-black/5 rounded-full"
+                            initial={false}
+                            transition={{
+                              type: 'spring',
+                              bounce: 0.2,
+                              duration: 0.6,
+                            }}
+                          />
+                        )}
+                        <Pin className="relative z-10 w-5 h-5 text-gray-700\" />
                       </motion.button>
                     </TooltipTrigger>
                     {!hasActivePopup && (
-                      <TooltipContent side="top" className="mb-2">
+                      <TooltipContent side="top" className="mb-2" container={tooltipContainer}>
                         <p>Pinned Issues</p>
                       </TooltipContent>
                     )}
@@ -260,19 +314,35 @@ const FloatingTriggerButton: React.FC<FloatingTriggerButtonProps> = ({
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <motion.button
-                        ref={pinnedIconRef}
+                        ref={recordIconRef}
                         variants={iconVariants}
+                        whileHover={{ scale: 1.05 }}
+                        whileTap={{ scale: 0.95 }}
+                        onMouseEnter={() => setHoveredAction('record')}
+                        onMouseLeave={() => setHoveredAction(null)}
                         onClick={e =>
-                          handleActionClick(e, 'record', pinnedIconRef)
+                          handleActionClick(e, 'record', recordIconRef)
                         }
-                        className="p-2 rounded-full hover:bg-black/5 transition-colors pointer-events-auto active:scale-95"
+                        className="relative flex items-center justify-center p-2 rounded-full pointer-events-auto"
                         aria-label="Automation Tests"
                       >
-                        <Video className="w-5 h-5 text-gray-700" />
+                        {hoveredAction === 'record' && (
+                          <motion.div
+                            layoutId="action-highlight"
+                            className="absolute inset-0 bg-black/5 rounded-full"
+                            initial={false}
+                            transition={{
+                              type: 'spring',
+                              bounce: 0.2,
+                              duration: 0.6,
+                            }}
+                          />
+                        )}
+                        <Video className="relative z-10 w-5 h-5 text-gray-700\" />
                       </motion.button>
                     </TooltipTrigger>
                     {!hasActivePopup && (
-                      <TooltipContent side="top" className="mb-2">
+                      <TooltipContent side="top" className="mb-2" container={tooltipContainer}>
                         <p>Automation Tests</p>
                       </TooltipContent>
                     )}
@@ -284,15 +354,31 @@ const FloatingTriggerButton: React.FC<FloatingTriggerButtonProps> = ({
                       <motion.button
                         ref={menuIconRef}
                         variants={iconVariants}
+                        whileHover={{ scale: 1.05 }}
+                        whileTap={{ scale: 0.95 }}
+                        onMouseEnter={() => setHoveredAction('menu')}
+                        onMouseLeave={() => setHoveredAction(null)}
                         onClick={e => handleActionClick(e, 'menu', menuIconRef)}
-                        className="p-2 rounded-full hover:bg-black/5 transition-colors pointer-events-auto active:scale-95"
+                        className="relative flex items-center justify-center p-2 rounded-full pointer-events-auto"
                         aria-label="Main Menu"
                       >
-                        <Menu className="w-5 h-5 text-gray-700" />
+                        {hoveredAction === 'menu' && (
+                          <motion.div
+                            layoutId="action-highlight"
+                            className="absolute inset-0 bg-black/5 rounded-full"
+                            initial={false}
+                            transition={{
+                              type: 'spring',
+                              bounce: 0.2,
+                              duration: 0.6,
+                            }}
+                          />
+                        )}
+                        <Menu className="relative z-10 w-5 h-5 text-gray-700\" />
                       </motion.button>
                     </TooltipTrigger>
                     {!hasActivePopup && (
-                      <TooltipContent side="top" className="mb-2">
+                      <TooltipContent side="top" className="mb-2" container={tooltipContainer}>
                         <p>Main Menu</p>
                       </TooltipContent>
                     )}

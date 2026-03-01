@@ -252,9 +252,11 @@ export type UpdateIssueRequest = {
 export interface IssueFilterParams {
   search?: string;
   project_id?: number;
+  project_ids?: string;
   state?: string;
   labels?: string[];
   assignee_id?: number | string | null;
+  assignee_ids?: string;
   author_id?: number | string | null;
   issue_ids?: string;
 }
@@ -263,19 +265,22 @@ function buildIssueQueryParams(params: IssueFilterParams): string {
   const queryParams = new URLSearchParams();
 
   if (params.search) queryParams.append('search', params.search);
-  // Note: project_id might be used in the path for getProjectIssues, but kept here for getIssues global search
-  if (params.project_id)
-    queryParams.append('project_id', params.project_id.toString());
+  if (params.project_id) queryParams.append('project_id', params.project_id.toString());
+  if (params.project_ids) queryParams.append('project_ids', params.project_ids);
   if (params.state) queryParams.append('state', params.state);
 
   if (params.labels && params.labels.length > 0) {
-    // Backend likely expects comma-separated string for "labels" key
-    queryParams.append('labels', params.labels.join(','));
+    const activeLabels = params.labels.filter(l => l !== 'ALL');
+    if (activeLabels.length > 0) {
+      queryParams.append('labels', activeLabels.join(','));
+    }
   }
 
-  if (params.assignee_id)
+  if (params.assignee_id && params.assignee_id !== 'ALL')
     queryParams.append('assignee_id', params.assignee_id.toString());
-  if (params.author_id)
+  if (params.assignee_ids && params.assignee_ids !== 'ALL')
+    queryParams.append('assignee_ids', params.assignee_ids);
+  if (params.author_id && params.author_id !== 'ALL')
     queryParams.append('author_id', params.author_id.toString());
   if (params.issue_ids) queryParams.append('issue_ids', params.issue_ids);
 
@@ -293,8 +298,6 @@ export async function getProjectIssues(
   projectId: number,
   params: IssueFilterParams = {}
 ) {
-  // Exclude project_id from query params if it's already in the path,
-  // though duplicate usually doesn't hurt, it's cleaner to remove it.
   const { project_id, ...restParams } = params;
   const queryString = buildIssueQueryParams(restParams);
   const url = queryString

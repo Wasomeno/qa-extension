@@ -44,6 +44,7 @@ export const AddChildModal: React.FC<AddChildModalProps> = ({
     selectedProject: { id: parentIssue.project_id },
     selectedLabels: [],
     selectedAssignee: null,
+    selectedRecording: null,
   });
   const [status, setStatus] = useState<
     'idle' | 'submitting' | 'success' | 'error'
@@ -59,6 +60,7 @@ export const AddChildModal: React.FC<AddChildModalProps> = ({
         selectedProject: { id: parentIssue.project_id },
         selectedLabels: [],
         selectedAssignee: null,
+        selectedRecording: null,
       });
     }
   }, [isOpen, parentIssue.project_id]);

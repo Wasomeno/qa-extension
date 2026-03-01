@@ -6,7 +6,6 @@ import { IssueCard } from '@/pages/issues/components/issue-card';
 import { IssueCardSkeleton } from '@/pages/issues/components/issue-card-skeleton';
 import { PinColorPicker } from './components/pin-color-picker';
 import { PinNoteModal } from './components/pin-note-modal';
-import { PinnedIssueMeta } from '@/types/issues';
 import { usePinnedIssues, PinnedIssue } from '@/hooks/use-pinned-issues';
 
 interface PinnedPageProps {
@@ -51,7 +50,7 @@ export const PinnedPage: React.FC<PinnedPageProps> = ({ portalContainer }) => {
   }
 
   return (
-    <ScrollArea className="h-full">
+    <ScrollArea className="h-full [&>div>div[style]]:!block [&>div>div[style]]:h-full">
       <div className="flex flex-col h-full p-8 gap-8">
         <div className="shrink-0 flex items-center justify-between">
           <div>
@@ -111,7 +110,7 @@ export const PinnedPage: React.FC<PinnedPageProps> = ({ portalContainer }) => {
             ))}
           </div>
         ) : (
-          <div className="flex-1 min-h-[200px] h-full flex flex-col items-center justify-center bg-gray-50/50 rounded-2xl border-2 border-dashed border-gray-200">
+          <div className="flex-1 min-h-[200px] flex flex-col items-center justify-center bg-gray-50/50 rounded-2xl border-2 border-dashed border-gray-200">
             <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
               <Pin className="w-8 h-8 text-gray-300" />
             </div>

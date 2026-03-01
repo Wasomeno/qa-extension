@@ -1,9 +1,8 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { QAAgent } from '@/agent/agent/qa-agent';
 import { Message } from '../components/chat-message';
 import { useSessionUser } from '@/hooks/use-session-user';
-
-declare const __GOOGLE_API_KEY__: string;
+import { uploadService } from '@/services/upload';
+import { MessageType } from '@/types/messages';
 
 export const useAgent = () => {
   const { user } = useSessionUser();
@@ -12,12 +11,12 @@ export const useAgent = () => {
       id: 'init',
       role: 'assistant',
       content:
-        "Hello! I'm your GitLab QA Agent. I can help you create issues, search projects, or run recorded automation tests and match them against your expectations.",
+        "Hello! I'm your QA Assistant. I can help you manage GitLab issues, browse projects, and run your recorded automation tests. What can I help you with?",
       timestamp: Date.now(),
     },
   ]);
   const [isAgentLoading, setIsAgentLoading] = useState(false);
-  const agentRef = useRef<QAAgent | null>(null);
+  const portRef = useRef<chrome.runtime.Port | null>(null);
 
   // Update initial message with user name found
   useEffect(() => {
@@ -27,7 +26,7 @@ export const useAgent = () => {
           msg.id === 'init'
             ? {
                 ...msg,
-                content: `Hello ${user.name}! I'm your GitLab QA Agent. I can help you create issues, search projects, or run recorded automation tests. I can even match the results against your expectations! What can I help you with?`,
+                content: `Hello ${user.name}! I'm your QA Assistant. I can help you manage GitLab issues, browse projects, and run your recorded automation tests. What can I help you with?`,
               }
             : msg
         )
@@ -35,61 +34,71 @@ export const useAgent = () => {
     }
   }, [user?.name]);
 
-  // Initialize agent on mount
+  // Cleanup on unmount
   useEffect(() => {
-    if (!__GOOGLE_API_KEY__) {
-      setMessages(prev => [
-        ...prev,
-        {
-          id: Date.now().toString(),
-          role: 'error',
-          content:
-            'Critical Error: GOOGLE_API_KEY is missing from build. Please contact support.',
-          timestamp: Date.now(),
-        },
-      ]);
-      return;
-    }
-
-    try {
-      agentRef.current = new QAAgent({
-        googleApiKey: __GOOGLE_API_KEY__,
-      });
-    } catch (e) {
-    }
+    return () => {
+      if (portRef.current) {
+        portRef.current.disconnect();
+      }
+    };
   }, []);
 
-  const sendMessage = async (content: string) => {
-    if (!agentRef.current) {
-      setMessages(prev => [
-        ...prev,
-        {
-          id: Date.now().toString(),
-          role: 'error',
-          content: 'Agent is not initialized. Please check your settings.',
-          timestamp: Date.now(),
-        },
-      ]);
-      return;
-    }
+  const sendMessage = async (content: string, files: File[] = []) => {
+    const fileToData = async (file: File): Promise<{ mimeType: string; data: string; url: string }> => {
+      // 1. Upload to R2 for persistence
+      const fileName = `${Date.now()}-${file.name}`;
+      const url = await uploadService.uploadFile(file, fileName);
+      
+      // 2. Convert to base64 for Gemini
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          const base64 = (reader.result as string).split(',')[1];
+          resolve({ mimeType: file.type, data: base64, url });
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+    };
 
     const userMsg: Message = {
       id: Date.now().toString(),
       role: 'user',
       content,
       timestamp: Date.now(),
+      attachments: files.map(f => ({ name: f.name, type: f.type })),
     };
     setMessages(prev => [...prev, userMsg]);
     setIsAgentLoading(true);
 
     let responseId = (Date.now() + 1).toString();
     let messageCreated = false;
-    let currentContent = '';
 
     try {
-      const stream = agentRef.current.chat(content);
+      // Process files if any
+      const processedFiles = await Promise.all(files.map(fileToData));
 
-      for await (const event of stream) {
+      // Update user message with URLs
+      setMessages(prev =>
+        prev.map(msg =>
+          msg.id === userMsg.id
+            ? {
+                ...msg,
+                attachments: processedFiles.map((pf, i) => ({
+                  name: files[i].name,
+                  type: pf.mimeType,
+                  url: pf.url,
+                })),
+              }
+            : msg
+        )
+      );
+
+      // Connect to background agent via Port
+      const port = chrome.runtime.connect({ name: 'agent-chat' });
+      portRef.current = port;
+
+      port.onMessage.addListener((event) => {
         if (!messageCreated) {
           setIsAgentLoading(false);
           setMessages(prev => [
@@ -105,7 +114,6 @@ export const useAgent = () => {
         }
 
         if (event.type === 'text') {
-          currentContent = event.content;
           setMessages(prev =>
             prev.map(msg =>
               msg.id === responseId ? { ...msg, content: event.content } : msg
@@ -117,8 +125,10 @@ export const useAgent = () => {
               msg.id === responseId
                 ? {
                     ...msg,
-                    content:
-                      currentContent + `\n\n_Calling tool: ${event.tool}..._`,
+                    activities: [
+                      ...(msg.activities || []),
+                      { id: event.id, tool: event.tool, status: 'running' },
+                    ],
                   }
                 : msg
             )
@@ -129,8 +139,11 @@ export const useAgent = () => {
               msg.id === responseId
                 ? {
                     ...msg,
-                    content:
-                      currentContent + `\n\n_Tool ${event.tool} completed._`,
+                    activities: (msg.activities || []).map(a =>
+                      a.id === event.id
+                        ? { ...a, status: 'completed', result: event.result }
+                        : a
+                    ),
                   }
                 : msg
             )
@@ -147,8 +160,27 @@ export const useAgent = () => {
                 : msg
             )
           );
+        } else if (event.type === 'done') {
+          setIsAgentLoading(false);
         }
-      }
+      });
+
+      port.onDisconnect.addListener(() => {
+        setIsAgentLoading(false);
+        portRef.current = null;
+      });
+
+      port.postMessage({
+        type: MessageType.AGENT_CHAT,
+        data: {
+          content,
+          attachments: processedFiles.map(pf => ({
+            mimeType: pf.mimeType,
+            data: pf.data,
+          })),
+        },
+      });
+
     } catch (error: any) {
       if (!messageCreated) {
         setMessages(prev => [
@@ -173,7 +205,6 @@ export const useAgent = () => {
           )
         );
       }
-    } finally {
       setIsAgentLoading(false);
     }
   };

@@ -35,7 +35,7 @@ const queryClient = new QueryClient({
 });
 
 const FloatingTriggerInner: React.FC<FloatingTriggerProps> = ({ onClose }) => {
-  const { user } = useSessionUser();
+  const { user, clearUser, syncUser } = useSessionUser();
   const [activeFeature, setActiveFeature] = useState<
     'issue' | 'issues' | 'pinned' | 'menu' | 'login' | 'record' | null
   >(null);
@@ -50,22 +50,27 @@ const FloatingTriggerInner: React.FC<FloatingTriggerProps> = ({ onClose }) => {
   );
   const [isHovered, setIsHovered] = useState<boolean>(false);
   const [popupContainer, setPopupContainer] = useState<HTMLDivElement | null>(null);
+  const [buttonContainer, setButtonContainer] = useState<HTMLDivElement | null>(
+    null
+  );
 
   const opacity = activeFeature === 'menu' && !isHovered ? 0.3 : 1;
 
   const session = useQuery({
     queryKey: ['session'],
     queryFn: async () => getGitlabLoginSession(),
+    retry: 1,
   });
 
-  const isSessionExists = session.data?.success || !!user;
+  const isSessionExists = !!user;
 
   // Sync state on logout
   useEffect(() => {
-    if (!user && !session.isLoading && !session.data?.success) {
+    if (!session.isLoading && session.data && !session.data.success && user) {
+      clearUser();
       handleClose();
     }
-  }, [user, session.data, session.isLoading]);
+  }, [session.data, session.isLoading, user, clearUser]);
 
   useEffect(() => {
     if (typeof chrome !== 'undefined' && chrome.runtime?.onMessage) {
@@ -75,7 +80,7 @@ const FloatingTriggerInner: React.FC<FloatingTriggerProps> = ({ onClose }) => {
           message.type === MessageType.AUTH_SESSION_UPDATED
         ) {
           session.refetch();
-          if (message.type === MessageType.AUTH_LOGOUT || (message.type === MessageType.AUTH_SESSION_UPDATED && !message.data)) {
+          if (message.type === MessageType.AUTH_LOGOUT) {
             handleClose();
           }
         }
@@ -83,6 +88,15 @@ const FloatingTriggerInner: React.FC<FloatingTriggerProps> = ({ onClose }) => {
       chrome.runtime.onMessage.addListener(handleMessage);
       return () => chrome.runtime.onMessage.removeListener(handleMessage);
     }
+  }, [session]);
+
+  // Sync user state when window gains focus
+  useEffect(() => {
+    const handleFocus = () => {
+      session.refetch();
+    };
+    window.addEventListener('focus', handleFocus);
+    return () => window.removeEventListener('focus', handleFocus);
   }, [session]);
 
   // Calculate fixed bottom-center position for capsule
@@ -154,6 +168,9 @@ const FloatingTriggerInner: React.FC<FloatingTriggerProps> = ({ onClose }) => {
     setPopupPosition({ x: popupX, y: popupY });
     setActiveFeature(action);
     if (action === 'menu') {
+      // When opening the menu via the main menu icon, 
+      // we don't want to force a dashboard reset anymore
+      // so that it preserves the last state.
       setInitialView('dashboard');
     }
   };
@@ -162,7 +179,12 @@ const FloatingTriggerInner: React.FC<FloatingTriggerProps> = ({ onClose }) => {
     setActiveFeature(null);
     setPopupPosition(null);
     setSelectedIssue(null);
-    setInitialView('dashboard');
+  };
+
+  const handleLoginSuccess = async () => {
+    await syncUser();
+    session.refetch();
+    handleClose();
   };
 
   const handleIssueSelect = (issue: any) => {
@@ -205,7 +227,7 @@ const FloatingTriggerInner: React.FC<FloatingTriggerProps> = ({ onClose }) => {
         return (
           <LoginPopup
             onClose={handleClose}
-            onLoginSuccess={handleClose}
+            onLoginSuccess={handleLoginSuccess}
           />
         );
       case 'record':
@@ -231,6 +253,8 @@ const FloatingTriggerInner: React.FC<FloatingTriggerProps> = ({ onClose }) => {
         onActionClick={handleActionClick}
         hasActivePopup={!!activeFeature}
         isLoggedIn={isSessionExists}
+        containerRef={setButtonContainer}
+        tooltipContainer={buttonContainer}
       />
 
       {activeFeature && activeFeature !== 'menu' && popupPosition && (

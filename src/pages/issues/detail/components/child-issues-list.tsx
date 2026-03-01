@@ -36,7 +36,7 @@ export const ChildIssuesList: React.FC<ChildIssuesListProps> = ({
   const childIids = parentIssue.child?.items.map(item => item.iid) || [];
 
   const { data: childIssues, isLoading } = useGetIssues({
-    projectId: parentIssue.project_id.toString(),
+    projectIds: [parentIssue.project_id.toString()],
     issueIds: childIids,
   });
 

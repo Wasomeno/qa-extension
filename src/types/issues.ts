@@ -151,9 +151,10 @@ export interface ParentIssue {
 
 export interface IssueFilterState {
   search: string;
-  projectId: string | 'ALL';
+  projectIds: string[];
   status: IssueStatus | 'ALL';
   labels?: string[];
+  assigneeIds?: (string | number)[];
   issueIds?: number[];
   sort: 'UPDATED' | 'NEWEST' | 'OLDEST' | 'PRIORITY';
   quickFilters: {

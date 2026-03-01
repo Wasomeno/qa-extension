@@ -41,7 +41,7 @@ async function startRecording(streamId: string) {
       audio: false,
       video: {
         mandatory: {
-          chromeMediaSource: 'desktop',
+          chromeMediaSource: 'tab',
           chromeMediaSourceId: streamId
         }
       }

@@ -1,17 +1,16 @@
 import { GoogleGenAI, Type, Tool } from '@google/genai';
-import bridgeFetch from '@/services/fetch-bridge';
 import { createIssue, updateIssue, getProjectIssues } from '@/api/issue';
 import { getProjects } from '@/api/project';
 import { MessageType } from '@/types/messages';
 
- const GITLAB_SPECIALIST_INSTRUCTION = `You are a GitLab Specialist. Your role is strictly limited to GitLab Issue and Project management.
+const GITLAB_SPECIALIST_INSTRUCTION = `You are a GitLab Specialist. Your role is strictly limited to GitLab Issue and Project management.
  Use the available tools to list projects, list issues, create issues, or update issues.
  Be concise and report the outcome clearly.`;
- 
- const TEST_SPECIALIST_INSTRUCTION = `You are a Test Automation Specialist. Your role is strictly limited to listing and running recorded automation tests.
+
+const TEST_SPECIALIST_INSTRUCTION = `You are a Test Automation Specialist. Your role is strictly limited to listing and running recorded automation tests.
  Use the available tools to list tests and execute them.
  Be concise and report the outcome clearly.`;
- 
+
 const SYSTEM_INSTRUCTION = `You are a QA Assistant embedded in a Chrome extension. Your role is strictly limited to helping users with:
 
 1. **GitLab Issue Management** — Creating, listing, updating, and discussing GitLab issues and projects.
@@ -49,96 +48,42 @@ export class QAAgent {
   private maxHistoryTokens: number;
   private minRequestDelay: number;
   private lastRequestTime: number = 0;
-   private config: AgentConfig;
+  private config: AgentConfig;
 
   constructor(config: AgentConfig) {
-     this.config = config;
+    this.config = config;
     this.modelName = config.model || 'gemini-3-flash-preview';
     this.maxHistoryTokens = config.maxHistoryTokens || 12000; // Leaves room for response
     this.minRequestDelay = config.minRequestDelay || 500;
 
-    // Create custom fetch for bridging requests through background script
-    const customFetch = async (
-      input: RequestInfo | URL,
-      init?: RequestInit
-    ) => {
-      let url = input.toString();
-
-      // Force non-streaming URL
-      if (url.includes(':streamGenerateContent')) {
-        url = url.replace(':streamGenerateContent', ':generateContent');
-        url = url.replace('alt=sse', '');
-        url = url.replace('?&', '?').replace('&&', '&');
-        if (url.endsWith('?') || url.endsWith('&')) {
-          url = url.slice(0, -1);
-        }
-      }
-
-      // Convert Headers object to plain object
-      const headers: Record<string, string> = {};
-      if (init?.headers) {
-        new Headers(init.headers).forEach((value, key) => {
-          headers[key] = value;
-        });
-      }
-
-      const response = await bridgeFetch({
-        url,
-        init: {
-          ...init,
-          headers,
-        },
-        responseType: 'text',
-      });
-
-      if (!response.ok) {
-        throw new Error(response.statusText || 'Network error');
-      }
-
-      // Handle body - could be string or already-parsed object
-      let bodyContent: string;
-      if (typeof response.body === 'object' && response.body !== null) {
-        bodyContent = JSON.stringify(response.body);
-      } else {
-        bodyContent = response.body as string;
-      }
-
-      return new Response(bodyContent, {
-        status: response.status,
-        statusText: response.statusText,
-        headers: { ...response.headers, 'content-type': 'application/json' },
-      });
-    };
-
     // Initialize Google GenAI client
     this.client = new GoogleGenAI({
       apiKey: config.googleApiKey,
-      httpOptions: { fetch: customFetch },
     } as any);
 
     // Define tools
     this.tools = [
       {
         functionDeclarations: [
-           {
-             name: 'delegateTask',
-             description: 'Delegate a specific specialized task to a subagent.',
-             parameters: {
-               type: Type.OBJECT,
-               properties: {
-                 role: {
-                   type: Type.STRING,
-                   enum: ['gitlab_specialist', 'test_specialist'],
-                   description: 'The specialized role required for the task.',
-                 },
-                 task: {
-                   type: Type.STRING,
-                   description: 'The specific instruction for the subagent.',
-                 },
-               },
-               required: ['role', 'task'],
-             },
-           },
+          {
+            name: 'delegateTask',
+            description: 'Delegate a specific specialized task to a subagent.',
+            parameters: {
+              type: Type.OBJECT,
+              properties: {
+                role: {
+                  type: Type.STRING,
+                  enum: ['gitlab_specialist', 'test_specialist'],
+                  description: 'The specialized role required for the task.',
+                },
+                task: {
+                  type: Type.STRING,
+                  description: 'The specific instruction for the subagent.',
+                },
+              },
+              required: ['role', 'task'],
+            },
+          },
           {
             name: 'createGitLabIssue',
             description: 'Create a new issue in GitLab.',
@@ -201,7 +146,7 @@ export class QAAgent {
           {
             name: 'runRecordedTest',
             description:
-              'Run a recorded automation test. ALWAYS ask the user for the expected result BEFORE running this tool. This tool will wait for the test to complete in a new tab and return the actual outcome. You can provide variables to override recorded values (e.g. email, password). You can also choose to record the test execution.',
+              'Run a recorded automation test. ALWAYS ask the user for the expected result BEFORE running this tool. This tool will wait for the test to complete in a new tab and return the actual outcome. You can provide variables to override recorded values (e.g. email, password).',
             parameters: {
               type: Type.OBJECT,
               properties: {
@@ -209,10 +154,6 @@ export class QAAgent {
                   type: Type.STRING,
                   description: 'The ID of the recorded test to run.',
                 },
-               record: {
-                 type: Type.BOOLEAN,
-                 description: 'Whether to record the test execution.',
-               },
                 variables: {
                   type: Type.OBJECT,
                   description:
@@ -227,10 +168,19 @@ export class QAAgent {
     ];
   }
 
+  public async uploadFile(file: string | Blob, config?: { mimeType: string }) {
+    return await (this.client as any).files.upload({
+      file,
+      config,
+    });
+  }
+
   private estimateTokens(parts: any[]): number {
     let totalChars = 0;
     for (const part of parts) {
       if (part.text) totalChars += part.text.length;
+      if (part.inlineData) totalChars += part.inlineData.data.length;
+      if (part.fileData) totalChars += 100; // Reference is small, constant estimate
       if (part.functionCall)
         totalChars += JSON.stringify(part.functionCall).length;
       if (part.functionResponse)
@@ -293,9 +243,34 @@ export class QAAgent {
 
   public async *chat(
     input: string,
-    options?: { signal?: AbortSignal }
+    options?: {
+      signal?: AbortSignal;
+      attachments?: Array<{ mimeType: string; data?: string; fileUri?: string }>;
+    }
   ): AsyncGenerator<AgentEvent> {
-    this.history.push({ role: 'user', parts: [{ text: input }] });
+    const parts: any[] = [{ text: input }];
+
+    if (options?.attachments && options.attachments.length > 0) {
+      options.attachments.forEach(attachment => {
+        if (attachment.fileUri) {
+          parts.push({
+            fileData: {
+              mimeType: attachment.mimeType,
+              fileUri: attachment.fileUri,
+            },
+          });
+        } else if (attachment.data) {
+          parts.push({
+            inlineData: {
+              mimeType: attachment.mimeType,
+              data: attachment.data,
+            },
+          });
+        }
+      });
+    }
+
+    this.history.push({ role: 'user', parts });
     this.trimHistory();
 
     try {
@@ -327,7 +302,7 @@ export class QAAgent {
           this.history.push(response.candidates[0].content);
         }
 
-        const toolPromises = functionCalls.map(async call => {
+        const toolPromises = functionCalls.map(async (call: any) => {
           const { name, args } = call;
           if (!name) return null;
 
@@ -359,76 +334,88 @@ export class QAAgent {
             let result: any;
             try {
               switch (name) {
-                case 'createGitLabIssue':
-                  result = await createIssue(Number(safeArgs.projectId), {
+                case 'createGitLabIssue': {
+                  const projectId = Number(safeArgs.projectId);
+                  if (isNaN(projectId)) throw new Error('Invalid project ID');
+                  result = await createIssue(projectId, {
                     title: (safeArgs.title as string) || '',
                     description: (safeArgs.description as string) || '',
                     labels: (safeArgs.labels as string[]) || [],
                   });
                   break;
+                }
                 case 'listGitLabIssues':
                   result = await getProjectIssues(Number(safeArgs.projectId), {
                     state: safeArgs.state as string,
                   });
                   break;
-                case 'updateGitLabIssue':
+                case 'updateGitLabIssue': {
+                  const projectId = Number(safeArgs.projectId);
+                  const issueIid = Number(safeArgs.issueIid);
+                  if (isNaN(projectId) || isNaN(issueIid))
+                    throw new Error('Invalid project ID or issue IID');
                   result = await updateIssue(
-                    Number(safeArgs.projectId),
-                    Number(safeArgs.issueIid),
+                    projectId,
+                    issueIid,
                     (safeArgs.updates as any) || {}
                   );
                   break;
+                }
                 case 'listGitLabProjects':
                   result = await getProjects();
                   break;
-                 case 'delegateTask':
-                   const subAgent = new QAAgent({
-                     ...this.config,
-                   });
-                   // Filter tools based on role
-                   if (safeArgs.role === 'gitlab_specialist') {
-                    subAgent['systemInstruction'] = GITLAB_SPECIALIST_INSTRUCTION;
-                     subAgent.tools = [
-                       {
-                         functionDeclarations: this.tools[0].functionDeclarations?.filter(
-                           f =>
-                             [
-                               'createGitLabIssue',
-                               'listGitLabIssues',
-                               'updateGitLabIssue',
-                               'listGitLabProjects',
-                             ].includes(f.name)
-                         ) || [],
-                       },
-                     ];
-                     // Run subagent chat
-                     const subStream = subAgent.chat(safeArgs.task);
-                     let finalContent = '';
-                     for await (const event of subStream) {
-                       if (event.type === 'text') finalContent += event.content;
-                       if (event.type === 'done') finalContent = event.content;
-                     }
-                     result = finalContent || 'Task completed with no summary.';
-                   } else if (safeArgs.role === 'test_specialist') {
+                case 'delegateTask':
+                  const subAgent = new QAAgent({
+                    ...this.config,
+                  });
+                  // Filter tools based on role
+                  if (safeArgs.role === 'gitlab_specialist') {
+                    subAgent['systemInstruction'] =
+                      GITLAB_SPECIALIST_INSTRUCTION;
+                    subAgent.tools = [
+                      {
+                        functionDeclarations:
+                          this.tools[0].functionDeclarations?.filter(f =>
+                            [
+                              'createGitLabIssue',
+                              'listGitLabIssues',
+                              'updateGitLabIssue',
+                              'listGitLabProjects',
+                            ].includes(f.name || '')
+                          ) || [],
+                      },
+                    ];
+                    // Run subagent chat
+                    const subStream = subAgent.chat(safeArgs.task as string);
+                    let finalContent = '';
+                    for await (const event of subStream) {
+                      if (event.type === 'text') finalContent += event.content;
+                      if (event.type === 'done') finalContent = event.content;
+                    }
+                    result = finalContent || 'Task completed with no summary.';
+                  } else if (safeArgs.role === 'test_specialist') {
                     subAgent['systemInstruction'] = TEST_SPECIALIST_INSTRUCTION;
-                     subAgent.tools = [
-                       {
-                         functionDeclarations: this.tools[0].functionDeclarations?.filter(
-                           f => ['listRecordedTests', 'runRecordedTest'].includes(f.name)
-                         ) || [],
-                       },
-                     ];
-                     const subStream = subAgent.chat(safeArgs.task);
-                     let finalContent = '';
-                     for await (const event of subStream) {
-                       if (event.type === 'text') finalContent += event.content;
-                       if (event.type === 'done') finalContent = event.content;
-                     }
-                     result = finalContent || 'Task completed with no summary.';
-                   } else {
-                     throw new Error(`Unknown role: ${safeArgs.role}`);
-                   }
-                   break;
+                    subAgent.tools = [
+                      {
+                        functionDeclarations:
+                          this.tools[0].functionDeclarations?.filter(f =>
+                            ['listRecordedTests', 'runRecordedTest'].includes(
+                              f.name || ''
+                            )
+                          ) || [],
+                      },
+                    ];
+                    const subStream = subAgent.chat(safeArgs.task as string);
+                    let finalContent = '';
+                    for await (const event of subStream) {
+                      if (event.type === 'text') finalContent += event.content;
+                      if (event.type === 'done') finalContent = event.content;
+                    }
+                    result = finalContent || 'Task completed with no summary.';
+                  } else {
+                    throw new Error(`Unknown role: ${safeArgs.role}`);
+                  }
+                  break;
                 case 'listRecordedTests':
                   result = await new Promise(resolve => {
                     chrome.runtime.sendMessage(
@@ -486,7 +473,9 @@ export class QAAgent {
                     (b: any) => b.id === safeArgs.testId
                   );
                   if (!blueprint)
-                    throw new Error(`Test with ID ${safeArgs.testId} not found.`);
+                    throw new Error(
+                      `Test with ID ${safeArgs.testId} not found.`
+                    );
                   if (!blueprint.steps || blueprint.steps.length === 0)
                     throw new Error(
                       `Test "${blueprint.name}" has no steps to execute.`
@@ -498,7 +487,6 @@ export class QAAgent {
                         data: {
                           blueprint,
                           waitForCompletion: true,
-                         record: !!safeArgs.record,
                           variables: safeArgs.variables || {},
                         },
                       },

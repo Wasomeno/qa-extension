@@ -26,6 +26,7 @@ export enum MessageType {
   GET_PROJECT_BRANCHES = 'GET_PROJECT_BRANCHES',
   GET_MERGE_REQUESTS = 'GET_MERGE_REQUESTS',
   START_RECORDING = 'START_RECORDING',
+  ACTUAL_START_RECORDING = 'ACTUAL_START_RECORDING',
   STOP_RECORDING = 'STOP_RECORDING',
   GENERATE_BLUEPRINT = 'GENERATE_BLUEPRINT',
   SAVE_BLUEPRINT = 'SAVE_BLUEPRINT',
@@ -34,9 +35,14 @@ export enum MessageType {
   STOP_PLAYBACK = 'STOP_PLAYBACK',
   PLAYBACK_STATUS_UPDATE = 'PLAYBACK_STATUS_UPDATE',
   PING = 'PING',
+  GET_TAB_ID = 'GET_TAB_ID',
   GET_VIDEO_BLOB = 'GET_VIDEO_BLOB',
   OPEN_URL = 'OPEN_URL',
   GET_RECORDED_TESTS = 'GET_RECORDED_TESTS',
+  ACTIVATE_QA_SESSION = 'ACTIVATE_QA_SESSION',
+  R2_UPLOAD = 'R2_UPLOAD',
+  AGENT_CHAT = 'AGENT_CHAT',
+  CLOSE_MAIN_MENU = 'CLOSE_MAIN_MENU',
 }
 
 export interface ExtensionMessage {
@@ -68,8 +74,22 @@ export interface InteractionEvent {
     id?: string;
     className?: string;
     selector: string;
+    selectorCandidates?: string[];
+    xpath?: string;
+    xpathCandidates?: string[];
     textContent?: string;
     attributes?: Record<string, string>;
+    parentInfo?: {
+      tagName: string;
+      id?: string;
+      selector?: string;
+      attributes?: Record<string, string>;
+    };
+    structuralInfo?: {
+      depth: number;
+      siblingIndex: number;
+      totalSiblings: number;
+    };
   };
   position?: { x: number; y: number };
   value?: string;

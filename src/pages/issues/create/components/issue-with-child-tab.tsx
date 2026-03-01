@@ -9,6 +9,8 @@ import {
 } from '@/components/ui/accordion';
 import { Loader2, Plus, Trash2 } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
+import { uploadProjectFile } from '@/api/project';
+import { videoStorage } from '@/services/video-storage';
 import { CreateIssueWithChildRequest } from '@/api/issue';
 import { useCreateIssueWithChild } from '../hooks/use-create-issue-with-child';
 import { IssueFormFields, IssueFormState } from './issue-form-fields';
@@ -23,6 +25,7 @@ const DEFAULT_FORM_STATE: IssueFormState = {
   selectedProject: null,
   selectedLabels: [],
   selectedAssignee: null,
+  selectedRecording: null,
 };
 
 export const IssueWithChildTab: React.FC<IssueWithChildTabProps> = ({
@@ -33,6 +36,7 @@ export const IssueWithChildTab: React.FC<IssueWithChildTabProps> = ({
   const [childIssues, setChildIssues] = useState<
     (IssueFormState & { id: string })[]
   >([{ id: uuidv4(), ...DEFAULT_FORM_STATE }]);
+  const [isUploading, setIsUploading] = useState(false);
 
   const createIssueWithChildMutation = useCreateIssueWithChild({
     onSuccess: () => {
@@ -44,6 +48,37 @@ export const IssueWithChildTab: React.FC<IssueWithChildTabProps> = ({
       toast.error('Failed to create issues. Please try again.');
     },
   });
+
+  const processIssueRecording = async (state: IssueFormState, projectId: number): Promise<string> => {
+    if (!state.selectedRecording) return state.description;
+
+    try {
+      const videoBlob = await videoStorage.getVideo(state.selectedRecording.id);
+      if (videoBlob) {
+        const fileName = `${state.selectedRecording.name.replace(/\s+/g, '_')}_${Date.now()}.mp4`;
+        const uploadResult = await uploadProjectFile(projectId, videoBlob, fileName);
+
+        if (uploadResult.success && uploadResult.data?.markdown) {
+          const videoMarkdown = uploadResult.data.markdown;
+          let desc = state.description;
+
+          if (desc.includes('### Evidence')) {
+            return desc.replace(/### Evidence/, `### Evidence\n\n${videoMarkdown}`);
+          } else if (desc.includes('### Notes:')) {
+            return desc.replace(/### Notes:/, `### Evidence\n\n${videoMarkdown}\n\n### Notes:`);
+          } else {
+            return `${desc}\n\n### Evidence\n\n${videoMarkdown}`;
+          }
+        } else {
+          toast.error(uploadResult.error || `Failed to upload recording for ${state.title || 'issue'}`);
+        }
+      }
+    } catch (e) {
+      console.error('Failed to process recording upload:', e);
+      toast.error(`Failed to process recording upload for ${state.title || 'issue'}`);
+    }
+    return state.description;
+  };
 
   const handleCreateParentAndChildren = async () => {
     const {
@@ -64,23 +99,34 @@ export const IssueWithChildTab: React.FC<IssueWithChildTabProps> = ({
       return;
     }
 
-    const request: CreateIssueWithChildRequest = {
-      title,
-      description,
-      assignee_ids: selectedAssignee ? [selectedAssignee.id] : [],
-      labels: selectedLabels.map(l => l.name),
-      child_issues: childIssues.map(child => ({
-        title: child.title,
-        description: child.description,
-        assignee_ids: child.selectedAssignee ? [child.selectedAssignee.id] : [],
-        labels: child.selectedLabels.map(l => l.name),
-      })),
-    };
+    setIsUploading(true);
+    try {
+      const finalParentDescription = await processIssueRecording(parentIssueState, selectedProject.id);
+      
+      const finalChildIssues = await Promise.all(
+        childIssues.map(async (child) => ({
+          title: child.title,
+          description: await processIssueRecording(child, selectedProject.id),
+          assignee_ids: child.selectedAssignee ? [child.selectedAssignee.id] : [],
+          labels: child.selectedLabels.map(l => l.name),
+        }))
+      );
 
-    createIssueWithChildMutation.mutate({
-      projectId: selectedProject.id,
-      request,
-    });
+      const request: CreateIssueWithChildRequest = {
+        title,
+        description: finalParentDescription,
+        assignee_ids: selectedAssignee ? [selectedAssignee.id] : [],
+        labels: selectedLabels.map(l => l.name),
+        child_issues: finalChildIssues,
+      };
+
+      createIssueWithChildMutation.mutate({
+        projectId: selectedProject.id,
+        request,
+      });
+    } finally {
+      setIsUploading(false);
+    }
   };
 
   const addChildIssue = () => {
@@ -176,13 +222,14 @@ export const IssueWithChildTab: React.FC<IssueWithChildTabProps> = ({
             !parentIssueState.selectedProject ||
             !parentIssueState.title ||
             childIssues.length === 0 ||
-            createIssueWithChildMutation.isPending
+            createIssueWithChildMutation.isPending ||
+            isUploading
           }
         >
-          {createIssueWithChildMutation.isPending && (
+          {(createIssueWithChildMutation.isPending || isUploading) && (
             <Loader2 className="w-4 h-4 mr-2 animate-spin" />
           )}
-          Create Issue with {childIssues.length} Children
+          {isUploading ? 'Uploading Recordings...' : `Create Issue with ${childIssues.length} Children`}
         </Button>
       </div>
     </div>

@@ -411,11 +411,27 @@ class SimpleTrigger {
 
   /**
    * Check if current URL is allowed by whitelist
-   * @returns true if URL is whitelisted or whitelist is empty, false otherwise
+   * @returns true if URL is whitelisted, false otherwise
    */
   private async isUrlAllowedByWhitelist(): Promise<boolean> {
     try {
-      return true;
+      const result = await chrome.storage.local.get(['url_whitelist']);
+      const whitelist = result.url_whitelist || [];
+
+      if (whitelist.length === 0) {
+        return false;
+      }
+
+      const hostname = window.location.hostname;
+
+      // Check for exact match or subdomain match
+      return whitelist.some((domain: string) => {
+        const normalizedDomain = domain.toLowerCase();
+        return (
+          hostname === normalizedDomain ||
+          hostname.endsWith(`.${normalizedDomain}`)
+        );
+      });
     } catch (error) {
       // Fail safely - don't activate if we can't check whitelist
       return false;

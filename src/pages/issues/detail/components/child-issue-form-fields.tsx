@@ -48,8 +48,44 @@ export const ChildIssueFormFields: React.FC<ChildIssueFormFieldsProps> = ({
   };
 
   const TEMPLATES = {
-    bug: `### Description\n[Description of the bug]\n\n### Reproduction Steps\n1. [Step 1]\n\n### Expected Behavior\n[What should happen]\n\n### Actual Behavior\n[What actually happened]`,
-    feature: `### Problem Statement\n[What problem are we solving?]\n\n### User Story\nAs a [user], I want to [action] so that [benefit].`,
+    default: `### Issue Description:
+
+[Description of the issue]
+
+---
+
+### Scope:
+
+- [ ] [Scope item]
+
+---
+
+### Testing Steps: \`(Step can be video or description)\`
+
+1. [Step 1]
+2. [Step 2]
+
+---
+
+### Expectation
+
+| Actual | Expectation |
+|--------|-------------|
+| [Actual Condition] | [Expected Condition] |
+
+---
+
+### Notes:
+
+- Username Login **(required)**
+- Issue Monitoring Line & Link **(required)**
+- cURL _(gunakan pastebin.com)_ **(required)**
+- Video Link
+- Picture Link
+- Sentry Link
+- File Link
+- Note
+- etc.`,
   };
 
   return (

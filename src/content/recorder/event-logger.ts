@@ -1,4 +1,4 @@
-import { generateSelector, getElementInfo } from '@/utils/dom';
+import { getElementInfo } from '@/utils/dom';
 import { MessageType } from '@/types/messages';
 import { RawEvent } from '@/types/recording';
 
@@ -7,7 +7,10 @@ export class EventLogger {
   private onEventCaptured?: (event: RawEvent) => void;
   private shadowHostId: string;
 
-  constructor(shadowHostId: string, onEventCaptured?: (event: RawEvent) => void) {
+  constructor(
+    shadowHostId: string,
+    onEventCaptured?: (event: RawEvent) => void
+  ) {
     this.shadowHostId = shadowHostId;
     this.onEventCaptured = onEventCaptured;
     this.handleEvent = this.handleEvent.bind(this);
@@ -16,7 +19,9 @@ export class EventLogger {
   public start() {
     if (this.isRecording) return;
     this.isRecording = true;
-    console.log(`[EventLogger] Started listening for interactions in frame: ${window.location.href}`);
+    console.log(
+      `[EventLogger] Started listening for interactions in frame: ${window.location.href}`
+    );
 
     window.addEventListener('click', this.handleEvent, true);
     window.addEventListener('input', this.handleEvent, true);
@@ -26,7 +31,9 @@ export class EventLogger {
   public stop() {
     if (!this.isRecording) return;
     this.isRecording = false;
-    console.log(`[EventLogger] Stopped listening for interactions in frame: ${window.location.href}`);
+    console.log(
+      `[EventLogger] Stopped listening for interactions in frame: ${window.location.href}`
+    );
 
     window.removeEventListener('click', this.handleEvent, true);
     window.removeEventListener('input', this.handleEvent, true);
@@ -36,10 +43,13 @@ export class EventLogger {
   private handleEvent(event: Event) {
     if (!this.isRecording) return;
 
-    const target = event.target as HTMLElement;
+    const rawTarget = event.target as HTMLElement;
+    const target = this.getActionableTarget(rawTarget, event.type);
     if (!target || this.isEventFromShadowDOM(target)) return;
 
-    console.log(`[EventLogger] Captured ${event.type} on ${target.tagName.toLowerCase()}`);
+    console.log(
+      `[EventLogger] Captured ${event.type} on ${target.tagName.toLowerCase()}`
+    );
 
     const interactionEvent: RawEvent = {
       type: event.type as any,
@@ -53,7 +63,11 @@ export class EventLogger {
       isTrusted: event.isTrusted,
     };
 
-    if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target instanceof HTMLSelectElement) {
+    if (
+      target instanceof HTMLInputElement ||
+      target instanceof HTMLTextAreaElement ||
+      target instanceof HTMLSelectElement
+    ) {
       interactionEvent.value = target.value;
     }
 
@@ -67,12 +81,43 @@ export class EventLogger {
     });
   }
 
+  private getActionableTarget(
+    target: HTMLElement | null,
+    eventType: string
+  ): HTMLElement | null {
+    if (!target) return null;
+
+    if (eventType === 'input' || eventType === 'change') {
+      return (
+        target.closest(
+          'input, textarea, select, [contenteditable="true"], [contenteditable=""]'
+        ) || target
+      ) as HTMLElement;
+    }
+
+    // Traverse up to find semantic interactive element to avoid capturing SVGs/spans inside buttons
+    let current: HTMLElement | null = target;
+    const interactiveSelectors = [
+      'button', 'a[href]', 'input', 'textarea', 'select', 
+      '[role="button"]', '[role="link"]', '[role="menuitem"]', '[role="tab"]',
+      '[role="option"]', '[role="gridcell"]', '[role="treeitem"]',
+      'label', '[data-testid]', '[data-test-id]', '[data-qa]', '[data-cy]',
+      'td[title]' // Common for datepickers like Ant Design
+    ].join(', ');
+
+    while (current && current !== document.body) {
+      if (current.matches(interactiveSelectors)) {
+        return current;
+      }
+      current = current.parentElement;
+    }
+
+    return target;
+  }
+
   private isEventFromShadowDOM(element: HTMLElement): boolean {
     let current: Node | null = element;
     while (current) {
-      if (current instanceof ShadowRoot && (current.host as HTMLElement).id === this.shadowHostId) {
-        return true;
-      }
       if (current instanceof HTMLElement && current.id === this.shadowHostId) {
         return true;
       }

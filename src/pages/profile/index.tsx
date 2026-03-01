@@ -37,8 +37,8 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({
               className="w-20 h-20 rounded-xl object-cover flex-shrink-0 shadow-sm"
             />
           ) : (
-            <div className="w-20 h-20 rounded-xl bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center flex-shrink-0 shadow-sm">
-              <span className="text-2xl font-semibold text-white">
+            <div className="w-20 h-20 rounded-xl bg-zinc-900 flex items-center justify-center flex-shrink-0 shadow-sm">
+              <span className="text-2xl font-semibold text-zinc-100">
                 {(user?.name || user?.username || 'U').charAt(0).toUpperCase()}
               </span>
             </div>
@@ -58,7 +58,7 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({
             <div className="flex items-center gap-2 mt-3">
               {/* We can infer connection status from provider, or just show GitLab as connected since we likely logged in via it */}
               {user && (
-                <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-orange-100 text-orange-700">
+                <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-zinc-900 text-zinc-100 border border-zinc-800">
                   GitLab Connected
                 </span>
               )}
@@ -72,9 +72,9 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({
 
           {/* Settings Items */}
           <div className="space-y-2">
-            <button className="w-full flex items-center gap-4 p-4 bg-white border border-gray-200 rounded-xl hover:border-gray-300 hover:shadow-sm transition-all cursor-pointer text-left">
-              <div className="w-10 h-10 rounded-lg bg-blue-50 flex items-center justify-center flex-shrink-0">
-                <Settings className="w-5 h-5 text-blue-600" />
+            <button className="w-full flex items-center gap-4 p-4 bg-white border border-gray-200 rounded-xl hover:border-gray-300 hover:shadow-sm transition-all cursor-pointer text-left group">
+              <div className="w-10 h-10 rounded-lg bg-zinc-100 flex items-center justify-center flex-shrink-0 group-hover:bg-zinc-900 transition-colors">
+                <Settings className="w-5 h-5 text-zinc-900 group-hover:text-zinc-100" />
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-gray-900">
@@ -87,9 +87,9 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({
               <ChevronRight className="w-5 h-5 text-gray-400 flex-shrink-0" />
             </button>
 
-            <button className="w-full flex items-center gap-4 p-4 bg-white border border-gray-200 rounded-xl hover:border-gray-300 hover:shadow-sm transition-all cursor-pointer text-left">
-              <div className="w-10 h-10 rounded-lg bg-amber-50 flex items-center justify-center flex-shrink-0">
-                <Bell className="w-5 h-5 text-amber-600" />
+            <button className="w-full flex items-center gap-4 p-4 bg-white border border-gray-200 rounded-xl hover:border-gray-300 hover:shadow-sm transition-all cursor-pointer text-left group">
+              <div className="w-10 h-10 rounded-lg bg-zinc-100 flex items-center justify-center flex-shrink-0 group-hover:bg-zinc-900 transition-colors">
+                <Bell className="w-5 h-5 text-zinc-900 group-hover:text-zinc-100" />
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-gray-900">
@@ -107,7 +107,7 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({
           <button
             onClick={handleLogout}
             disabled={logoutMutation.isPending}
-            className="flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-red-600 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className="flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-zinc-600 hover:text-zinc-900 hover:bg-zinc-50 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {logoutMutation.isPending ? (
               <Loader2 className="w-4 h-4 animate-spin" />

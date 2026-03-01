@@ -1,5 +1,3 @@
-import { videoStorage } from '@/services/video-storage';
-
 async function initializePlayer() {
   const player = document.getElementById('player') as HTMLVideoElement;
   const errorMsg = document.getElementById('error-message') as HTMLDivElement;
@@ -12,52 +10,29 @@ async function initializePlayer() {
     return;
   }
 
-  let attempts = 0;
-  const maxAttempts = 5;
-  const retryInterval = 2000;
+  const publicDomain = process.env.R2_PUBLIC_DOMAIN || 'https://pub-03dd816d26684f7fba942512f600ddf5.r2.dev';
+  const videoUrl = `${publicDomain}/${id}.webm`;
 
-  async function tryLoadVideo() {
-    attempts++;
-    console.log(`[VideoViewer] Loading attempt ${attempts} for ID: ${id}`);
+  console.log(`[VideoViewer] Loading video from R2: ${videoUrl}`);
+  
+  try {
+    player.src = videoUrl;
+    if (errorMsg) errorMsg.style.display = 'none';
+    if (player) player.style.display = 'block';
     
-    try {
-      const blob = await videoStorage.getVideo(id!);
-      if (!blob) {
-        if (attempts < maxAttempts) {
-          showError(`Recording video not found. Retrying... (${attempts}/${maxAttempts})`);
-          setTimeout(tryLoadVideo, retryInterval);
-        } else {
-          showError('Recording video not found after multiple attempts. It might still be saving or failed to save.');
-        }
-        return;
-      }
+    player.oncanplay = () => {
+      console.log('[VideoViewer] Video can play');
+    };
 
-      console.log(`[VideoViewer] Video blob found: ${blob.size} bytes`);
-      const url = URL.createObjectURL(blob);
-      player.src = url;
-      if (errorMsg) errorMsg.style.display = 'none';
-      if (player) player.style.display = 'block';
-      
-      player.oncanplay = () => {
-        console.log('[VideoViewer] Video can play');
-      };
+    player.onerror = () => {
+      // If R2 fails, it might not be uploaded yet or failed
+      showError('Recording video not found on R2. It might still be uploading or failed to save.');
+    };
 
-      player.onerror = (e) => {
-        showError(`Player error: ${player.error?.message || 'Unknown video error'}`);
-      };
-      
-      // Auto-revoke URL when page is unloaded
-      window.addEventListener('unload', () => {
-        URL.revokeObjectURL(url);
-      });
-
-    } catch (error: any) {
-      console.error('[VideoViewer] Load error:', error);
-      showError(`Failed to load video: ${error.message}`);
-    }
+  } catch (error: any) {
+    console.error('[VideoViewer] Load error:', error);
+    showError(`Failed to load video: ${error.message}`);
   }
-
-  await tryLoadVideo();
 
   function showError(text: string) {
     console.error(`[VideoViewer] Error: ${text} (ID: ${id})`);

@@ -15,11 +15,10 @@ module.exports = (env, argv) => {
       content: './src/content/simple-trigger.ts',
       recorder: './src/content/recorder/index.tsx',
       player: './src/content/player/index.ts',
-      picker: './src/background/picker.ts',
 
       popup: './src/popup/index.tsx',
       options: './src/options/index.tsx',
-      offscreen: './src/offscreen/index.ts',
+      'recorder-iframe': './src/recorder-iframe/index.tsx',
       'video-viewer': './src/pages/recordings/video-viewer.ts',
       'recording-detail': './src/pages/recordings/standalone.tsx',
       'shadow-dom-styles': './src/styles/shadow-dom.css',
@@ -72,7 +71,7 @@ module.exports = (env, argv) => {
           test: /\.css$/,
           exclude: /shadow-dom\.css$/,
           use: [
-            'style-loader',
+            rspack.CssExtractRspackPlugin.loader,
             'css-loader',
             {
               loader: 'postcss-loader',
@@ -116,6 +115,11 @@ module.exports = (env, argv) => {
         ),
         'process.env.TARGET_BROWSER': JSON.stringify(targetBrowser),
         __GOOGLE_API_KEY__: JSON.stringify(process.env.GOOGLE_API_KEY || ''),
+        'process.env.R2_ACCOUNT_ID': JSON.stringify(process.env.R2_ACCOUNT_ID || ''),
+        'process.env.R2_BUCKET_NAME': JSON.stringify(process.env.R2_BUCKET_NAME || ''),
+        'process.env.R2_ACCESS_KEY_ID': JSON.stringify(process.env.R2_ACCESS_KEY_ID || ''),
+        'process.env.R2_SECRET_ACCESS_KEY': JSON.stringify(process.env.R2_SECRET_ACCESS_KEY || ''),
+        'process.env.R2_PUBLIC_DOMAIN': JSON.stringify(process.env.R2_PUBLIC_DOMAIN || ''),
       }),
       new rspack.CssExtractRspackPlugin({
         filename: '[name].css',
@@ -123,32 +127,27 @@ module.exports = (env, argv) => {
       new rspack.HtmlRspackPlugin({
         template: './src/popup/popup.html',
         filename: 'popup.html',
-        chunks: ['popup'],
+        chunks: ['popup', 'vendor'],
       }),
       new rspack.HtmlRspackPlugin({
         template: './src/options/options.html',
         filename: 'options.html',
-        chunks: ['options'],
+        chunks: ['options', 'vendor'],
       }),
       new rspack.HtmlRspackPlugin({
-        template: './src/offscreen/offscreen.html',
-        filename: 'offscreen.html',
-        chunks: ['offscreen'],
+        template: './src/recorder-iframe/index.html',
+        filename: 'recorder-iframe.html',
+        chunks: ['recorder-iframe', 'vendor'],
       }),
       new rspack.HtmlRspackPlugin({
         template: './src/pages/recordings/video-viewer.html',
         filename: 'video-viewer.html',
-        chunks: ['video-viewer'],
+        chunks: ['video-viewer', 'vendor'],
       }),
       new rspack.HtmlRspackPlugin({
         template: './src/pages/recordings/standalone.html',
         filename: 'recording-detail.html',
-        chunks: ['recording-detail'],
-      }),
-      new rspack.HtmlRspackPlugin({
-        template: './src/background/picker.html',
-        filename: 'picker.html',
-        chunks: ['picker'],
+        chunks: ['recording-detail', 'vendor'],
       }),
       new rspack.CopyRspackPlugin({
         patterns: [
@@ -220,8 +219,8 @@ module.exports = (env, argv) => {
             to: 'icons',
           },
           {
-            from: './public/log-loom-logo.png',
-            to: 'assets/log-loom-logo.png',
+            from: './public/flowg-logo.png',
+            to: 'assets/flowg-logo.png',
           },
           {
             from: './public/assets',
