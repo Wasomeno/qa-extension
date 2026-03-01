@@ -8,6 +8,7 @@ import { ProjectBoard } from './mock-data';
 import { updateIssue } from '@/api/issue';
 import { toast } from 'sonner';
 import { useQueryClient } from '@tanstack/react-query';
+import { useLocalStorage } from '@/hooks/use-local-storage';
 
 interface BoardsPageProps {
   portalContainer?: HTMLDivElement | null;
@@ -20,9 +21,9 @@ export const BoardsPage: React.FC<BoardsPageProps> = ({
 }) => {
   const { data: projects = [], isLoading: isLoadingProjects } =
     useGetProjects();
-  const [selectedProjectId, setSelectedProjectId] = useState<
+  const [selectedProjectId, setSelectedProjectId] = useLocalStorage<
     string | number | undefined
-  >(undefined);
+  >('qa-extension-boards-project-id', undefined);
 
   // Default to first project if none selected
   const activeProjectId = selectedProjectId ?? projects[0]?.id;

@@ -11,6 +11,7 @@ import { useGetIssues } from './hooks/use-get-issues';
 import { usePinnedIssues } from '@/hooks/use-pinned-issues';
 import { Issue } from '@/api/issue';
 import { useNavigation } from '@/contexts/navigation-context';
+import { useLocalStorage } from '@/hooks/use-local-storage';
 
 interface IssuesPageProps {
   initialIssue?: Issue | null;
@@ -22,7 +23,7 @@ export const IssuesPage: React.FC<IssuesPageProps> = ({
   portalContainer,
 }) => {
   const { current, push, pop } = useNavigation();
-  const [filters, setFilters] = useState<IssueFilterState>({
+  const [filters, setFilters] = useLocalStorage<IssueFilterState>('qa-extension-issues-filters', {
     search: '',
     projectIds: [],
     status: 'ALL',
