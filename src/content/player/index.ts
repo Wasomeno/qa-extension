@@ -131,7 +131,7 @@ class PlayerEngine {
     return resolved;
   }
 
-  private async runNextStep() {
+  private async runNextStep(retryCount = 0) {
     if (!this.state.isActive || !this.state.blueprint) return;
 
     if (this.state.currentStepIndex >= this.state.blueprint.steps.length) {
@@ -148,6 +148,8 @@ class PlayerEngine {
     };
     
     try {
+      console.log(`[Player] Executing step ${this.state.currentStepIndex + 1}/${this.state.blueprint.steps.length}: ${step.action} - ${step.description}`);
+      
       // Notify background about current step starting
       chrome.runtime.sendMessage({
         type: MessageType.PLAYBACK_STATUS_UPDATE,
@@ -161,15 +163,19 @@ class PlayerEngine {
 
       // Special handling for navigation: save state BEFORE navigating
       if (step.action === 'navigate') {
+        console.log(`[Player] Navigating to: ${step.value}`);
         this.state.currentStepIndex++;
         await this.saveState();
         await Executor.executeStep(step);
         return;
       }
 
+      console.log(`[Player] Waiting for page to settle...`);
       await Executor.waitForPageSettled();
 
+      console.log(`[Player] Resolving and executing step...`);
       const actualValue = await Executor.executeStep(step);
+      console.log(`[Player] Step successful. Actual value: ${actualValue}`);
 
       this.state.currentStepIndex++;
       await this.saveState();
@@ -193,7 +199,14 @@ class PlayerEngine {
       setTimeout(() => this.runNextStep(), 1000);
       
     } catch (error: any) {
-      this.stopPlayback('failed', error.message);
+      console.error(`[Player] Step failed: ${error.message}`);
+      
+      if (retryCount < 2) {
+        console.log(`[Player] Retrying step ${this.state.currentStepIndex + 1} (Attempt ${retryCount + 2})...`);
+        setTimeout(() => this.runNextStep(retryCount + 1), 2000);
+      } else {
+        this.stopPlayback('failed', error.message);
+      }
     }
   }
 }
