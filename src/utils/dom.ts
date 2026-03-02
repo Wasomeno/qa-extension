@@ -84,62 +84,51 @@ export function generateXPathCandidates(element: Element): XPathCandidate[] {
   const candidates: XPathCandidate[] = [];
   const tagName = element.tagName.toLowerCase();
 
-  // 1. Attribute-based XPath (highest priority)
-  for (const attr of STABLE_ATTRIBUTES) {
-    const value = element.getAttribute(attr);
-    if (!value) continue;
-    const xpath = `//${tagName}[@${attr}="${escapeXPathValue(value)}"]`;
-    candidates.push({ xpath, type: 'attribute' });
-  }
-
-  // ID-based XPath
-  if (isStableId(element.id)) {
-    candidates.push({ xpath: `//*[@id="${CSS.escape(element.id)}"]`, type: 'id' });
-  }
-
-  // 2. Name + type combination
-  const name = element.getAttribute('name');
-  if (name && tagName !== 'div' && tagName !== 'span') {
-    candidates.push({ xpath: `//${tagName}[@name="${escapeXPathValue(name)}"]`, type: 'combined' });
-  }
-
-  // 3. Text-based XPath for clickable elements
+  // 1. Text-based XPath (extremely robust for semantic elements)
   const textContent = element.textContent?.trim();
-  if (textContent && textContent.length > 0 && textContent.length < 100) {
-    const shortText = textContent.substring(0, 50);
-    candidates.push({ xpath: `//${tagName}[contains(text(),"${escapeXPathValue(shortText)}")]`, type: 'text' });
+  if (textContent && textContent.length > 0 && textContent.length < 60) {
+    const escaped = escapeXPathValue(textContent);
+    // Exact match
+    candidates.push({ xpath: `//${tagName}[text()="${escaped}"]`, type: 'text' });
+    // Normalize space match
+    candidates.push({ xpath: `//${tagName}[normalize-space()="${escaped}"]`, type: 'text' });
+    // Partial match
+    if (textContent.length > 5) {
+      candidates.push({ xpath: `//${tagName}[contains(text(), "${escaped.substring(0, 30)}")]`, type: 'text' });
+    }
   }
 
-  // 4. Role-based XPath
-  const role = element.getAttribute('role');
+  // 2. Data-testid (The "Golden" attribute)
+  for (const attr of ['data-testid', 'data-test-id', 'data-qa', 'data-cy']) {
+    const val = element.getAttribute(attr);
+    if (val) {
+      candidates.push({ xpath: `//*[@${attr}="${escapeXPathValue(val)}"]`, type: 'attribute' });
+    }
+  }
+
+  // 3. ARIA Roles and Labels
+  const role = element.getAttribute('role') || getImplicitRole(element);
+  const ariaLabel = element.getAttribute('aria-label') || element.getAttribute('aria-labelledby');
   if (role) {
-    candidates.push({ xpath: `//*[@role="${escapeXPathValue(role)}"]`, type: 'attribute' });
+    if (ariaLabel) {
+      candidates.push({ xpath: `//${tagName}[@role="${role}" and (@aria-label="${ariaLabel}" or @aria-labelledby="${ariaLabel}")]`, type: 'attribute' });
+      candidates.push({ xpath: `//*[@role="${role}" and @aria-label="${ariaLabel}"]`, type: 'attribute' });
+    } else {
+      candidates.push({ xpath: `//${tagName}[@role="${role}"]`, type: 'attribute' });
+    }
   }
 
-  // 5. Structural XPath - parent-based
-  const parent = element.parentElement;
-  if (parent) {
-    // Parent with stable attribute
-    for (const attr of STABLE_ATTRIBUTES) {
-      const parentValue = parent.getAttribute(attr);
-      if (parentValue) {
-        const parentTag = parent.tagName.toLowerCase();
-        candidates.push({ xpath: `//${parentTag}[@${attr}="${escapeXPathValue(parentValue)}"]/${tagName}`, type: 'structural' });
-        break;
-      }
+  // 4. Name, placeholder, alt
+  for (const attr of ['name', 'placeholder', 'alt', 'title']) {
+    const val = element.getAttribute(attr);
+    if (val) {
+      candidates.push({ xpath: `//${tagName}[@${attr}="${escapeXPathValue(val)}"]`, type: 'attribute' });
     }
+  }
 
-    // Parent with ID
-    if (isStableId(parent.id)) {
-      candidates.push({ xpath: `//*[@id="${CSS.escape(parent.id)}"]/${tagName}`, type: 'structural' });
-    }
-
-    // nth-child based (fallback)
-    const siblings = Array.from(parent.children).filter(c => c.tagName === element.tagName);
-    if (siblings.length > 1) {
-      const index = siblings.indexOf(element) + 1;
-      candidates.push({ xpath: `//${parent.tagName.toLowerCase()}/${tagName}[${index}]`, type: 'structural' });
-    }
+  // 5. Stable ID
+  if (isStableId(element.id)) {
+    candidates.push({ xpath: `//*[@id="${element.id}"]`, type: 'id' });
   }
 
   return candidates;
@@ -257,37 +246,61 @@ export function generateSelectorCandidates(element: Element): string[] {
   if (!element) return [];
 
   const candidates: string[] = [];
+  const tagName = element.tagName.toLowerCase();
 
-  for (const attr of STABLE_ATTRIBUTES) {
+  // 1. Data-test-id attributes (Highest priority)
+  const testIdAttrs = ['data-testid', 'data-test-id', 'data-qa', 'data-cy'];
+  for (const attr of testIdAttrs) {
     const value = element.getAttribute(attr);
-    if (!value) continue;
-    const selector = `[${attr}="${CSS.escape(value)}"]`;
-    candidates.push(selector);
-    if (isUniqueSelector(selector)) {
-      return [selector, ...candidates.filter(c => c !== selector)];
+    if (value) {
+      candidates.push(`[${attr}="${CSS.escape(value)}"]`);
     }
   }
 
-  if (isStableId(element.id)) {
-    candidates.push(`#${CSS.escape(element.id)}`);
+  // 2. Role + Accessible Name (Semantic Priority)
+  const role = element.getAttribute('role') || getImplicitRole(element);
+  const ariaLabel = element.getAttribute('aria-label') || element.getAttribute('aria-labelledby');
+  const textContent = element.textContent?.trim().substring(0, 50);
+
+  if (role) {
+    if (ariaLabel) {
+      candidates.push(`${tagName}[role="${CSS.escape(role)}"][aria-label="${CSS.escape(ariaLabel)}"]`);
+      candidates.push(`[role="${CSS.escape(role)}"][aria-label="${CSS.escape(ariaLabel)}"]`);
+    }
+    if (textContent && textContent.length > 0) {
+      // Note: CSS doesn't have a :text selector, but we'll use this as a hint for the AI/Matcher
+      candidates.push(`${tagName}[role="${CSS.escape(role)}"]`);
+    }
   }
 
-  const tagName = element.tagName.toLowerCase();
+  // 3. Labels (for inputs)
+  if (element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement || element instanceof HTMLSelectElement) {
+    const label = findAssociatedLabel(element);
+    if (label && label.textContent) {
+      const labelText = label.textContent.trim().substring(0, 50);
+      // Again, a semantic hint
+      candidates.push(`label:has-text("${CSS.escape(labelText)}") + ${tagName}`);
+    }
+  }
+
+  // 4. Name attribute
   const name = element.getAttribute('name');
   if (name) {
     candidates.push(`${tagName}[name="${CSS.escape(name)}"]`);
   }
 
-  const role = element.getAttribute('role');
-  if (role) {
-    candidates.push(`${tagName}[role="${CSS.escape(role)}"]`);
+  // 5. Placeholder
+  const placeholder = element.getAttribute('placeholder');
+  if (placeholder) {
+    candidates.push(`${tagName}[placeholder="${CSS.escape(placeholder)}"]`);
   }
 
-  const ariaLabel = element.getAttribute('aria-label');
-  if (ariaLabel) {
-    candidates.push(`${tagName}[aria-label="${CSS.escape(ariaLabel)}"]`);
+  // 6. Stable ID
+  if (isStableId(element.id)) {
+    candidates.push(`#${CSS.escape(element.id)}`);
   }
 
+  // 7. Stable Classes
   if (element.className && typeof element.className === 'string') {
     const stableClasses = element.className
       .trim()
@@ -303,12 +316,42 @@ export function generateSelectorCandidates(element: Element): string[] {
     }
   }
 
+  // 8. Limited Path (Last resort)
   const pathSelector = generateSelector(element);
   if (pathSelector) {
     candidates.push(pathSelector);
   }
 
   return Array.from(new Set(candidates));
+}
+
+/**
+ * Helper to find implicit roles
+ */
+function getImplicitRole(element: Element): string | null {
+  const tag = element.tagName.toLowerCase();
+  const type = element.getAttribute('type');
+
+  if (tag === 'button') return 'button';
+  if (tag === 'a' && element.hasAttribute('href')) return 'link';
+  if (tag === 'input') {
+    if (['button', 'submit', 'reset', 'image'].includes(type || '')) return 'button';
+    if (type === 'checkbox') return 'checkbox';
+    if (type === 'radio') return 'radio';
+    return 'textbox';
+  }
+  return null;
+}
+
+/**
+ * Find label associated with input
+ */
+function findAssociatedLabel(element: HTMLElement): HTMLElement | null {
+  if (element.id) {
+    const label = document.querySelector(`label[for="${CSS.escape(element.id)}"]`);
+    if (label instanceof HTMLElement) return label;
+  }
+  return element.closest('label');
 }
 
 /**
@@ -319,144 +362,56 @@ export function generateSelector(element: Element): string {
     return 'body';
   }
 
-  // 1. Check for high-priority stable attributes (QA-friendly)
-  for (const attr of STABLE_ATTRIBUTES) {
-    const value = element.getAttribute(attr);
-    if (value) {
-      const selector = `${element.tagName.toLowerCase()}[${attr}="${CSS.escape(value)}"]`;
-      if (isUniqueSelector(selector)) {
-        return selector;
-      } else {
-        // If not globally unique (e.g., multiple hidden datepickers), 
-        // try to scope it by building a path up to a unique ancestor.
-        let ancestor = element.parentElement;
-        let scopedPath = selector;
-        while (ancestor && ancestor.tagName.toLowerCase() !== 'html') {
-          let ancestorSelector = ancestor.tagName.toLowerCase();
-          let hasUniqueAncestorAttr = false;
-
-          for (const aAttr of STABLE_ATTRIBUTES) {
-            const aValue = ancestor.getAttribute(aAttr);
-            if (aValue) {
-              ancestorSelector += `[${aAttr}="${CSS.escape(aValue)}"]`;
-              hasUniqueAncestorAttr = true;
-              break;
-            }
-          }
-
-          if (!hasUniqueAncestorAttr && isStableId(ancestor.id)) {
-            ancestorSelector += `#${CSS.escape(ancestor.id)}`;
-            hasUniqueAncestorAttr = true;
-          }
-
-          if (
-            !hasUniqueAncestorAttr &&
-            ancestor.className &&
-            typeof ancestor.className === 'string'
-          ) {
-            const classes = ancestor.className.trim().split(/\s+/).filter(Boolean);
-            const stableClasses = classes.filter(isLikelyStableClassName);
-            if (stableClasses.length > 0) {
-              ancestorSelector += '.' + stableClasses.slice(0, 3).map(c => CSS.escape(c)).join('.');
-              hasUniqueAncestorAttr = true; // Use stable class as a scoping mechanism if nothing else
-            }
-          }
-
-          if (hasUniqueAncestorAttr) {
-            const testScopedSelector = `${ancestorSelector} ${selector}`;
-            try {
-              if (document.querySelectorAll(testScopedSelector).length === 1) {
-                return testScopedSelector; // Successfully scoped to a unique container
-              }
-            } catch (e) {}
-          }
-          ancestor = ancestor.parentElement;
-        }
-      }
+  // 1. Try simple unique attributes first
+  const uniqueAttrs = ['data-testid', 'data-test-id', 'data-qa', 'data-cy', 'id'];
+  for (const attr of uniqueAttrs) {
+    const val = element.getAttribute(attr);
+    if (val && (attr !== 'id' || isStableId(val))) {
+      const sel = attr === 'id' ? `#${CSS.escape(val)}` : `[${attr}="${CSS.escape(val)}"]`;
+      if (isUniqueSelector(sel)) return sel;
     }
   }
 
-  // 2. Use ID if available and unique
-  // Ignore purely numeric or auto-generated looking IDs
-  if (isStableId(element.id)) {
-    const idSelector = `#${CSS.escape(element.id)}`;
-    if (isUniqueSelector(idSelector)) {
-      return idSelector;
-    }
-  }
-
-  // 2.5 Try to use text content for simple leaf nodes (like datepicker numbers)
-  if (
-    element.children.length === 0 &&
-    element.textContent &&
-    element.textContent.trim().length > 0 &&
-    element.textContent.trim().length < 20 // Only use short text, e.g., "15" or "Submit"
-  ) {
-    const textContent = element.textContent.trim();
-    // Use an attribute selector if text is available, as CSS doesn't have a :contains() selector
-    // Fallback to evaluating uniqueness of XPath text equivalent via a custom approach or rely on XPath directly for playback.
-    // For CSS Selector generation, we will fall back to structural paths if attributes and ID fail.
-  }
-
-  // 3. Build path from element to root
+  // 2. Build limited path (max 3 levels)
   const path: string[] = [];
   let current: Element | null = element;
+  let depth = 0;
 
-  while (current && current.tagName.toLowerCase() !== 'html') {
+  while (current && current.tagName.toLowerCase() !== 'html' && depth < 3) {
     let selector = current.tagName.toLowerCase();
-    let hasUniqueAttr = false;
+    
+    // Use ID if stable
+    if (isStableId(current.id)) {
+      selector = `#${CSS.escape(current.id)}`;
+      path.unshift(selector);
+      if (isUniqueSelector(path.join(' > '))) return path.join(' > ');
+      break; // Stop climbing if we hit an ID
+    }
 
-    // Check stable attributes for current element in path
-    for (const attr of STABLE_ATTRIBUTES) {
-      const value = current.getAttribute(attr);
-      if (value) {
-        selector += `[${attr}="${CSS.escape(value)}"]`;
-        hasUniqueAttr = true;
-        break;
+    // Use stable classes
+    const classes = current.className && typeof current.className === 'string' 
+      ? current.className.trim().split(/\s+/).filter(isLikelyStableClassName).slice(0, 2)
+      : [];
+    
+    if (classes.length > 0) {
+      selector += '.' + classes.map(c => CSS.escape(c)).join('.');
+    }
+
+    // Add nth-child only if necessary
+    const currentParent: Element | null = current.parentElement;
+    if (currentParent) {
+      const siblings = Array.from(currentParent.children).filter(c => (c as Element).tagName === current!.tagName);
+      if (siblings.length > 1) {
+        const index = Array.from(currentParent.children).indexOf(current) + 1;
+        selector += `:nth-child(${index})`;
       }
-    }
-
-    if (!hasUniqueAttr && isStableId(current.id)) {
-      selector += `#${CSS.escape(current.id)}`;
-      hasUniqueAttr = true;
-    }
-
-    if (
-      !hasUniqueAttr &&
-      current.className &&
-      typeof current.className === 'string'
-    ) {
-      const classes = current.className.trim().split(/\s+/).filter(Boolean);
-      const stableClasses = classes.filter(isLikelyStableClassName);
-      if (stableClasses.length > 0) {
-        // Use first couple of classes
-        selector +=
-          '.' +
-          stableClasses
-            .slice(0, 3)
-            .map(c => CSS.escape(c))
-            .join('.');
-      }
-    }
-
-    // Append nth-child only when we don't already have a stable anchor
-    const parent = current.parentElement;
-    if (parent && !hasUniqueAttr) {
-      const index = Array.from(parent.children).indexOf(current) + 1;
-      selector += `:nth-child(${index})`;
     }
 
     path.unshift(selector);
-    const currentSelector = path.join(' > ');
-
-    try {
-      // Check if the current constructed path is unique globally
-      if (document.querySelectorAll(currentSelector).length === 1) {
-        return currentSelector;
-      }
-    } catch (e) {}
-
-    current = current.parentElement;
+    if (isUniqueSelector(path.join(' > '))) return path.join(' > ');
+    
+    current = currentParent;
+    depth++;
   }
 
   return path.join(' > ') || '*';
@@ -513,6 +468,8 @@ export function getElementInfo(element: Element): ElementInfo {
 
   // Generate XPath candidates
   const xpathCandidates = generateXPathCandidates(element);
+  const role = element.getAttribute('role') || getImplicitRole(element);
+  const ariaLabel = element.getAttribute('aria-label') || element.getAttribute('aria-labelledby');
 
   return {
     tagName: element.tagName.toLowerCase(),
@@ -520,10 +477,14 @@ export function getElementInfo(element: Element): ElementInfo {
     className: element.className || undefined,
     selector: generateSelector(element),
     selectorCandidates: generateSelectorCandidates(element),
-    xpath: generateXPath(element),
+    xpath: xpathCandidates[0]?.xpath || generateXPath(element),
     xpathCandidates: xpathCandidates.map(c => c.xpath),
     textContent: element.textContent?.trim().substring(0, 100) || undefined,
-    attributes,
+    attributes: {
+      ...attributes,
+      ...(role ? { role } : {}),
+      ...(ariaLabel ? { 'aria-label': ariaLabel } : {}),
+    },
     position: {
       x: rect.left + window.scrollX,
       y: rect.top + window.scrollY,
@@ -555,15 +516,115 @@ function getElementDepth(element: Element): number {
  */
 export function findElement(selector: string): Element | null {
   try {
-    return document.querySelector(selector);
+    return queryAllShadows(selector)[0] || null;
   } catch (error) {
     return null;
   }
 }
 
 /**
- * Check if element is visible and interactable
+ * Recursively find elements including those in Shadow DOMs
  */
+export function queryAllShadows(
+  selector: string,
+  root: Document | Element | ShadowRoot = document
+): Element[] {
+  let results: Element[] = [];
+
+  // Try standard querySelectorAll on the current root
+  try {
+    results = Array.from(root.querySelectorAll(selector));
+  } catch (e) {}
+
+  // Find all shadow hosts under the current root
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_ELEMENT, {
+    acceptNode(node) {
+      return (node as Element).shadowRoot ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_SKIP;
+    },
+  });
+
+  let currentNode = walker.nextNode() as Element | null;
+  while (currentNode) {
+    if (currentNode.shadowRoot) {
+      results = results.concat(queryAllShadows(selector, currentNode.shadowRoot));
+    }
+    currentNode = walker.nextNode() as Element | null;
+  }
+
+  return results;
+}
+
+/**
+ * Check if element is visible and actionable (Playwright-style)
+ */
+export async function isElementActionable(element: Element): Promise<boolean> {
+  if (!element.isConnected) return false;
+
+  const rect = element.getBoundingClientRect();
+  const style = window.getComputedStyle(element);
+
+  const isVisible =
+    rect.width > 0 &&
+    rect.height > 0 &&
+    style.display !== 'none' &&
+    style.visibility !== 'hidden' &&
+    parseFloat(style.opacity) > 0.1;
+
+  if (!isVisible) return false;
+
+  // Check if it's disabled
+  if (element instanceof HTMLElement) {
+    if (element.hasAttribute('disabled') || element.getAttribute('aria-disabled') === 'true') {
+      return false;
+    }
+  }
+
+  // Stability Check: ensure it's not moving
+  const rectBefore = element.getBoundingClientRect();
+  await new Promise(resolve => setTimeout(resolve, 50));
+  const rectAfter = element.getBoundingClientRect();
+
+  if (
+    Math.abs(rectBefore.top - rectAfter.top) > 5 ||
+    Math.abs(rectBefore.left - rectAfter.left) > 5
+  ) {
+    return false; // Element is animating/moving
+  }
+
+  // Occlusion Check: is it covered by something else?
+  const centerX = rect.left + rect.width / 2;
+  const centerY = rect.top + rect.height / 2;
+
+  // If outside viewport, we can't check occlusion with elementFromPoint accurately
+  if (
+    centerX < 0 ||
+    centerY < 0 ||
+    centerX > window.innerWidth ||
+    centerY > window.innerHeight
+  ) {
+    return true; // Assume actionable if outside, we'll scroll later
+  }
+
+  const elAtPoint = document.elementFromPoint(centerX, centerY);
+  if (!elAtPoint) return true;
+
+  // Allow if it's the element itself, a child, or an ancestor
+  if (element.contains(elAtPoint) || elAtPoint.contains(element)) {
+    return true;
+  }
+
+  // Handle Shadow DOM for elementFromPoint
+  if (elAtPoint.shadowRoot) {
+    const shadowEl = elAtPoint.shadowRoot.elementFromPoint(centerX, centerY);
+    if (shadowEl && (element.contains(shadowEl) || shadowEl.contains(element))) {
+      return true;
+    }
+  }
+
+  console.log(`[Actionable] Occlusion check: Element at (${Math.round(centerX)}, ${Math.round(centerY)}) is blocked by:`, elAtPoint);
+  return false; // Covered by something else
+}
+
 export function isElementVisible(element: Element): boolean {
   const rect = element.getBoundingClientRect();
   const style = window.getComputedStyle(element);
