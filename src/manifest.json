@@ -14,7 +14,8 @@
     "notifications",
     "desktopCapture",
     "offscreen",
-    "tabCapture"
+    "tabCapture",
+    "debugger"
   ],
   "offscreen": {
     "page": "offscreen.html"

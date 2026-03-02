@@ -43,6 +43,11 @@ export enum MessageType {
   R2_UPLOAD = 'R2_UPLOAD',
   AGENT_CHAT = 'AGENT_CHAT',
   CLOSE_MAIN_MENU = 'CLOSE_MAIN_MENU',
+  CDP_CLICK = 'CDP_CLICK',
+  CDP_TYPE = 'CDP_TYPE',
+  CDP_ATTACH = 'CDP_ATTACH',
+  CDP_DETACH = 'CDP_DETACH',
+  CDP_SCROLL = 'CDP_SCROLL',
 }
 
 export interface ExtensionMessage {
