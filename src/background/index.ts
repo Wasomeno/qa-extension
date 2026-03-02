@@ -23,6 +23,96 @@ const s3Client = new S3Client({
   },
 });
 
+export class CDPHandler {
+  private static attachedTabs: Set<number> = new Set();
+
+  public static async attach(tabId: number): Promise<void> {
+    if (this.attachedTabs.has(tabId)) return;
+    
+    return new Promise((resolve, reject) => {
+      chrome.debugger.attach({ tabId }, '1.3', () => {
+        if (chrome.runtime.lastError) {
+          reject(chrome.runtime.lastError);
+        } else {
+          this.attachedTabs.add(tabId);
+          resolve();
+        }
+      });
+    });
+  }
+
+  public static async detach(tabId: number): Promise<void> {
+    if (!this.attachedTabs.has(tabId)) return;
+    
+    return new Promise((resolve, reject) => {
+      chrome.debugger.detach({ tabId }, () => {
+        if (chrome.runtime.lastError) {
+          reject(chrome.runtime.lastError);
+        } else {
+          this.attachedTabs.delete(tabId);
+          resolve();
+        }
+      });
+    });
+  }
+
+  public static async sendCommand(tabId: number, method: string, params: any): Promise<any> {
+    await this.attach(tabId);
+    return new Promise((resolve, reject) => {
+      chrome.debugger.sendCommand({ tabId }, method, params, (result) => {
+        if (chrome.runtime.lastError) {
+          reject(chrome.runtime.lastError);
+        } else {
+          resolve(result);
+        }
+      });
+    });
+  }
+
+  public static async click(tabId: number, x: number, y: number): Promise<void> {
+    // Playwright-style click: move, press, release
+    await this.sendCommand(tabId, 'Input.dispatchMouseEvent', {
+      type: 'mousePressed',
+      x,
+      y,
+      button: 'left',
+      clickCount: 1,
+    });
+    await this.sendCommand(tabId, 'Input.dispatchMouseEvent', {
+      type: 'mouseReleased',
+      x,
+      y,
+      button: 'left',
+      clickCount: 1,
+    });
+  }
+
+  public static async type(tabId: number, text: string): Promise<void> {
+    for (const char of text) {
+      await this.sendCommand(tabId, 'Input.dispatchKeyEvent', {
+        type: 'keyDown',
+        text: char,
+        unmodifiedText: char,
+      });
+      await this.sendCommand(tabId, 'Input.dispatchKeyEvent', {
+        type: 'keyUp',
+        text: char,
+        unmodifiedText: char,
+      });
+    }
+  }
+
+  public static async scroll(tabId: number, x: number, y: number, deltaX: number, deltaY: number): Promise<void> {
+    await this.sendCommand(tabId, 'Input.dispatchMouseEvent', {
+      type: 'mouseWheel',
+      x,
+      y,
+      deltaX,
+      deltaY,
+    });
+  }
+}
+
 class BackgroundService {
   private aiProcessor: AIProcessor;
   private qaAgent: QAAgent | null = null;
@@ -718,6 +808,57 @@ class BackgroundService {
       case MessageType.CLOSE_MAIN_MENU:
         this.broadcast({ type: MessageType.CLOSE_MAIN_MENU });
         sendResponse({ success: true });
+        break;
+
+      case MessageType.CDP_ATTACH:
+        try {
+          await CDPHandler.attach(message.data.tabId);
+          sendResponse({ success: true });
+        } catch (e: any) {
+          sendResponse({ success: false, error: e.message });
+        }
+        break;
+
+      case MessageType.CDP_DETACH:
+        try {
+          await CDPHandler.detach(message.data.tabId);
+          sendResponse({ success: true });
+        } catch (e: any) {
+          sendResponse({ success: false, error: e.message });
+        }
+        break;
+
+      case MessageType.CDP_CLICK:
+        try {
+          await CDPHandler.click(message.data.tabId, message.data.x, message.data.y);
+          sendResponse({ success: true });
+        } catch (e: any) {
+          sendResponse({ success: false, error: e.message });
+        }
+        break;
+
+      case MessageType.CDP_TYPE:
+        try {
+          await CDPHandler.type(message.data.tabId, message.data.text);
+          sendResponse({ success: true });
+        } catch (e: any) {
+          sendResponse({ success: false, error: e.message });
+        }
+        break;
+
+      case MessageType.CDP_SCROLL:
+        try {
+          await CDPHandler.scroll(
+            message.data.tabId,
+            message.data.x,
+            message.data.y,
+            message.data.deltaX,
+            message.data.deltaY
+          );
+          sendResponse({ success: true });
+        } catch (e: any) {
+          sendResponse({ success: false, error: e.message });
+        }
         break;
 
       case MessageType.TRACK_INTERACTION:
