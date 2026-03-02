@@ -1,19 +1,35 @@
 import { TestStep } from '@/types/recording';
+import { MessageType } from '@/types/messages';
 import {
-  simulateClick,
-  simulateInput,
   highlightElement,
-  scrollToElement,
   getElementValue,
-  isElementInteractable,
-  findByXPath,
+  isElementActionable,
   findAllByXPath,
-  isElementVisible,
+  queryAllShadows,
 } from '@/utils/dom';
 
 export class Executor {
   private static readonly DEFAULT_TIMEOUT = 30000;
   private static readonly RETRY_DELAY_MS = 300;
+
+  private static async sendCDPMessage(type: MessageType, data: any): Promise<void> {
+    const response = await new Promise<{ success: boolean; error?: string }>(resolve => {
+      chrome.runtime.sendMessage({ type, data }, resolve);
+    });
+    if (!response?.success) {
+      throw new Error(`CDP command failed: ${response?.error || 'Unknown error'}`);
+    }
+  }
+
+  private static async getTabId(): Promise<number> {
+    const response = await new Promise<{ success: boolean; data?: { tabId: number } }>(resolve => {
+      chrome.runtime.sendMessage({ type: MessageType.GET_TAB_ID }, resolve);
+    });
+    if (!response?.success || !response.data?.tabId) {
+      throw new Error('Could not determine current tab ID');
+    }
+    return response.data.tabId;
+  }
 
   public static async waitForPageSettled(
     timeout: number = 15000,
@@ -65,27 +81,41 @@ export class Executor {
   private static async handleClick(
     step: TestStep
   ): Promise<string | undefined> {
+    console.log(`[Executor] Handling click for selectors:`, this.getSelectors(step));
     const element = await this.resolveElement(step, this.DEFAULT_TIMEOUT, true);
     if (!element) {
+      console.error(`[Executor] Click failed: Element not found or actionable.`);
       throw new Error(
         `Click failed: Element not found or not interactable for selectors [${this.getSelectors(step).join(', ')}] after ${this.DEFAULT_TIMEOUT}ms`
       );
     }
 
-    scrollToElement(element);
+    console.log(`[Executor] Element found. Ensuring in viewport...`);
+    await this.ensureElementInViewport(element);
     highlightElement(element, { color: '#4dabf7' }); // Blue for playback
 
     // Brief delay to allow the user to see what's being clicked
     await new Promise(resolve => setTimeout(resolve, 350));
 
     const value = getElementValue(element);
-    simulateClick(element);
+    const rect = element.getBoundingClientRect();
+    const tabId = await this.getTabId();
+
+    console.log(`[Executor] Sending CDP click to (${Math.round(rect.left + rect.width / 2)}, ${Math.round(rect.top + rect.height / 2)})`);
+    await this.sendCDPMessage(MessageType.CDP_CLICK, {
+      tabId,
+      x: Math.round(rect.left + rect.width / 2),
+      y: Math.round(rect.top + rect.height / 2),
+    });
+
     return value;
   }
 
   private static async handleType(step: TestStep): Promise<string | undefined> {
+    console.log(`[Executor] Handling type "${step.value}" for selectors:`, this.getSelectors(step));
     const element = await this.resolveElement(step, this.DEFAULT_TIMEOUT, true);
     if (!element) {
+      console.error(`[Executor] Type failed: Element not found or actionable.`);
       throw new Error(
         `Type failed: Element not found or not interactable for selectors [${this.getSelectors(step).join(', ')}] after ${this.DEFAULT_TIMEOUT}ms`
       );
@@ -97,13 +127,59 @@ export class Executor {
       );
     }
 
-    scrollToElement(element);
+    await this.ensureElementInViewport(element);
     highlightElement(element, { color: '#4dabf7' });
 
     await new Promise(resolve => setTimeout(resolve, 350));
 
-    simulateInput(element, step.value);
+    const rect = element.getBoundingClientRect();
+    const tabId = await this.getTabId();
+
+    console.log(`[Executor] Sending CDP click to focus element...`);
+    // Focus element via CDP click first
+    await this.sendCDPMessage(MessageType.CDP_CLICK, {
+      tabId,
+      x: Math.round(rect.left + rect.width / 2),
+      y: Math.round(rect.top + rect.height / 2),
+    });
+
+    console.log(`[Executor] Sending CDP keystrokes...`);
+    // Send keystrokes
+    await this.sendCDPMessage(MessageType.CDP_TYPE, {
+      tabId,
+      text: step.value,
+    });
+
     return getElementValue(element);
+  }
+
+  private static async ensureElementInViewport(element: Element): Promise<void> {
+    const rect = element.getBoundingClientRect();
+    const inViewport =
+      rect.top >= 0 &&
+      rect.left >= 0 &&
+      rect.bottom <= (window.innerHeight || document.documentElement.clientHeight) &&
+      rect.right <= (window.innerWidth || document.documentElement.clientWidth);
+
+    if (!inViewport) {
+      const tabId = await this.getTabId();
+      // Use CDP mouseWheel to scroll until element is in view
+      // We'll use a simple approach: scroll the center of the viewport to the element
+      const viewportCenterY = window.innerHeight / 2;
+      const elementCenterY = rect.top + rect.height / 2;
+      const deltaY = elementCenterY - viewportCenterY;
+
+      await this.sendCDPMessage(MessageType.CDP_SCROLL, {
+        tabId,
+        x: Math.round(window.innerWidth / 2),
+        y: Math.round(window.innerHeight / 2),
+        deltaX: 0,
+        deltaY: Math.round(deltaY),
+      });
+
+      // Wait for scroll to settle
+      await new Promise(resolve => setTimeout(resolve, 500));
+    }
   }
 
   private static async handleNavigate(
@@ -141,13 +217,23 @@ export class Executor {
       throw new Error(`Select failed: Missing value for 'select' action`);
     }
 
-    scrollToElement(element);
+    await this.ensureElementInViewport(element);
     highlightElement(element, { color: '#4dabf7' });
 
     await new Promise(resolve => setTimeout(resolve, 350));
 
     // Handle standard HTML select
     if (element instanceof HTMLSelectElement) {
+      const tabId = await this.getTabId();
+      const rect = element.getBoundingClientRect();
+      
+      // Click to open select
+      await this.sendCDPMessage(MessageType.CDP_CLICK, {
+        tabId,
+        x: Math.round(rect.left + rect.width / 2),
+        y: Math.round(rect.top + rect.height / 2),
+      });
+
       element.value = step.value;
       element.dispatchEvent(new Event('change', { bubbles: true }));
       element.dispatchEvent(new Event('input', { bubbles: true }));
@@ -156,11 +242,19 @@ export class Executor {
 
     // Try to handle custom combobox (like Ant Design)
     if (element.getAttribute('role') === 'combobox') {
-      simulateClick(element);
+      const tabId = await this.getTabId();
+      const rect = element.getBoundingClientRect();
+
+      await this.sendCDPMessage(MessageType.CDP_CLICK, {
+        tabId,
+        x: Math.round(rect.left + rect.width / 2),
+        y: Math.round(rect.top + rect.height / 2),
+      });
+
       await this.waitForDomQuiet(1000, 200);
 
       // We wait for the listbox/dropdown to appear and try to find the item
-      const optionXPath = `//div[contains(@class, "ant-select-item-option-content") and text()="${step.value}"] | //div[@role="option" and contains(., "${step.value}")]`;
+      const optionXPath = `//div[contains(@class, \"ant-select-item-option-content\") and text()=\"${step.value}\"] | //div[@role=\"option\" and contains(., \"${step.value}\")]`;
       const optionElement = await this.resolveElement(
         { ...step, selector: '', xpath: optionXPath, action: 'click' },
         5000,
@@ -168,17 +262,35 @@ export class Executor {
       );
 
       if (optionElement) {
-        scrollToElement(optionElement);
-        simulateClick(optionElement);
+        await this.ensureElementInViewport(optionElement);
+        const optRect = optionElement.getBoundingClientRect();
+        await this.sendCDPMessage(MessageType.CDP_CLICK, {
+          tabId,
+          x: Math.round(optRect.left + optRect.width / 2),
+          y: Math.round(optRect.top + optRect.height / 2),
+        });
         return step.value;
       }
       
-      throw new Error(`Select failed: Could not find option "${step.value}" in custom combobox`);
+      throw new Error(`Select failed: Could not find option \"${step.value}\" in custom combobox`);
     }
 
     // If it's some other input, try setting its value and triggering change
     if (element instanceof HTMLInputElement) {
-       simulateInput(element, step.value);
+       const tabId = await this.getTabId();
+       const rect = element.getBoundingClientRect();
+
+       await this.sendCDPMessage(MessageType.CDP_CLICK, {
+         tabId,
+         x: Math.round(rect.left + rect.width / 2),
+         y: Math.round(rect.top + rect.height / 2),
+       });
+
+       await this.sendCDPMessage(MessageType.CDP_TYPE, {
+         tabId,
+         text: step.value,
+       });
+
        return getElementValue(element);
     }
     
@@ -203,11 +315,11 @@ export class Executor {
 
     if (step.assertionType === 'not_exists') {
       throw new Error(
-        `Assertion failed: Element should NOT exist for selector "${step.selector}", but it was found.`
+        `Assertion failed: Element should NOT exist for selector \"${step.selector}\", but it was found.`
       );
     }
 
-    scrollToElement(element);
+    await this.ensureElementInViewport(element);
     highlightElement(element, { color: '#51cf66', duration: 1000 }); // Green for success
 
     const actualValue = getElementValue(element);
@@ -215,7 +327,7 @@ export class Executor {
     if (step.assertionType === 'equals' && step.expectedValue !== undefined) {
       if (actualValue !== step.expectedValue) {
         throw new Error(
-          `Assertion failed: Expected value to be "${step.expectedValue}", but it was "${actualValue}"`
+          `Assertion failed: Expected value to be \"${step.expectedValue}\", but it was \"${actualValue}\"`
         );
       }
     }
@@ -223,7 +335,7 @@ export class Executor {
     if (step.assertionType === 'contains' && step.expectedValue !== undefined) {
       if (!actualValue.includes(step.expectedValue)) {
         throw new Error(
-          `Assertion failed: Expected value to contain "${step.expectedValue}", but it was "${actualValue}"`
+          `Assertion failed: Expected value to contain \"${step.expectedValue}\", but it was \"${actualValue}\"`
         );
       }
     }
@@ -254,7 +366,7 @@ export class Executor {
   private static async resolveElement(
     step: TestStep,
     timeout: number,
-    requireInteractable: boolean
+    requireActionable: boolean
   ): Promise<Element | null> {
     const selectors = this.getSelectors(step);
     const xpathSelectors = this.getXPathSelectors(step);
@@ -268,12 +380,17 @@ export class Executor {
     let attempts = 0;
 
     while (Date.now() - start < timeout) {
-      // Try CSS selectors first
+      const elapsed = Date.now() - start;
+      const shouldForce = elapsed > 5000;
+
+      // Try CSS selectors first (including Shadow DOM)
       if (selectors.length > 0) {
         const bestMatch = this.findBestMatch(selectors, step);
         if (bestMatch) {
           lastBest = bestMatch;
-          if (!requireInteractable || isElementInteractable(bestMatch)) {
+          console.log(`[Executor] Found candidate via CSS. Checking actionability (forced=${shouldForce})...`);
+          if (!requireActionable || shouldForce || await isElementActionable(bestMatch)) {
+            if (shouldForce) console.warn(`[Executor] Forcing interaction with occluded/unstable element after 5s.`);
             return bestMatch;
           }
         }
@@ -284,7 +401,9 @@ export class Executor {
         const xpathMatch = this.findBestXPathMatch(xpathSelectors, step);
         if (xpathMatch) {
           lastBest = xpathMatch;
-          if (!requireInteractable || isElementInteractable(xpathMatch)) {
+          console.log(`[Executor] Found candidate via XPath. Checking actionability (forced=${shouldForce})...`);
+          if (!requireActionable || shouldForce || await isElementActionable(xpathMatch)) {
+            if (shouldForce) console.warn(`[Executor] Forcing interaction with occluded/unstable element after 5s.`);
             return xpathMatch;
           }
         }
@@ -298,7 +417,7 @@ export class Executor {
       }
     }
 
-    return requireInteractable ? null : lastBest;
+    return requireActionable ? null : lastBest;
   }
 
   private static findBestXPathMatch(
@@ -341,22 +460,30 @@ export class Executor {
     const hints = step.elementHints;
     const text = (element.textContent || '').trim();
     // XPath selectors are generally more stable, so start with higher base score
-    let score = 25 - selectorPriority * 2 - matchIndex;
-
-    if (isElementInteractable(element)) {
-      score += 4;
-    }
+    let score = 30 - selectorPriority * 5 - matchIndex;
 
     if (hints?.tagName) {
-      score += element.tagName.toLowerCase() === hints.tagName.toLowerCase() ? 6 : -4;
+      score += element.tagName.toLowerCase() === hints.tagName.toLowerCase() ? 10 : -5;
     }
 
     if (hints?.textContent) {
       const normalizedHint = hints.textContent.trim().toLowerCase();
       const normalizedText = text.toLowerCase();
-      if (normalizedHint && normalizedText.includes(normalizedHint.slice(0, 40))) {
-        score += 5;
+      if (normalizedHint && normalizedText === normalizedHint) {
+        score += 20; // Exact text match is very strong
+      } else if (normalizedHint && normalizedText.includes(normalizedHint.slice(0, 40))) {
+        score += 8;
       }
+    }
+
+    if (hints?.attributes) {
+      const highPriorityAttrs = ['data-testid', 'data-test-id', 'data-qa', 'data-cy', 'aria-label', 'role'];
+      highPriorityAttrs.forEach(attr => {
+        const expected = hints.attributes?.[attr];
+        if (expected && element.getAttribute(attr) === expected) {
+          score += 15;
+        }
+      });
     }
 
     if (hints?.parentInfo) {
@@ -401,7 +528,7 @@ export class Executor {
     selectors.forEach((selector, selectorPriority) => {
       let matches: Element[] = [];
       try {
-        matches = Array.from(document.querySelectorAll(selector));
+        matches = queryAllShadows(selector);
       } catch {
         return;
       }
@@ -435,42 +562,37 @@ export class Executor {
   ): number {
     const hints = step.elementHints;
     const text = (element.textContent || '').trim();
-    let score = 20 - selectorPriority * 3 - matchIndex;
-
-    if (isElementInteractable(element)) {
-      score += 4;
-    }
+    let score = 30 - selectorPriority * 5 - matchIndex;
 
     if (hints?.tagName) {
-      score += element.tagName.toLowerCase() === hints.tagName.toLowerCase() ? 6 : -4;
+      score += element.tagName.toLowerCase() === hints.tagName.toLowerCase() ? 10 : -5;
     }
 
     if (hints?.textContent) {
       const normalizedHint = hints.textContent.trim().toLowerCase();
       const normalizedText = text.toLowerCase();
-      if (normalizedHint && normalizedText.includes(normalizedHint.slice(0, 40))) {
-        score += 5;
+      if (normalizedHint && normalizedText === normalizedHint) {
+        score += 20; // Exact text match is very strong
+      } else if (normalizedHint && normalizedText.includes(normalizedHint.slice(0, 40))) {
+        score += 8;
       }
     }
 
     if (hints?.attributes) {
-      const attrsToMatch = [
-        'data-testid',
-        'data-test-id',
-        'data-qa',
-        'data-cy',
-        'name',
-        'role',
-        'aria-label',
-        'type',
-        'id',
-      ];
-
-      attrsToMatch.forEach(attr => {
+      const highPriorityAttrs = ['data-testid', 'data-test-id', 'data-qa', 'data-cy', 'aria-label', 'role'];
+      
+      highPriorityAttrs.forEach(attr => {
         const expected = hints.attributes?.[attr];
-        if (!expected) return;
-        if (element.getAttribute(attr) === expected) {
-          score += 3;
+        if (expected && element.getAttribute(attr) === expected) {
+          score += 15;
+        }
+      });
+
+      const otherAttrs = ['name', 'type', 'id'];
+      otherAttrs.forEach(attr => {
+        const expected = hints.attributes?.[attr];
+        if (expected && element.getAttribute(attr) === expected) {
+          score += 5;
         }
       });
     }
