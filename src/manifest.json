@@ -12,14 +12,8 @@
     "cookies",
     "contextMenus",
     "notifications",
-    "desktopCapture",
-    "offscreen",
-    "tabCapture",
     "debugger"
   ],
-  "offscreen": {
-    "page": "offscreen.html"
-  },
   "host_permissions": [
     "<all_urls>",
     "https://gitlab.com/*",
@@ -53,8 +47,6 @@
         "assets/flowg-logo.png",
         "assets/*",
         "styles/*",
-        "video-viewer.html",
-        "video-viewer.js",
         "recording-detail.html",
         "recording-detail.js",
         "recorder-iframe.html",
