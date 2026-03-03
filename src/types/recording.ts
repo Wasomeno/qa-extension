@@ -73,5 +73,4 @@ export interface TestBlueprint {
   parameters: string[];
   status?: 'processing' | 'ready' | 'failed';
   error?: string;
-  hasVideo?: boolean;
 }
