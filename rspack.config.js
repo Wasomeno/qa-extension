@@ -19,7 +19,6 @@ module.exports = (env, argv) => {
       popup: './src/popup/index.tsx',
       options: './src/options/index.tsx',
       'recorder-iframe': './src/recorder-iframe/index.tsx',
-      'video-viewer': './src/pages/recordings/video-viewer.ts',
       'recording-detail': './src/pages/recordings/standalone.tsx',
       'shadow-dom-styles': './src/styles/shadow-dom.css',
     },
@@ -138,11 +137,6 @@ module.exports = (env, argv) => {
         template: './src/recorder-iframe/index.html',
         filename: 'recorder-iframe.html',
         chunks: ['recorder-iframe', 'vendor'],
-      }),
-      new rspack.HtmlRspackPlugin({
-        template: './src/pages/recordings/video-viewer.html',
-        filename: 'video-viewer.html',
-        chunks: ['video-viewer', 'vendor'],
       }),
       new rspack.HtmlRspackPlugin({
         template: './src/pages/recordings/standalone.html',
