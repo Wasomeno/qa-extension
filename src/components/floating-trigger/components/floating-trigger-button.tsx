@@ -5,8 +5,8 @@ import {
   Pin,
   Menu,
   LogIn,
-  Video as VideoIcon,
-  Video,
+  FileText as FileIcon,
+  FileText,
 } from 'lucide-react';
 import { useKeyboardIsolation } from '@/hooks/use-keyboard-isolation';
 import {
@@ -338,7 +338,7 @@ const FloatingTriggerButton: React.FC<FloatingTriggerButtonProps> = ({
                             }}
                           />
                         )}
-                        <Video className="relative z-10 w-5 h-5 text-gray-700\" />
+                        <FileText className="relative z-10 w-5 h-5 text-gray-700\" />
                       </motion.button>
                     </TooltipTrigger>
                     {!hasActivePopup && (

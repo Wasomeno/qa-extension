@@ -39,24 +39,4 @@ export function downloadJsonFile(content: object, filename: string): void {
   downloadFile(jsonString, filename, 'application/json');
 }
 
-/**
- * Downloads video blob as a file
- */
-export function downloadVideoFile(blob: Blob, filename: string): void {
-  const mimeType = blob.type || 'video/webm';
-  downloadFile(blob, filename, mimeType);
-}
 
-/**
- * Generates a video filename for a blueprint
- */
-export function generateVideoFilename(blueprintName: string, blueprintId: string, mimeType: string = 'video/webm'): string {
-  const sanitizedName = blueprintName
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-|-$/g, '');
-  
-  const isMp4 = mimeType.includes('mp4') || mimeType.includes('h264');
-  const extension = isMp4 ? 'mp4' : 'webm';
-  return `${sanitizedName || 'recording'}-${blueprintId.slice(0, 8)}.${extension}`;
-}

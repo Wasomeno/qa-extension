@@ -8,7 +8,7 @@ import {
   X,
   SquareKanban,
   Bot,
-  Video as VideoIcon,
+  FileText as FileIcon,
   RefreshCw,
 } from 'lucide-react';
 import { useQueryClient, useIsFetching } from '@tanstack/react-query';
@@ -65,7 +65,7 @@ const MENU_ITEMS: MenuItem[] = [
   { id: 'issues', label: 'Issues', icon: List },
   { id: 'boards', label: 'Issue Boards', icon: SquareKanban },
   { id: 'pinned', label: 'Pinned Issues', icon: Pin },
-  { id: 'recordings', label: 'Recordings', icon: VideoIcon },
+  { id: 'recordings', label: 'Recordings', icon: FileIcon },
   { id: 'create-issue', label: 'Create Issue', icon: PlusCircle },
   { id: 'agent', label: 'QA Agent', icon: Bot },
 ];

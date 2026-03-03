@@ -38,7 +38,7 @@ async function request<T>(
     if (!resp.ok) {
       return {
         success: false,
-        error: `GitLab API Error: ${resp.status} ${resp.statusText}`,
+        error: `API Error: ${resp.status} ${resp.statusText}`,
         // message: resp.body,
       };
     }

@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Square, Play } from 'lucide-react';
-import { videoStorage } from '@/services/video-storage';
 import { MessageType } from '@/types/messages';
 import { RawEvent } from '@/types/recording';
 
@@ -11,10 +10,6 @@ const App = () => {
   const [isRecording, setIsRecording] = useState(false);
   const [events, setEvents] = useState<RawEvent[]>([]);
   const scrollRef = useRef<HTMLDivElement>(null);
-
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const streamRef = useRef<MediaStream | null>(null);
-  const recordedChunksRef = useRef<Blob[]>([]);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -28,21 +23,19 @@ const App = () => {
       sender: chrome.runtime.MessageSender,
       sendResponse: (response?: any) => void
     ) => {
-      if (message.type === 'IFRAME_PREPARE_RECORDING') {
-        setTargetRecordingId(message.data?.id || `rec_${Date.now()}`);
+      if (message.type === MessageType.IFRAME_PREPARE_RECORDING) {
+        const id = message.data?.id || `rec_${Date.now()}`;
+        setTargetRecordingId(id);
+        startDomRecording(id);
         sendResponse({ success: true });
         return false;
-      } else if (message.type === 'IFRAME_STOP_RECORDING') {
-        if (
-          mediaRecorderRef.current &&
-          mediaRecorderRef.current.state !== 'inactive'
-        ) {
-          mediaRecorderRef.current.stop();
-        }
+      } else if (message.type === MessageType.IFRAME_STOP_RECORDING) {
         chrome.storage.local.set({ isRecording: false });
+        setIsRecording(false);
+        setTargetRecordingId(null);
         sendResponse({ success: true });
         return false;
-      } else if (message.type === 'IFRAME_LOG_EVENT') {
+      } else if (message.type === MessageType.IFRAME_LOG_EVENT) {
         if (isRecording) {
           setEvents(prev => [...prev, message.data]);
         }
@@ -54,93 +47,31 @@ const App = () => {
     return () => chrome.runtime.onMessage.removeListener(handleMessage);
   }, [isRecording]);
 
-  const startRecording = async () => {
+  const startDomRecording = async (id: string) => {
     try {
-      const stream = await navigator.mediaDevices.getDisplayMedia({
-        video: {
-          displaySurface: 'monitor',
-        },
-        audio: false,
-      });
-
-      streamRef.current = stream;
-      recordedChunksRef.current = [];
-
-      const supportedTypes = [
-        'video/mp4;codecs=h264',
-        'video/mp4',
-        'video/webm;codecs=h264',
-        'video/webm;codecs=vp9',
-        'video/webm',
-      ];
-      const mimeType =
-        supportedTypes.find(type => MediaRecorder.isTypeSupported(type)) ||
-        'video/webm';
-
-      const mediaRecorder = new MediaRecorder(stream, { mimeType });
-      mediaRecorderRef.current = mediaRecorder;
-
-      mediaRecorder.ondataavailable = event => {
-        if (event.data.size > 0) {
-          recordedChunksRef.current.push(event.data);
-        }
-      };
-
-      mediaRecorder.onstop = async () => {
-        const idToSave = targetRecordingId || `rec_${Date.now()}`;
-        const blob = new Blob(recordedChunksRef.current, {
-          type: mediaRecorder.mimeType,
-        });
-        if (blob.size > 0) {
-          try {
-            await videoStorage.saveVideo(idToSave, blob);
-            chrome.runtime
-              .sendMessage({
-                type: 'VIDEO_SAVED',
-                data: { id: idToSave, success: true },
-              })
-              .catch(() => {});
-          } catch (e) {
-            console.error('Error saving video to IndexedDB:', e);
-            chrome.runtime
-              .sendMessage({
-                type: 'VIDEO_SAVED',
-                data: { id: idToSave, success: false, error: 'Failed to save' },
-              })
-              .catch(() => {});
-          }
-        }
-
-        stream.getTracks().forEach(t => t.stop());
-        mediaRecorderRef.current = null;
-        streamRef.current = null;
-        setIsRecording(false);
-        setTargetRecordingId(null);
-        chrome.runtime.sendMessage({ type: 'IFRAME_CLOSED_OVERLAY' });
-      };
-
-      mediaRecorder.start(1000);
       setIsRecording(true);
       setEvents([]);
 
       chrome.runtime.sendMessage({
         type: 'ACTUAL_START_RECORDING',
-        data: { id: targetRecordingId },
+        data: { id },
       });
       chrome.storage.local.set({
         isRecording: true,
-        currentRecordingId: targetRecordingId,
+        currentRecordingId: id,
       });
 
-      stream.getVideoTracks()[0].onended = () => {
-        requestStopRecording();
-      };
-
-      chrome.runtime.sendMessage({ type: 'IFRAME_STARTED_RECORDING' });
+      chrome.runtime.sendMessage({ type: MessageType.IFRAME_STARTED_RECORDING });
     } catch (error) {
-      console.error('Error starting recording:', error);
+      console.error('Error starting DOM recording:', error);
       setTargetRecordingId(null);
-      chrome.runtime.sendMessage({ type: 'IFRAME_CLOSED_OVERLAY' });
+      chrome.runtime.sendMessage({ type: MessageType.IFRAME_CLOSED_OVERLAY });
+    }
+  };
+
+  const startRecording = async () => {
+    if (targetRecordingId) {
+        startDomRecording(targetRecordingId);
     }
   };
 
@@ -150,7 +81,7 @@ const App = () => {
 
   const cancelRecording = () => {
     setTargetRecordingId(null);
-    chrome.runtime.sendMessage({ type: 'IFRAME_CLOSED_OVERLAY' });
+    chrome.runtime.sendMessage({ type: MessageType.IFRAME_CLOSED_OVERLAY });
   };
 
   if (!isRecording && !targetRecordingId) return null;

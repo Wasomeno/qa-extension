@@ -54,30 +54,30 @@ async function initializeRecorder() {
       logger = new EventLogger(IFRAME_ID, event => {
         try {
           chrome.runtime
-            .sendMessage({ type: 'IFRAME_LOG_EVENT', data: event })
+            .sendMessage({ type: MessageType.IFRAME_LOG_EVENT, data: event })
             .catch(() => {});
         } catch (e) {}
       });
 
       chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-        if (message.type === 'OPEN_RECORDING_OVERLAY') {
+        if (message.type === MessageType.OPEN_RECORDING_OVERLAY) {
           // Instead of starting direct, we tell iframe to show the start button
           setIframeStyles('overlay');
           chrome.runtime
             .sendMessage({
-              type: 'IFRAME_PREPARE_RECORDING',
+              type: MessageType.IFRAME_PREPARE_RECORDING,
               data: message.data,
             })
             .catch(() => {});
           sendResponse({ success: true });
-        } else if (message.type === 'IFRAME_STARTED_RECORDING') {
+        } else if (message.type === MessageType.IFRAME_STARTED_RECORDING) {
           // The user actually clicked Start inside the iframe
           if (!isRecording) {
             isRecording = true;
             logger?.start();
             setIframeStyles('recording');
           }
-        } else if (message.type === 'IFRAME_CLOSED_OVERLAY') {
+        } else if (message.type === MessageType.IFRAME_CLOSED_OVERLAY) {
           // The user cancelled or finished
           if (isRecording) {
             isRecording = false;
@@ -91,10 +91,10 @@ async function initializeRecorder() {
           }
           setIframeStyles('hidden');
           chrome.runtime
-            .sendMessage({ type: 'IFRAME_STOP_RECORDING' })
+            .sendMessage({ type: MessageType.IFRAME_STOP_RECORDING })
             .catch(() => {});
           sendResponse({ success: true });
-        } else if (message.type === 'RESIZE_IFRAME') {
+        } else if (message.type === MessageType.RESIZE_IFRAME) {
           if (iframe && isRecording) {
             iframe.style.width = `${message.data.width}px`;
             iframe.style.height = `${message.data.height}px`;
