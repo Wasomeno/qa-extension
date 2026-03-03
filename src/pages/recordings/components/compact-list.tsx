@@ -1,6 +1,6 @@
 import React, { useState, useCallback } from 'react';
 import {
-  Video as VideoIcon,
+  FileText,
   Play,
   Trash2,
   Plus,
@@ -21,7 +21,6 @@ import {
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { getProjects } from '@/api/project';
 import { storageService } from '@/services/storage';
-import { videoStorage } from '@/services/video-storage';
 import { TestBlueprint } from '@/types/recording';
 import { MessageType } from '@/types/messages';
 import { isRestrictedUrl } from '@/utils/domain-matcher';
@@ -91,8 +90,8 @@ export const CompactRecordingsList: React.FC<CompactRecordingsListProps> = ({
   React.useEffect(() => {
     const handleMessage = (message: any) => {
       if (
-        message.type === 'BLUEPRINT_GENERATED' ||
-        message.type === 'BLUEPRINT_PROCESSING'
+        message.type === MessageType.BLUEPRINT_GENERATED ||
+        message.type === MessageType.BLUEPRINT_PROCESSING
       ) {
         refetchLastBlueprint();
       }
@@ -207,10 +206,6 @@ export const CompactRecordingsList: React.FC<CompactRecordingsListProps> = ({
   };
 
   const handleDelete = async (id: string) => {
-    try {
-      await videoStorage.deleteVideo(id);
-    } catch (e) {}
-
     chrome.runtime.sendMessage({
       type: MessageType.DELETE_BLUEPRINT,
       data: { id },
@@ -363,7 +358,7 @@ export const CompactRecordingsList: React.FC<CompactRecordingsListProps> = ({
         ) : filteredRecordings.length === 0 ? (
           <div className="flex flex-col items-center justify-center min-h-[200px] text-center px-6 py-8">
             <div className="w-12 h-12 bg-gray-50 rounded-full flex items-center justify-center mb-4">
-              <VideoIcon className="w-6 h-6 text-gray-300" />
+              <FileText className="w-6 h-6 text-gray-300" />
             </div>
             <p className="text-sm font-medium text-gray-900 mb-1 border-none bg-transparent">
               No recordings found
@@ -403,11 +398,11 @@ export const CompactRecordingsList: React.FC<CompactRecordingsListProps> = ({
                   });
                 }}
               >
-                <div className="flex items-center justify-between mb-1.5">
-                  <span className="font-medium text-sm text-gray-900 truncate pr-2 group-hover:text-red-600 transition-colors">
+                <div className="flex items-center gap-2 mb-1.5">
+                  <span className="font-medium text-sm text-gray-900 truncate group-hover:text-red-600 transition-colors flex-1 min-w-0">
                     {rec.name}
                   </span>
-                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
                     <Button
                       variant="ghost"
                       size="icon"

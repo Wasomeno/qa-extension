@@ -1,5 +1,5 @@
  import React from 'react';
- import { Video as VideoIcon, Play, MoreVertical, Clock, Bot, FileCode, FileJson, Copy, Trash2, Download } from 'lucide-react';
+ import { FileText, Play, MoreVertical, Clock, Bot, FileCode, FileJson, Copy, Trash2, Download } from 'lucide-react';
  import { cn } from '@/lib/utils';
  import { Button } from '@/components/ui/button';
  import { TestBlueprint } from '@/types/recording';
@@ -24,7 +24,6 @@
    onDelete: (e: React.MouseEvent) => void;
    onExportPlaywright: (e: React.MouseEvent) => void;
    onExportJson: (e: React.MouseEvent) => void;
-   onExportVideo: (e: React.MouseEvent) => void;
    onRunInAgent: (e: React.MouseEvent) => void;
    onCopyScript: (e: React.MouseEvent) => void;
    portalContainer?: HTMLElement | null;
@@ -40,7 +39,6 @@
    onDelete,
    onExportPlaywright,
    onExportJson,
-   onExportVideo,
    onRunInAgent,
    onCopyScript,
    portalContainer,
@@ -65,15 +63,6 @@
              <DropdownMenuItem className="gap-2" onClick={onExportPlaywright}>
                <FileCode className="w-4 h-4" /> Playwright Test
              </DropdownMenuItem>
-             {recording.hasVideo ? (
-               <DropdownMenuItem className="gap-2" onClick={onExportVideo}>
-                 <VideoIcon className="w-4 h-4" /> Video Recording
-               </DropdownMenuItem>
-             ) : (
-               <DropdownMenuItem className="gap-2 opacity-50 cursor-not-allowed" disabled>
-                 <VideoIcon className="w-4 h-4" /> No Video
-               </DropdownMenuItem>
-             )}
              <DropdownMenuItem className="gap-2" onClick={onExportJson}>
                <FileJson className="w-4 h-4" /> JSON Data
              </DropdownMenuItem>
@@ -100,7 +89,7 @@
          onClick={onClick}
          onDoubleClick={onDoubleClick}
        >
-         <VideoIcon className="w-5 h-5 text-zinc-600" />
+         <FileText className="w-5 h-5 text-zinc-600" />
          <span className="flex-1 font-medium text-gray-700 truncate">{recording.name}</span>
          <span className="text-xs text-gray-500 w-24 text-right flex items-center justify-end gap-1">
            <Clock className="w-3 h-3" /> {recording.steps.length} steps
@@ -130,7 +119,7 @@
        onDoubleClick={onDoubleClick}
      >
        <div className="aspect-video bg-gray-100 flex items-center justify-center relative overflow-hidden">
-         <VideoIcon className="w-10 h-10 text-gray-300" />
+         <FileText className="w-10 h-10 text-gray-300" />
          <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 flex items-center justify-center transition-all">
            <Button
              size="icon"

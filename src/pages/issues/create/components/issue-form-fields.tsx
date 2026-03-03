@@ -99,7 +99,7 @@ export const IssueFormFields: React.FC<IssueFormFieldsProps> = ({
 
 ---
 
-### Testing Steps: \`(Step can be video or description)\`
+### Testing Steps:
 
 1. [Step 1]
 2. [Step 2]
@@ -119,7 +119,6 @@ export const IssueFormFields: React.FC<IssueFormFieldsProps> = ({
 - Username Login **(required)**
 - Issue Monitoring Line & Link **(required)**
 - cURL _(gunakan pastebin.com)_ **(required)**
-- Video Link
 - Picture Link
 - Sentry Link
 - File Link

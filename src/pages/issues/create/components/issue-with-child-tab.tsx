@@ -9,8 +9,6 @@ import {
 } from '@/components/ui/accordion';
 import { Loader2, Plus, Trash2 } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
-import { uploadProjectFile } from '@/api/project';
-import { videoStorage } from '@/services/video-storage';
 import { CreateIssueWithChildRequest } from '@/api/issue';
 import { useCreateIssueWithChild } from '../hooks/use-create-issue-with-child';
 import { IssueFormFields, IssueFormState } from './issue-form-fields';
@@ -49,35 +47,14 @@ export const IssueWithChildTab: React.FC<IssueWithChildTabProps> = ({
     },
   });
 
-  const processIssueRecording = async (state: IssueFormState, projectId: number): Promise<string> => {
+  const processIssueRecording = async (state: IssueFormState): Promise<string> => {
     if (!state.selectedRecording) return state.description;
 
-    try {
-      const videoBlob = await videoStorage.getVideo(state.selectedRecording.id);
-      if (videoBlob) {
-        const fileName = `${state.selectedRecording.name.replace(/\s+/g, '_')}_${Date.now()}.mp4`;
-        const uploadResult = await uploadProjectFile(projectId, videoBlob, fileName);
-
-        if (uploadResult.success && uploadResult.data?.markdown) {
-          const videoMarkdown = uploadResult.data.markdown;
-          let desc = state.description;
-
-          if (desc.includes('### Evidence')) {
-            return desc.replace(/### Evidence/, `### Evidence\n\n${videoMarkdown}`);
-          } else if (desc.includes('### Notes:')) {
-            return desc.replace(/### Notes:/, `### Evidence\n\n${videoMarkdown}\n\n### Notes:`);
-          } else {
-            return `${desc}\n\n### Evidence\n\n${videoMarkdown}`;
-          }
-        } else {
-          toast.error(uploadResult.error || `Failed to upload recording for ${state.title || 'issue'}`);
-        }
-      }
-    } catch (e) {
-      console.error('Failed to process recording upload:', e);
-      toast.error(`Failed to process recording upload for ${state.title || 'issue'}`);
-    }
-    return state.description;
+    const stepsText = state.selectedRecording.steps
+      .map((s, i) => `${i + 1}. **${s.action}** ${s.value || ''} \`${s.selector}\``)
+      .join('\n');
+    
+    return `${state.description}\n\n### Recorded Interaction Steps\n\n${stepsText}`;
   };
 
   const handleCreateParentAndChildren = async () => {
@@ -101,12 +78,12 @@ export const IssueWithChildTab: React.FC<IssueWithChildTabProps> = ({
 
     setIsUploading(true);
     try {
-      const finalParentDescription = await processIssueRecording(parentIssueState, selectedProject.id);
+      const finalParentDescription = await processIssueRecording(parentIssueState);
       
       const finalChildIssues = await Promise.all(
         childIssues.map(async (child) => ({
           title: child.title,
-          description: await processIssueRecording(child, selectedProject.id),
+          description: await processIssueRecording(child),
           assignee_ids: child.selectedAssignee ? [child.selectedAssignee.id] : [],
           labels: child.selectedLabels.map(l => l.name),
         }))
@@ -226,10 +203,10 @@ export const IssueWithChildTab: React.FC<IssueWithChildTabProps> = ({
             isUploading
           }
         >
-          {(createIssueWithChildMutation.isPending || isUploading) && (
+          {createIssueWithChildMutation.isPending && (
             <Loader2 className="w-4 h-4 mr-2 animate-spin" />
           )}
-          {isUploading ? 'Uploading Recordings...' : `Create Issue with ${childIssues.length} Children`}
+          {createIssueWithChildMutation.isPending ? 'Creating Issues...' : `Create Issue with ${childIssues.length} Children`}
         </Button>
       </div>
     </div>

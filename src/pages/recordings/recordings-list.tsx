@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  Video as VideoIcon,
+  FileText,
   Search,
   Plus,
   Loader2,
@@ -13,7 +13,6 @@ import {
 import { useQuery } from '@tanstack/react-query';
 import { getProjects } from '@/api/project';
 import { storageService } from '@/services/storage';
-import { videoStorage } from '@/services/video-storage';
 import {
   generatePlaywrightTest,
   generateTestFilename,
@@ -23,8 +22,6 @@ import {
 import {
   downloadTextFile,
   downloadJsonFile,
-  downloadVideoFile,
-  generateVideoFilename,
 } from '@/lib/download';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -72,9 +69,9 @@ export const RecordingsPage: React.FC<{
   React.useEffect(() => {
     const handleMessage = (message: any) => {
       if (
-        message.type === 'BLUEPRINT_GENERATED' ||
-        message.type === 'BLUEPRINT_PROCESSING' ||
-        message.type === 'BLUEPRINT_SAVED'
+        message.type === MessageType.BLUEPRINT_GENERATED ||
+        message.type === MessageType.BLUEPRINT_PROCESSING ||
+        message.type === MessageType.BLUEPRINT_SAVED
       ) {
         refetchLastBlueprint();
         refetchBlueprints();
@@ -114,10 +111,6 @@ export const RecordingsPage: React.FC<{
   };
 
   const handleDelete = async (id: string) => {
-    try {
-      await videoStorage.deleteVideo(id);
-    } catch (error) {}
-
     chrome.runtime.sendMessage(
       {
         type: MessageType.DELETE_BLUEPRINT,
@@ -139,29 +132,6 @@ export const RecordingsPage: React.FC<{
   const handleExportJson = (blueprint: TestBlueprint) => {
     const filename = generateBlueprintFilename(blueprint);
     downloadJsonFile(blueprint, filename);
-  };
-
-  const handleExportVideo = (blueprint: TestBlueprint) => {
-    chrome.runtime.sendMessage(
-      { type: MessageType.GET_VIDEO_BLOB, data: { id: blueprint.id } },
-      (response) => {
-        if (response && response.success && response.data && response.data.base64) {
-          const base64 = response.data.base64;
-          const mimeMatch = base64.match(/^data:([^;]+);base64,/);
-          const detectedMime = mimeMatch ? mimeMatch[1] : 'video/mp4';
-          
-          const byteCharacters = atob(base64.split(',')[1] || base64);
-          const byteNumbers = new Array(byteCharacters.length);
-          for (let i = 0; i < byteCharacters.length; i++) {
-            byteNumbers[i] = byteCharacters.charCodeAt(i);
-          }
-          const byteArray = new Uint8Array(byteNumbers);
-          const blob = new Blob([byteArray], { type: detectedMime });
-          const filename = generateVideoFilename(blueprint.name, blueprint.id, detectedMime);
-          downloadVideoFile(blob, filename);
-        }
-      }
-    );
   };
 
   const handleRunInAgent = (blueprint: TestBlueprint) => {
@@ -351,7 +321,7 @@ export const RecordingsPage: React.FC<{
                       {lastBlueprint.status === 'processing' ? (
                         <Loader2 className="w-5 h-5 text-zinc-600 animate-spin" />
                       ) : (
-                        <VideoIcon className="w-5 h-5 text-zinc-600" />
+                        <FileText className="w-5 h-5 text-zinc-600" />
                       )}
                     </div>
                     <div>
@@ -432,7 +402,6 @@ export const RecordingsPage: React.FC<{
                         onDelete={(e) => { e.stopPropagation(); handleDelete(item.id); }}
                         onExportPlaywright={(e) => { e.stopPropagation(); handleExportPlaywright(item); }}
                         onExportJson={(e) => { e.stopPropagation(); handleExportJson(item); }}
-                        onExportVideo={(e) => { e.stopPropagation(); handleExportVideo(item); }}
                         onRunInAgent={(e) => { e.stopPropagation(); handleRunInAgent(item); }}
                         onCopyScript={(e) => { e.stopPropagation(); handleShareCopyScript(item); }}
                         portalContainer={portalContainer}
@@ -441,7 +410,7 @@ export const RecordingsPage: React.FC<{
                   ))}
                   {filteredItems.length === 0 && (
                     <div className="col-span-full py-12 flex flex-col items-center justify-center text-gray-400 bg-gray-50/50 rounded-xl border-2 border-dashed border-gray-200">
-                      <VideoIcon className="w-12 h-12 mb-2 opacity-20" />
+                      <FileText className="w-12 h-12 mb-2 opacity-20" />
                       <p>No recordings found in this folder</p>
                     </div>
                   )}

@@ -3,8 +3,6 @@ import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Loader2 } from 'lucide-react';
 import { CreateIssueRequest } from '@/api/issue';
-import { uploadProjectFile } from '@/api/project';
-import { videoStorage } from '@/services/video-storage';
 import { useCreateIssue } from '../hooks/use-create-issue';
 import { IssueFormFields, IssueFormState } from './issue-form-fields';
 
@@ -51,43 +49,13 @@ export const SingleIssueTab: React.FC<SingleIssueTabProps> = ({
 
     let finalDescription = description;
 
+    // Optional: Add recording steps as text if needed
     if (selectedRecording) {
-      setIsUploading(true);
-      try {
-        const videoBlob = await videoStorage.getVideo(selectedRecording.id);
-        if (videoBlob) {
-          const fileName = `${selectedRecording.name.replace(/\s+/g, '_')}_${Date.now()}.mp4`;
-          const uploadResult = await uploadProjectFile(selectedProject.id, videoBlob, fileName);
-
-          if (uploadResult.success && uploadResult.data?.markdown) {
-            const videoMarkdown = uploadResult.data.markdown;
-            
-            if (finalDescription.includes('### Evidence')) {
-              finalDescription = finalDescription.replace(
-                /### Evidence/,
-                `### Evidence\n\n${videoMarkdown}`
-              );
-            } else {
-              // Try to insert before Notes or at the end
-              if (finalDescription.includes('### Notes:')) {
-                finalDescription = finalDescription.replace(
-                  /### Notes:/,
-                  `### Evidence\n\n${videoMarkdown}\n\n### Notes:`
-                );
-              } else {
-                finalDescription = `${finalDescription}\n\n### Evidence\n\n${videoMarkdown}`;
-              }
-            }
-          } else {
-            toast.error(uploadResult.error || 'Failed to upload recording. Creating issue without it.');
-          }
-        }
-      } catch (e) {
-        console.error('Failed to process recording upload:', e);
-        toast.error('Failed to process recording upload. Creating issue without it.');
-      } finally {
-        setIsUploading(false);
-      }
+      const stepsText = selectedRecording.steps
+        .map((s, i) => `${i + 1}. **${s.action}** ${s.value || ''} \`${s.selector}\``)
+        .join('\n');
+      
+      finalDescription = `${finalDescription}\n\n### Recorded Interaction Steps\n\n${stepsText}`;
     }
 
     const request: CreateIssueRequest = {

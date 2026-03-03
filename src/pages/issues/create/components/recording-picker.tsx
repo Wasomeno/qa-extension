@@ -1,6 +1,6 @@
 import React from 'react';
 import {
-  Video,
+  FileText,
   Check,
   ChevronsUpDown,
   Search,
@@ -61,12 +61,12 @@ export const RecordingPicker: React.FC<RecordingPickerProps> = ({
             </div>
           ) : selectedRecording ? (
             <div className="flex items-center gap-2 truncate">
-              <Video className="w-4 h-4 text-red-500" />
+              <FileText className="w-4 h-4 text-zinc-500" />
               <span className="truncate">{selectedRecording.name}</span>
             </div>
           ) : (
             <div className="flex items-center gap-2 text-gray-400">
-              <Video className="w-4 h-4" />
+              <FileText className="w-4 h-4" />
               <span>Select a recording to include...</span>
             </div>
           )}
@@ -111,7 +111,7 @@ export const RecordingPicker: React.FC<RecordingPickerProps> = ({
                       <Check className="h-3.5 w-3.5 text-blue-600" />
                     )}
                   </div>
-                  <Video className="h-4 w-4 text-red-500 shrink-0" />
+                  <FileText className="h-4 w-4 text-zinc-500 shrink-0" />
                   <div className="flex flex-col min-w-0">
                     <span className="truncate font-medium">
                       {recording.name}

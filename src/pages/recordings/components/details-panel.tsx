@@ -1,5 +1,5 @@
  import React from 'react';
- import { X, Video as VideoIcon, Clock, Calendar, Hash, FileCode, Play, Bot, Trash2 } from 'lucide-react';
+ import { X, FileText, Clock, Calendar, Hash, FileCode, Play, Bot, Trash2 } from 'lucide-react';
  import { Button } from '@/components/ui/button';
  import { ScrollArea } from '@/components/ui/scroll-area';
  import { Separator } from '@/components/ui/separator';
@@ -25,12 +25,12 @@
  }) => {
    if (!recording) {
      return (
-       <div className="h-full flex flex-col items-center justify-center p-6 text-center text-gray-500 bg-white">
-         <div className="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center mb-4">
-           <VideoIcon className="w-8 h-8 text-gray-300" />
+       <div className="h-full flex flex-col items-center justify-center p-6 text-center text-gray-400 bg-white">
+         <div className="w-16 h-16 bg-zinc-50 rounded-full flex items-center justify-center mb-4 border-2 border-dashed border-zinc-100">
+           <FileText className="w-8 h-8 opacity-20" />
          </div>
-         <p className="font-medium text-gray-900">Select an item</p>
-         <p className="text-sm mt-1">Select a recording or project folder to see more details.</p>
+         <p className="font-semibold text-zinc-900">Select an item</p>
+         <p className="text-xs mt-1 leading-relaxed max-w-[200px]">Select a recording or project folder to see more details.</p>
        </div>
      );
    }
@@ -46,8 +46,8 @@
  
        <ScrollArea className="flex-1">
          <div className="p-4 space-y-6">
-           <div className="aspect-video bg-gray-100 rounded-lg flex items-center justify-center overflow-hidden border border-gray-200">
-             <VideoIcon className="w-12 h-12 text-gray-300" />
+           <div className="aspect-video bg-zinc-50 rounded-lg flex items-center justify-center overflow-hidden border border-zinc-200 border-dashed">
+             <FileText className="w-12 h-12 text-zinc-300 opacity-20" />
            </div>
  
            <div>

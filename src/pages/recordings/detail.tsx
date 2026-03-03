@@ -1,17 +1,15 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import {
   ChevronLeft,
   Play,
   Clock,
   Database,
-  Video as VideoIcon,
   CheckCircle2,
   MousePointer2,
   Type,
   Navigation,
   ListFilter,
   AlertCircle,
-  RefreshCw,
 } from 'lucide-react';
 import { useNavigation } from '@/contexts/navigation-context';
 import { TestBlueprint } from '@/types/recording';
@@ -29,7 +27,6 @@ export const RecordingDetailPage: React.FC<RecordingDetailProps> = ({
   blueprint,
 }) => {
   const { pop } = useNavigation();
-  const [retryCount, setRetryCount] = useState(0);
 
   const handleRunTest = () => {
     chrome.runtime.sendMessage({
@@ -55,8 +52,6 @@ export const RecordingDetailPage: React.FC<RecordingDetailProps> = ({
     }
   };
 
-  const videoViewerUrl = chrome.runtime.getURL(`video-viewer.html?id=${blueprint.id}&t=${retryCount}`);
-
   return (
     <div className="flex flex-col h-full bg-white">
       <header className="px-4 py-3 border-b flex items-center gap-3 bg-white sticky top-0 z-10">
@@ -76,32 +71,6 @@ export const RecordingDetailPage: React.FC<RecordingDetailProps> = ({
 
       <ScrollArea className="flex-1">
         <div className="p-4 space-y-6">
-          {/* Video Section */}
-          <section className="space-y-3">
-            <div className="flex items-center justify-between">
-              <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider flex items-center gap-2">
-                <VideoIcon className="w-4 h-4" />
-                Recorded Session
-              </h2>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-7 text-[10px] gap-1"
-                onClick={() => setRetryCount(prev => prev + 1)}
-              >
-                <RefreshCw className="w-3 h-3" />
-                Reload Video
-              </Button>
-            </div>
-            <div className="aspect-video bg-gray-900 rounded-lg overflow-hidden border border-gray-200 flex items-center justify-center relative group">
-              <iframe
-                src={videoViewerUrl}
-                className="w-full h-full border-none"
-                allow="autoplay"
-              />
-            </div>
-          </section>
-
           {/* Description */}
           {blueprint.description && (
             <section className="space-y-2">
