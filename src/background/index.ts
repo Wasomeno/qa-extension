@@ -4,12 +4,11 @@ import {
   BackgroundFetchRequest,
 } from '../types/messages';
 import { AIProcessor } from '../services/ai-processor';
-import { videoStorage } from '../services/video-storage';
 import { RawEvent } from '../types/recording';
 import { SAMPLE_BLUEPRINT } from '../lib/seed-data';
 import { isRestrictedUrl } from '../utils/domain-matcher';
 import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
-import { QAAgent } from '../agent/agent/qa-agent';
+
 
 const accountId = process.env.R2_ACCOUNT_ID;
 const bucketName = process.env.R2_BUCKET_NAME;
@@ -115,7 +114,6 @@ export class CDPHandler {
 
 class BackgroundService {
   private aiProcessor: AIProcessor;
-  private qaAgent: QAAgent | null = null;
   private recordingEvents: RawEvent[] = [];
   private pendingPlaybacks: Map<string, (result: any) => void> = new Map();
   private isStartingRecording = false;
@@ -123,15 +121,6 @@ class BackgroundService {
   constructor() {
     this.aiProcessor = new AIProcessor(__GOOGLE_API_KEY__);
     this.setupListeners();
-    this.initAgent();
-  }
-
-  private initAgent() {
-    if (__GOOGLE_API_KEY__) {
-      this.qaAgent = new QAAgent({
-        googleApiKey: __GOOGLE_API_KEY__,
-      });
-    }
   }
 
   private async uploadToR2(
@@ -149,33 +138,6 @@ class BackgroundService {
     await s3Client.send(command);
     const publicDomain = process.env.R2_PUBLIC_DOMAIN || 'YOUR_R2_PUBLIC_DOMAIN_HERE';
     return `${publicDomain}/${fileName}`;
-  }
-
-  private async uploadVideoToR2(id: string): Promise<string | null> {
-    try {
-      const blob = await videoStorage.getVideo(id);
-      if (!blob) {
-        console.warn(`[Background] No video found in local storage for ${id}`);
-        return null;
-      }
-
-      console.log(`[Background] Uploading video for ${id} to R2...`);
-      const arrayBuffer = await blob.arrayBuffer();
-      const data = new Uint8Array(arrayBuffer);
-      const fileName = `${id}.webm`;
-
-      const url = await this.uploadToR2(data, fileName, blob.type);
-      console.log(`[Background] Video uploaded to R2: ${url}`);
-
-      // After successful upload, delete the local copy
-      await videoStorage.deleteVideo(id);
-      console.log(`[Background] Local video copy deleted for ${id}`);
-
-      return url;
-    } catch (e) {
-      console.error(`[Background] Failed to upload video for ${id}:`, e);
-      return null;
-    }
   }
 
   private broadcast(payload: any) {
@@ -268,52 +230,6 @@ class BackgroundService {
     chrome.runtime.onConnect.addListener(port => {
       if (!port) return;
       
-      if (port.name === 'agent-chat') {
-        port.onMessage.addListener(async msg => {
-          if (msg.type !== MessageType.AGENT_CHAT || !this.qaAgent) return;
-          
-          try {
-            const { content, attachments } = msg.data || {};
-            let processedAttachments = attachments;
-
-            if (attachments && attachments.length > 0) {
-              processedAttachments = await Promise.all(
-                attachments.map(async (att: any) => {
-                  if (att.data) {
-                    // Manual base64 to Blob conversion to avoid CSP issues with fetch(data:)
-                    const byteCharacters = atob(att.data);
-                    const byteNumbers = new Array(byteCharacters.length);
-                    for (let i = 0; i < byteCharacters.length; i++) {
-                      byteNumbers[i] = byteCharacters.charCodeAt(i);
-                    }
-                    const byteArray = new Uint8Array(byteNumbers);
-                    const blob = new Blob([byteArray], { type: att.mimeType });
-
-                    // Upload to Google File API
-                    const uploaded = await this.qaAgent!.uploadFile(blob, {
-                      mimeType: att.mimeType,
-                    });
-                    return { mimeType: att.mimeType, fileUri: uploaded.uri };
-                  }
-                  return att;
-                })
-              );
-            }
-
-            const stream = this.qaAgent.chat(content, {
-              attachments: processedAttachments,
-            });
-            
-            for await (const event of stream) {
-              port.postMessage(event);
-            }
-          } catch (e: any) {
-            port.postMessage({ type: 'error', message: e?.message || 'Agent chat failed' });
-          }
-        });
-        return;
-      }
-
       if (port.name !== 'bridge') return;
       port.onMessage.addListener(async msg => {
         let _reqId: string | undefined;
@@ -398,15 +314,7 @@ class BackgroundService {
       this.setupContextMenus();
     });
 
-    // Global relay for offscreen logs
-    chrome.runtime.onMessage.addListener(message => {
-      if (message.type === 'OFFSCREEN_LOG') {
-        console.log(
-          `[Offscreen Relay] ${message.data.message}`,
-          ...(message.data.args || [])
-        );
-      }
-    });
+
 
     // Listen for tab updates
     chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
@@ -568,7 +476,7 @@ class BackgroundService {
           // Clear last blueprint after saving
           await chrome.storage.local.remove('lastBlueprint');
 
-          this.broadcast({ type: 'BLUEPRINT_SAVED', data: { blueprint } });
+          this.broadcast({ type: MessageType.BLUEPRINT_SAVED, data: { blueprint } });
           sendResponse({ success: true, data: { blueprint } });
         } catch (e: any) {
           sendResponse({ success: false, error: e?.message });
@@ -594,32 +502,7 @@ class BackgroundService {
         }
         break;
 
-      case MessageType.GET_VIDEO_BLOB:
-        try {
-          const { id } = message.data || {};
-          if (!id) {
-            sendResponse({ success: false, error: 'Missing ID' });
-            return;
-          }
-          const blob = await videoStorage.getVideo(id);
-          if (!blob) {
-            sendResponse({ success: false, error: 'Video not found' });
-            return;
-          }
-          // Convert blob to base64 for messaging
-          const reader = new FileReader();
-          reader.onloadend = () => {
-            sendResponse({ success: true, data: { base64: reader.result } });
-          };
-          reader.onerror = () => {
-            sendResponse({ success: false, error: 'Failed to read blob' });
-          };
-          reader.readAsDataURL(blob);
-          return true; // Keep channel open for async response
-        } catch (e: any) {
-          sendResponse({ success: false, error: e?.message });
-        }
-        break;
+
 
       case MessageType.OPEN_URL:
         try {
@@ -874,6 +757,25 @@ class BackgroundService {
         sendResponse({ success: true });
         break;
 
+      case MessageType.IFRAME_CLOSED_OVERLAY:
+      case MessageType.IFRAME_STARTED_RECORDING:
+      case MessageType.IFRAME_PREPARE_RECORDING:
+      case MessageType.IFRAME_STOP_RECORDING:
+      case MessageType.IFRAME_LOG_EVENT:
+      case MessageType.RESIZE_IFRAME:
+        // Relay to the tab where it came from
+        if (sender.tab?.id) {
+          this.notifyTab(sender.tab.id, message);
+        }
+        // Also relay to extension components (popup, options page)
+        try {
+          chrome.runtime.sendMessage(message, () => {
+            void chrome.runtime.lastError;
+          });
+        } catch {}
+        sendResponse({ success: true });
+        break;
+
       default:
       // Forward to content script if needed or ignore
     }
@@ -960,20 +862,6 @@ class BackgroundService {
       chrome.tabs.onUpdated.addListener(listener);
     });
   }
-  private async setupOffscreen() {
-    const existingContexts = await (chrome.runtime as any).getContexts({
-      contextTypes: ['OFFSCREEN_DOCUMENT'],
-    });
-
-    if (existingContexts.length > 0) return;
-
-    await chrome.offscreen.createDocument({
-      url: 'offscreen.html',
-      reasons: [chrome.offscreen.Reason.USER_MEDIA],
-      justification: 'Recording test execution evidence',
-    });
-  }
-
   private async startRecordingFlow(
     projectId: number | undefined,
     targetTabId: number,
@@ -992,24 +880,6 @@ class BackgroundService {
       console.log(
         `[Background] Starting recording session: ${currentRecordingId} for tab ${targetTabId}`
       );
-
-      // For audit/headless recordings, we use offscreen document + tabCapture
-      if (currentRecordingId.startsWith('audit-')) {
-        await this.setupOffscreen();
-        
-        // Get stream for the specific playback tab
-        const streamId = await new Promise<string>((resolve, reject) => {
-          chrome.tabCapture.getMediaStreamId({ targetTabId }, (id) => {
-            if (chrome.runtime.lastError) reject(chrome.runtime.lastError);
-            else resolve(id);
-          });
-        });
-
-        chrome.runtime.sendMessage({
-          type: 'START_OFFSCREEN_RECORDING',
-          data: { streamId, id: currentRecordingId }
-        });
-      }
 
       // 1. Immediate State
       this.recordingEvents = [];
@@ -1049,16 +919,15 @@ class BackgroundService {
       name: `Recording ${new Date().toLocaleTimeString()}`,
       steps: [],
       status: 'processing',
-      hasVideo: false,
     };
     await chrome.storage.local.set({ lastBlueprint: processingBlueprint });
     this.broadcast({
-      type: 'BLUEPRINT_PROCESSING',
+      type: MessageType.BLUEPRINT_PROCESSING,
       data: { blueprint: processingBlueprint },
     });
     // Explicitly notify the active tab so content scripts (compact-list) update immediately
     await this.notifyTab(tab?.id, {
-      type: 'BLUEPRINT_PROCESSING',
+      type: MessageType.BLUEPRINT_PROCESSING,
       data: { blueprint: processingBlueprint },
     });
 
@@ -1134,21 +1003,6 @@ class BackgroundService {
     // Sort by timestamp
     allEvents.sort((a, b) => a.timestamp - b.timestamp);
 
-    // Check if we already know there's no video (due to permission error)
-    const noVideoResult = await chrome.storage.local.get([
-      `no_video_${tempId}`,
-    ]);
-    const skipVideo = noVideoResult[`no_video_${tempId}`];
-
-    // Tell Offscreen Document to stop
-    if (!skipVideo) {
-      console.log('[Background] Signaling Offscreen Document to stop...');
-      chrome.runtime.sendMessage({
-        type: 'STOP_OFFSCREEN_RECORDING',
-        data: { id: tempId },
-      });
-    }
-
     // 3. Generate blueprint if we have events
     if (allEvents.length > 0) {
       try {
@@ -1168,16 +1022,15 @@ class BackgroundService {
             },
           })),
           status: 'processing',
-          hasVideo: !skipVideo,
         } as any;
 
         await chrome.storage.local.set({ lastBlueprint: tempBlueprint });
         this.broadcast({
-          type: 'BLUEPRINT_PROCESSING',
+          type: MessageType.BLUEPRINT_PROCESSING,
           data: { blueprint: tempBlueprint },
         });
         await this.notifyTab(tab?.id, {
-          type: 'BLUEPRINT_PROCESSING',
+          type: MessageType.BLUEPRINT_PROCESSING,
           data: { blueprint: tempBlueprint },
         });
 
@@ -1187,18 +1040,6 @@ class BackgroundService {
 
         // Generate blueprint
         const blueprint = await this.aiProcessor.generateBlueprint(allEvents);
-
-        // Check directly if video exists in storage (message passing was unreliable)
-        let hasVideo = false;
-        if (!skipVideo) {
-          try {
-            const videoBlob = await videoStorage.getVideo(tempId);
-            hasVideo = !!videoBlob;
-            console.log(`[Background] Video check for ${tempId}: ${hasVideo ? 'found' : 'not found'}`);
-          } catch (e) {
-            console.error('[Background] Failed to check video:', e);
-          }
-        }
 
         const enrichedSteps = (blueprint.steps || []).map((step, index) => {
           const fallbackEvent = allEvents[index];
@@ -1259,25 +1100,17 @@ class BackgroundService {
           steps: enrichedSteps,
           id: tempId,
           status: 'ready',
-          hasVideo,
         };
         await chrome.storage.local.set({ lastBlueprint: finalBlueprint });
 
         this.broadcast({
-          type: 'BLUEPRINT_GENERATED',
+          type: MessageType.BLUEPRINT_GENERATED,
           data: { blueprint: finalBlueprint },
         });
         await this.notifyTab(tab?.id, {
-          type: 'BLUEPRINT_GENERATED',
+          type: MessageType.BLUEPRINT_GENERATED,
           data: { blueprint: finalBlueprint },
         });
-
-        // Auto-upload to R2 if video exists
-        if (hasVideo) {
-          this.uploadVideoToR2(tempId).catch(err => {
-            console.error('[Background] Auto-upload to R2 failed:', err);
-          });
-        }
       } catch (e: any) {
         console.error('[Background] Final processing failed:', e);
         const result = await chrome.storage.local.get(['currentRecordingId']);
@@ -1289,15 +1122,14 @@ class BackgroundService {
           steps: [],
           status: 'failed',
           error: e.message,
-          hasVideo: !skipVideo,
         } as any;
         await chrome.storage.local.set({ lastBlueprint: failedBlueprint });
         this.broadcast({
-          type: 'BLUEPRINT_GENERATED',
+          type: MessageType.BLUEPRINT_GENERATED,
           data: { blueprint: failedBlueprint },
         });
         await this.notifyTab(tab?.id, {
-          type: 'BLUEPRINT_GENERATED',
+          type: MessageType.BLUEPRINT_GENERATED,
           data: { blueprint: failedBlueprint },
         });
       }
@@ -1305,11 +1137,11 @@ class BackgroundService {
       console.warn('[Background] No events captured, clearing lastBlueprint');
       await chrome.storage.local.remove('lastBlueprint');
       this.broadcast({
-        type: 'BLUEPRINT_GENERATED',
+        type: MessageType.BLUEPRINT_GENERATED,
         data: { blueprint: null },
       });
       await this.notifyTab(tab?.id, {
-        type: 'BLUEPRINT_GENERATED',
+        type: MessageType.BLUEPRINT_GENERATED,
         data: { blueprint: null },
       });
 
@@ -1321,26 +1153,10 @@ class BackgroundService {
       });
     }
 
-    // Close offscreen document after everything is done
-    if (!skipVideo) {
-      try {
-        const existingContexts = await (chrome.runtime as any).getContexts({
-          contextTypes: ['OFFSCREEN_DOCUMENT'],
-        });
-        if (existingContexts.length > 0) {
-          console.log('[Background] Closing offscreen document');
-          await chrome.offscreen.closeDocument();
-        }
-      } catch (closeError) {
-        console.error('[Background] Failed to close offscreen:', closeError);
-      }
-    }
-
     this.recordingEvents = [];
     await chrome.storage.session.remove('currentRecording');
     await chrome.storage.local.remove([
       'currentRecordingId',
-      `no_video_${tempId}`,
     ]);
   }
 }

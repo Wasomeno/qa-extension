@@ -137,7 +137,7 @@ export const AgentPage: React.FC<{ portalContainer?: HTMLElement | null }> = ({
             animate={{ y: 0, opacity: 1 }}
             className="relative"
           >
-            <ChatInput onSend={sendMessage} isLoading={isAgentLoading} />
+            <ChatInput onSend={(val) => sendMessage(val)} isLoading={isAgentLoading} />
             {!isAgentLoading && messages.length === 1 && (
               <div className="absolute -top-12 left-0 right-0 flex justify-center pointer-events-none">
                 <motion.div
