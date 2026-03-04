@@ -643,12 +643,10 @@ class BackgroundService {
           });
 
           // Send message to start
-          setTimeout(() => {
-            chrome.tabs.sendMessage(tab.id!, {
-              type: MessageType.START_PLAYBACK,
-              data: { blueprint, playbackTabId: tab.id },
-            });
-          }, 500);
+          chrome.tabs.sendMessage(tab.id!, {
+            type: MessageType.START_PLAYBACK,
+            data: { blueprint, playbackTabId: tab.id },
+          });
 
           if (waitForCompletion) {
             this.pendingPlaybacks.set(blueprint.id, sendResponse);
