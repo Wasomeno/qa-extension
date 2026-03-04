@@ -39,7 +39,9 @@ import { ChildIssuesList } from '@/pages/issues/detail/components/child-issues-l
 import { useIssueCommentMutations } from '@/pages/issues/hooks/use-issue-comment-mutations';
 
 interface IssueDetailPageProps {
-  issue: Issue;
+  issue?: Issue;
+  issueId?: number;
+  projectId?: number;
   onBack: () => void;
   portalContainer?: HTMLElement | null;
 }
@@ -152,6 +154,8 @@ const EditableSection: React.FC<EditableSectionProps> = ({
 
 export const IssueDetailPage: React.FC<IssueDetailPageProps> = ({
   issue,
+  issueId: propIssueId,
+  projectId: propProjectId,
   onBack,
   portalContainer,
 }) => {
@@ -159,12 +163,12 @@ export const IssueDetailPage: React.FC<IssueDetailPageProps> = ({
   const containerRef = React.useRef<HTMLDivElement>(null);
 
   const queryClient = useQueryClient();
-  const projectId = issue.project_id;
-  const issueId = issue.iid;
+  const projectId = propProjectId || issue?.project_id;
+  const issueId = propIssueId || issue?.iid;
 
   const { data: fetchedIssueData, isLoading: isFetching } = useGetIssue(
-    projectId,
-    issueId
+    projectId!,
+    issueId!
   );
   const currentIssue = fetchedIssueData?.data || issue;
 
@@ -177,12 +181,12 @@ export const IssueDetailPage: React.FC<IssueDetailPageProps> = ({
   const { togglePin, isPinned } = usePinnedIssues();
 
   // Form States
-  const [description, setDescription] = useState(issue.description);
+  const [description, setDescription] = useState(currentIssue?.description || '');
   const [status, setStatus] = useState<string>(
-    issue.state === 'closed' ? 'closed' : 'opened'
+    currentIssue?.state === 'closed' ? 'closed' : 'opened'
   );
 
-  const comments = useGetIssueComments(issue.project_id, issue.iid);
+  const comments = useGetIssueComments(projectId!, issueId!);
 
   // Comments Mutation Logic
   const [newComment, setNewComment] = useState('');
@@ -196,7 +200,7 @@ export const IssueDetailPage: React.FC<IssueDetailPageProps> = ({
     isCreating,
     isUpdating,
     isDeleting,
-  } = useIssueCommentMutations(projectId, issueId);
+  } = useIssueCommentMutations(projectId!, issueId!);
 
   const handleCreateComment = async () => {
     if (!newComment.trim()) return;
@@ -218,30 +222,30 @@ export const IssueDetailPage: React.FC<IssueDetailPageProps> = ({
 
   // Adapting to single assignee for now as per previous code assumption, though API supports array
   const [selectedAssignee, setSelectedAssignee] = useState(
-    issue.assignees?.[0]
+    currentIssue?.assignees?.[0]
       ? {
-          id: String(issue.assignees[0].id),
-          name: issue.assignees[0].name,
-          username: issue.assignees[0].username,
-          avatarUrl: issue.assignees[0].avatar_url,
-          webUrl: issue.assignees[0].web_url,
-          state: issue.assignees[0].state,
+          id: String(currentIssue.assignees[0].id),
+          name: currentIssue.assignees[0].name,
+          username: currentIssue.assignees[0].username,
+          avatarUrl: currentIssue.assignees[0].avatar_url,
+          webUrl: currentIssue.assignees[0].web_url,
+          state: currentIssue.assignees[0].state,
         }
       : undefined
   );
 
   const [selectedLabels, setSelectedLabels] = useState(
-    issue.label_details
-      ? issue.label_details.map(l => ({
+    currentIssue?.label_details
+      ? currentIssue.label_details.map(l => ({
           id: String(l.id),
           name: l.name,
           color: l.color,
           textColor: l.text_color,
           description: l.description,
         }))
-      : (issue.labels || []).map(l => ({
-          id: l,
-          name: l,
+      : (currentIssue?.labels || []).map(l => ({
+          id: String(l),
+          name: String(l),
           color: '#ccc',
           textColor: '#000',
           description: '',
@@ -250,9 +254,9 @@ export const IssueDetailPage: React.FC<IssueDetailPageProps> = ({
 
   // Data Fetching for Pickers
   const { data: members, isLoading: isLoadingMembers } =
-    useGetProjectMembers(projectId);
+    useGetProjectMembers(projectId!);
   const { data: labels, isLoading: isLoadingLabels } =
-    useGetProjectLabels(projectId);
+    useGetProjectLabels(projectId!);
 
   useEffect(() => {
     if (fetchedIssueData?.data) {
@@ -291,7 +295,39 @@ export const IssueDetailPage: React.FC<IssueDetailPageProps> = ({
     }
   }, [fetchedIssueData]);
 
-  const statusStyle = statusConfig[issue.state] || statusConfig.opened;
+  if (isFetching && !currentIssue) {
+    return (
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        className="flex-1 flex items-center justify-center bg-white"
+      >
+        <div className="space-y-4 w-full max-w-2xl px-8">
+          <Skeleton className="h-8 w-3/4" />
+          <Skeleton className="h-32 w-full" />
+          <div className="grid grid-cols-2 gap-4">
+            <Skeleton className="h-20 w-full" />
+            <Skeleton className="h-20 w-full" />
+          </div>
+        </div>
+      </motion.div>
+    );
+  }
+
+  if (!currentIssue) {
+    return (
+      <div className="flex-1 flex flex-col items-center justify-center bg-white gap-4 p-8">
+        <div className="text-gray-400">Issue not found</div>
+        <Button onClick={onBack} variant="outline" size="sm">
+          <ArrowLeft className="w-4 h-4 mr-2" />
+          Go Back
+        </Button>
+      </div>
+    );
+  }
+
+  const statusStyle = statusConfig[currentIssue.state] || statusConfig.opened;
 
   const handleUpdate = async () => {
     if (!editingField) return;
@@ -299,19 +335,19 @@ export const IssueDetailPage: React.FC<IssueDetailPageProps> = ({
     setIsSaving(true);
     try {
       if (editingField === 'description') {
-        await updateIssue(projectId, issueId, { description });
+        await updateIssue(projectId!, issueId!, { description });
         toast.success('Description updated');
       } else if (editingField === 'status') {
         const event = status === 'closed' ? 'close' : 'reopen';
-        await updateIssue(projectId, issueId, { state_event: event });
+        await updateIssue(projectId!, issueId!, { state_event: event });
         toast.success('Status updated');
       } else if (editingField === 'assignee') {
-        await updateIssue(projectId, issueId, {
+        await updateIssue(projectId!, issueId!, {
           assignee_ids: selectedAssignee ? [parseInt(selectedAssignee.id)] : [],
         });
         toast.success('Assignee updated');
       } else if (editingField === 'labels') {
-        await updateIssue(projectId, issueId, {
+        await updateIssue(projectId!, issueId!, {
           labels: selectedLabels.map(l => l.name).join(','),
         });
         toast.success('Labels updated');
@@ -331,32 +367,32 @@ export const IssueDetailPage: React.FC<IssueDetailPageProps> = ({
   const cancelEdit = () => {
     setEditingField(null);
     // Reset states
-    setDescription(issue.description);
-    setStatus(issue.state === 'closed' ? 'closed' : 'opened');
+    setDescription(currentIssue.description);
+    setStatus(currentIssue.state === 'closed' ? 'closed' : 'opened');
     setSelectedAssignee(
-      issue.assignees?.[0]
+      currentIssue.assignees?.[0]
         ? {
-            id: String(issue.assignees[0].id),
-            name: issue.assignees[0].name,
-            username: issue.assignees[0].username,
-            avatarUrl: issue.assignees[0].avatar_url,
-            webUrl: issue.assignees[0].web_url,
-            state: issue.assignees[0].state,
+            id: String(currentIssue.assignees[0].id),
+            name: currentIssue.assignees[0].name,
+            username: currentIssue.assignees[0].username,
+            avatarUrl: currentIssue.assignees[0].avatar_url,
+            webUrl: currentIssue.assignees[0].web_url,
+            state: currentIssue.assignees[0].state,
           }
         : undefined
     );
     setSelectedLabels(
-      issue.label_details
-        ? issue.label_details.map(l => ({
+      currentIssue.label_details
+        ? currentIssue.label_details.map(l => ({
             id: String(l.id),
             name: l.name,
             color: l.color,
             textColor: l.text_color,
             description: l.description,
           }))
-        : (issue.labels || []).map(l => ({
-            id: l,
-            name: l,
+        : (currentIssue.labels || []).map(l => ({
+            id: String(l),
+            name: String(l),
             color: '#ccc',
             textColor: '#000',
             description: '',

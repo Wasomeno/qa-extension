@@ -10,7 +10,7 @@ import { useGetProjects } from '../hooks/use-get-projects';
 import { useGetProjectLabels } from '../hooks/use-get-project-labels';
 import { useGetProjectMembers } from '../hooks/use-get-project-members';
 import { useQuery } from '@tanstack/react-query';
-import { storageService } from '@/services/storage';
+import { listRecordings } from '@/api/recording';
 import { TestBlueprint } from '@/types/recording';
 import { toast } from 'sonner';
 
@@ -59,8 +59,7 @@ export const IssueFormFields: React.FC<IssueFormFieldsProps> = ({
   const { data: recordings = [], isLoading: isLoadingRecordings } = useQuery({
     queryKey: ['recordings-blueprints'],
     queryFn: async () => {
-      const data = await storageService.get('test-blueprints');
-      return (data || []) as TestBlueprint[];
+      return await listRecordings() as unknown as TestBlueprint[];
     },
   });
 

@@ -89,7 +89,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message }) => {
 
       <div
         className={cn(
-          'flex flex-col max-w-[85%]',
+          'flex flex-col max-w-[85%] min-w-0',
           isUser ? 'items-end' : 'items-start'
         )}
       >
@@ -138,7 +138,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message }) => {
         )}
         <div
           className={cn(
-            'px-4 py-2.5 rounded-2xl shadow-sm text-sm relative overflow-hidden',
+            'px-4 py-2.5 rounded-2xl shadow-sm text-sm relative overflow-hidden break-words',
             isUser
               ? 'bg-primary text-primary-foreground rounded-tr-none shadow-primary/10'
               : cn(

@@ -580,20 +580,25 @@ export async function isElementActionable(element: Element): Promise<boolean> {
   }
 
   // Stability Check: ensure it's not moving
-  const rectBefore = element.getBoundingClientRect();
-  await new Promise(resolve => setTimeout(resolve, 50));
-  const rectAfter = element.getBoundingClientRect();
+  const getRect = () => element.getBoundingClientRect();
+  const rect1 = getRect();
+  await new Promise(resolve => requestAnimationFrame(resolve));
+  const rect2 = getRect();
+  await new Promise(resolve => requestAnimationFrame(resolve));
+  const rect3 = getRect();
 
   if (
-    Math.abs(rectBefore.top - rectAfter.top) > 5 ||
-    Math.abs(rectBefore.left - rectAfter.left) > 5
+    Math.abs(rect1.top - rect2.top) > 0.5 ||
+    Math.abs(rect1.left - rect2.left) > 0.5 ||
+    Math.abs(rect2.top - rect3.top) > 0.5 ||
+    Math.abs(rect2.left - rect3.left) > 0.5
   ) {
     return false; // Element is animating/moving
   }
 
   // Occlusion Check: is it covered by something else?
-  const centerX = rect.left + rect.width / 2;
-  const centerY = rect.top + rect.height / 2;
+  const centerX = rect1.left + rect1.width / 2;
+  const centerY = rect1.top + rect1.height / 2;
 
   // If outside viewport, we can't check occlusion with elementFromPoint accurately
   if (
@@ -605,20 +610,20 @@ export async function isElementActionable(element: Element): Promise<boolean> {
     return true; // Assume actionable if outside, we'll scroll later
   }
 
-  const elAtPoint = document.elementFromPoint(centerX, centerY);
+  let elAtPoint = document.elementFromPoint(centerX, centerY);
+  
+  // Pierce Shadow DOM to find the actual element at point
+  while (elAtPoint && elAtPoint.shadowRoot) {
+    const shadowEl = elAtPoint.shadowRoot.elementFromPoint(centerX, centerY);
+    if (!shadowEl || shadowEl === elAtPoint) break;
+    elAtPoint = shadowEl;
+  }
+
   if (!elAtPoint) return true;
 
   // Allow if it's the element itself, a child, or an ancestor
   if (element.contains(elAtPoint) || elAtPoint.contains(element)) {
     return true;
-  }
-
-  // Handle Shadow DOM for elementFromPoint
-  if (elAtPoint.shadowRoot) {
-    const shadowEl = elAtPoint.shadowRoot.elementFromPoint(centerX, centerY);
-    if (shadowEl && (element.contains(shadowEl) || shadowEl.contains(element))) {
-      return true;
-    }
   }
 
   console.log(`[Actionable] Occlusion check: Element at (${Math.round(centerX)}, ${Math.round(centerY)}) is blocked by:`, elAtPoint);

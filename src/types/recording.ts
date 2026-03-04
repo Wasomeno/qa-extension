@@ -56,6 +56,46 @@ export interface TestStep {
   retryCount?: number;
 }
 
+export interface ElementHints {
+  attributes: Record<string, string>;
+  tagName: string;
+}
+
+export interface RecordingStep {
+  action: string;
+  description: string;
+  elementHints: ElementHints;
+  selector: string;
+  selectorCandidates: string[];
+  value?: string;
+  assertionType?: string;
+  expectedValue?: string;
+}
+
+export interface TestRecording {
+  id: string; // Required for saving
+  name: string;
+  description: string;
+  status: string;
+  steps: RecordingStep[];
+  parameters: any[];
+}
+
+// Result types (used by the Agent/Runner)
+export interface TestStepResult {
+  stepIndex: number;
+  status: 'success' | 'failure';
+  error?: string;
+  screenshot?: string; // Base64 or URL
+}
+
+export interface TestResult {
+  testId: string;
+  status: 'passed' | 'failed';
+  stepResults: TestStepResult[];
+  log?: string;
+}
+
 export interface TestBlueprint {
   id: string;
   name: string;

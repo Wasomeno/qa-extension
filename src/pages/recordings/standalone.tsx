@@ -4,7 +4,7 @@ import { RecordingDetailPage } from './detail';
 import '@/styles/globals.css';
 import { NavigationProvider } from '@/contexts/navigation-context';
 import { TestBlueprint } from '@/types/recording';
-import { storageService } from '@/services/storage';
+import { listRecordings } from '@/api/recording';
 
 const StandaloneDetailApp = () => {
   const [blueprint, setBlueprint] = React.useState<TestBlueprint | null>(null);
@@ -20,10 +20,15 @@ const StandaloneDetailApp = () => {
     }
 
     const loadData = async () => {
-      const blueprints = await storageService.get('test-blueprints') || [];
-      const found = blueprints.find((b: TestBlueprint) => b.id === id);
-      setBlueprint(found || null);
-      setLoading(false);
+      try {
+        const recordings = await listRecordings();
+        const found = recordings.find((b: any) => b.id === id);
+        setBlueprint(found as unknown as TestBlueprint || null);
+      } catch (error) {
+        console.error('Failed to load recordings:', error);
+      } finally {
+        setLoading(false);
+      }
     };
 
     loadData();

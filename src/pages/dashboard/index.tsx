@@ -17,7 +17,10 @@ interface DashboardPageProps {
 export const DashboardPage: React.FC<DashboardPageProps> = ({
   portalContainer,
 }) => {
-  const [selectedIssue, setSelectedIssue] = useState<Issue | null>(null);
+  const [selectedIssue, setSelectedIssue] = useState<{
+    issueId: number;
+    projectId: number;
+  } | null>(null);
 
   const { data: stats, isLoading } = useQuery({
     queryKey: ['dashboard-stats'],
@@ -31,8 +34,9 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
     return (
       <AnimatePresence mode="wait">
         <IssueDetailPage
-          key={selectedIssue.id}
-          issue={selectedIssue}
+          key={selectedIssue.issueId}
+          issueId={selectedIssue.issueId}
+          projectId={selectedIssue.projectId}
           onBack={() => setSelectedIssue(null)}
           portalContainer={portalContainer}
         />
@@ -92,32 +96,9 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
                     activity={activity}
                     onIssueClick={() =>
                       setSelectedIssue({
-                        id: activity.issue_id,
-                        iid: activity.issue_iid,
-                        project_id: activity.project_id,
-                        title: activity.title,
-                        web_url: activity.web_url,
-                        description: activity.description || '',
-                        state: 'opened',
-                        author: {
-                          id: 0,
-                          name: activity.actor_name,
-                          username: activity.actor_name
-                            .toLowerCase()
-                            .replace(/\s+/g, '_'),
-                          avatar_url: activity.actor_avatar,
-                          state: 'active',
-                          web_url: '',
-                        },
-                        created_at: activity.created_at,
-                        updated_at: activity.created_at,
-                        project_name: 'Issue Activity', // Fallback name
-                        labels: [],
-                        label_details: [],
-                        assignees: [],
-                        merge_requests_count: 0,
-                        user_notes_count: 0,
-                      } as unknown as Issue)
+                        issueId: activity.issue_iid,
+                        projectId: activity.project_id,
+                      })
                     }
                   />
                 ))}

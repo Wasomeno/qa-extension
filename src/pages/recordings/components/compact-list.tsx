@@ -20,6 +20,7 @@ import {
 } from '@/components/ui/select';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { getProjects } from '@/api/project';
+import { listRecordings } from '@/api/recording';
 import { storageService } from '@/services/storage';
 import { TestBlueprint } from '@/types/recording';
 import { MessageType } from '@/types/messages';
@@ -67,8 +68,7 @@ export const CompactRecordingsList: React.FC<CompactRecordingsListProps> = ({
   } = useQuery({
     queryKey: ['recordings-blueprints'],
     queryFn: async () => {
-      const data = await storageService.get('test-blueprints');
-      return (data || []) as TestBlueprint[];
+      return await listRecordings() as unknown as TestBlueprint[];
     },
     refetchOnMount: 'always',
   });

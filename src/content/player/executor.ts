@@ -379,76 +379,86 @@ export class Executor {
     let lastBest: Element | null = null;
     let attempts = 0;
 
+    console.log(`[Executor] Starting Playwright-style polling for [${selectors.join(', ')}]...`);
+
     while (Date.now() - start < timeout) {
       const elapsed = Date.now() - start;
-      const shouldForce = elapsed > 5000;
+      const shouldForce = elapsed > 15000; // Wait longer before forcing than before
 
       // Try CSS selectors first (including Shadow DOM)
-      if (selectors.length > 0) {
-        const bestMatch = this.findBestMatch(selectors, step);
-        if (bestMatch) {
-          lastBest = bestMatch;
-          console.log(`[Executor] Found candidate via CSS. Checking actionability (forced=${shouldForce})...`);
-          if (!requireActionable || shouldForce || await isElementActionable(bestMatch)) {
-            if (shouldForce) console.warn(`[Executor] Forcing interaction with occluded/unstable element after 5s.`);
-            return bestMatch;
-          }
-        }
+      const matches = this.findAllMatches(selectors, xpathSelectors, step);
+      
+      if (matches.length > 1) {
+        console.warn(`[Executor] Strictness Violation: Found ${matches.length} elements matching. Disambiguating...`);
       }
 
-      // Try XPath selectors as fallback
-      if (xpathSelectors.length > 0) {
-        const xpathMatch = this.findBestXPathMatch(xpathSelectors, step);
-        if (xpathMatch) {
-          lastBest = xpathMatch;
-          console.log(`[Executor] Found candidate via XPath. Checking actionability (forced=${shouldForce})...`);
-          if (!requireActionable || shouldForce || await isElementActionable(xpathMatch)) {
-            if (shouldForce) console.warn(`[Executor] Forcing interaction with occluded/unstable element after 5s.`);
-            return xpathMatch;
-          }
+      if (matches.length > 0) {
+        // Playwright-style Strict Mode: If multiple matches, we use the one with the highest score
+        const bestMatch = matches[0].element;
+        lastBest = bestMatch;
+
+        if (!requireActionable || shouldForce || await isElementActionable(bestMatch)) {
+          if (shouldForce) console.warn(`[Executor] Forcing interaction with element after 15s timeout.`);
+          return bestMatch;
         }
+        
+        console.log(`[Executor] Element found but not yet actionable (Visibility/Stability/Occlusion). Retrying...`);
       }
 
       attempts += 1;
       await new Promise(resolve => setTimeout(resolve, this.RETRY_DELAY_MS));
-      if (attempts % 3 === 0) {
-        // Reduced quiet time to prevent hanging on elements that might trigger continuous animation
-        await this.waitForDomQuiet(400, 100);
+      
+      // Periodically wait for DOM to be quiet to avoid race conditions with dynamic loading
+      if (attempts % 5 === 0) {
+        await this.waitForDomQuiet(500, 150);
       }
     }
 
     return requireActionable ? null : lastBest;
   }
 
-  private static findBestXPathMatch(
+  private static findAllMatches(
+    selectors: string[],
     xpathSelectors: string[],
     step: TestStep
-  ): Element | null {
-    let bestElement: Element | null = null;
-    let bestScore = Number.NEGATIVE_INFINITY;
+  ): { element: Element; score: number }[] {
+    const results: { element: Element; score: number }[] = [];
+    const seen = new Set<Element>();
 
-    xpathSelectors.forEach((xpath, selectorPriority) => {
-      const matches = findAllByXPath(xpath);
-
-      matches.forEach((element, index) => {
-        if (!element.isConnected) {
-          return;
-        }
-
-        const score = this.scoreXPathMatch(
-          element,
-          step,
-          selectorPriority,
-          index
-        );
-        if (score > bestScore) {
-          bestScore = score;
-          bestElement = element;
-        }
-      });
+    // 1. CSS matches
+    selectors.forEach((selector, priority) => {
+      try {
+        const matches = queryAllShadows(selector);
+        matches.forEach((el, index) => {
+          if (el.isConnected && !seen.has(el)) {
+            seen.add(el);
+            results.push({
+              element: el,
+              score: this.scoreElementMatch(el, step, priority, index)
+            });
+          }
+        });
+      } catch (e) {}
     });
 
-    return bestElement;
+    // 2. XPath matches
+    xpathSelectors.forEach((xpath, priority) => {
+      try {
+        const matches = findAllByXPath(xpath);
+        matches.forEach((el, index) => {
+          if (el.isConnected && !seen.has(el)) {
+            seen.add(el);
+            results.push({
+              element: el,
+              score: this.scoreXPathMatch(el, step, priority, index)
+            });
+          }
+        });
+      } catch (e) {}
+    });
+
+    // Sort by score descending (Playwright-style locator disambiguation)
+    return results.sort((a, b) => b.score - a.score);
   }
 
   private static scoreXPathMatch(
@@ -516,42 +526,6 @@ export class Executor {
     }
 
     return score;
-  }
-
-  private static findBestMatch(
-    selectors: string[],
-    step: TestStep
-  ): Element | null {
-    let bestElement: Element | null = null;
-    let bestScore = Number.NEGATIVE_INFINITY;
-
-    selectors.forEach((selector, selectorPriority) => {
-      let matches: Element[] = [];
-      try {
-        matches = queryAllShadows(selector);
-      } catch {
-        return;
-      }
-
-      matches.forEach((element, index) => {
-        if (!element.isConnected) {
-          return;
-        }
-
-        const score = this.scoreElementMatch(
-          element,
-          step,
-          selectorPriority,
-          index
-        );
-        if (score > bestScore) {
-          bestScore = score;
-          bestElement = element;
-        }
-      });
-    });
-
-    return bestElement;
   }
 
   private static scoreElementMatch(

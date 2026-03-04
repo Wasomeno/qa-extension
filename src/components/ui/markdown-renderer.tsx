@@ -1,7 +1,9 @@
-import React from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { cn } from '@/lib/utils';
+import { VideoPlaceholder } from './video-placeholder';
+
+const VIDEO_EXTENSIONS = ['.webm', '.mp4', '.mov'];
 
 interface MarkdownRendererProps {
   content: string;
@@ -77,17 +79,26 @@ export function MarkdownRenderer({
               {...props}
             />
           ),
-          a: ({ className, ...props }) => (
-            <a
-              className={cn(
-                'font-medium underline underline-offset-4 decoration-primary hover:text-primary transition-colors',
-                className
-              )}
-              target="_blank"
-              rel="noopener noreferrer"
-              {...props}
-            />
-          ),
+          a: ({ className, href, ...props }) => {
+            const isVideo = VIDEO_EXTENSIONS.some(ext =>
+              href?.toLowerCase().endsWith(ext)
+            );
+            if (isVideo && href) {
+              return <VideoPlaceholder url={href} className={className} />;
+            }
+            return (
+              <a
+                className={cn(
+                  'font-medium underline underline-offset-4 decoration-primary hover:text-primary transition-colors',
+                  className
+                )}
+                target="_blank"
+                rel="noopener noreferrer"
+                href={href}
+                {...props}
+              />
+            );
+          },
           ul: ({ className, ...props }) => (
             <ul className={cn('[&>li]:mt-2', className)} {...props} />
           ),
@@ -123,7 +134,7 @@ export function MarkdownRenderer({
             <hr className={cn('my-8 border-border', className)} {...props} />
           ),
           table: ({ className, ...props }) => (
-            <div className="my-6 w-full overflow-y-auto">
+            <div className="my-6 w-full overflow-x-auto">
               <table
                 className={cn('w-full border-collapse text-sm', className)}
                 {...props}

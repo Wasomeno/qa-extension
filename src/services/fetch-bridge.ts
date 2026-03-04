@@ -7,13 +7,14 @@ import {
 
 function isExtensionPage(): boolean {
   try {
-    return (
-      typeof window !== 'undefined' &&
-      String(window.location?.protocol) === 'chrome-extension:'
-    );
-  } catch {
-    return false;
-  }
+    if (typeof window !== 'undefined' && window.location?.protocol === 'chrome-extension:') {
+      return true;
+    }
+    if (typeof self !== 'undefined' && self.location?.protocol === 'chrome-extension:') {
+      return true;
+    }
+  } catch {}
+  return false;
 }
 
 function isNode(): boolean {

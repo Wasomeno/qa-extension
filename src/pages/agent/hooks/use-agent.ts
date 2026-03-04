@@ -14,9 +14,11 @@ export const useAgent = () => {
       timestamp: Date.now(),
     },
   ]);
+
   const [isAgentLoading, setIsAgentLoading] = useState(false);
   const [sessionId] = useState(() => crypto.randomUUID());
 
+  console.log('MESSAGE', messages);
   // Update initial message with user name found
   useEffect(() => {
     if (user?.name) {
@@ -47,7 +49,7 @@ export const useAgent = () => {
 
     try {
       const response = await api.post<any>('/agent/chat', {
-        body: JSON.stringify({ session_id: sessionId, input: content }),
+        body: { session_id: sessionId, input: content },
       });
 
       if (response.success && response.data) {

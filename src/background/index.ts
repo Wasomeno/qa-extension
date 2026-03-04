@@ -4,7 +4,8 @@ import {
   BackgroundFetchRequest,
 } from '../types/messages';
 import { AIProcessor } from '../services/ai-processor';
-import { RawEvent } from '../types/recording';
+import { RawEvent, TestRecording } from '../types/recording';
+import { api } from '../services/api';
 import { SAMPLE_BLUEPRINT } from '../lib/seed-data';
 import { isRestrictedUrl } from '../utils/domain-matcher';
 import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
@@ -117,6 +118,8 @@ class BackgroundService {
   private recordingEvents: RawEvent[] = [];
   private pendingPlaybacks: Map<string, (result: any) => void> = new Map();
   private isStartingRecording = false;
+  private thumbnailCache: Map<string, string> = new Map();
+  private pendingThumbnails: Map<string, Array<(response: any) => void>> = new Map();
 
   constructor() {
     this.aiProcessor = new AIProcessor(__GOOGLE_API_KEY__);
@@ -195,17 +198,6 @@ class BackgroundService {
       if (chrome.storage && chrome.storage.session) {
         chrome.storage.session.setAccessLevel({
           accessLevel: 'TRUSTED_AND_UNTRUSTED_CONTEXTS',
-        });
-      }
-
-      // Seed sample data if empty
-      const result = await chrome.storage.local.get(['test-blueprints']);
-      if (
-        !result['test-blueprints'] ||
-        result['test-blueprints'].length === 0
-      ) {
-        await chrome.storage.local.set({
-          'test-blueprints': [SAMPLE_BLUEPRINT],
         });
       }
     });
@@ -330,6 +322,60 @@ class BackgroundService {
     sendResponse: (response?: any) => void
   ) {
     switch (message.type) {
+      case MessageType.GET_VIDEO_THUMBNAIL:
+        try {
+          const { url, timeInSeconds = 3 } = message.data || {};
+          if (!url) {
+            sendResponse({ success: false, error: 'Missing URL' });
+            return;
+          }
+
+          const cacheKey = `${url}_${timeInSeconds}`;
+          
+          // Check memory cache first
+          if (this.thumbnailCache.has(cacheKey)) {
+            sendResponse({ success: true, data: this.thumbnailCache.get(cacheKey) });
+            return;
+          }
+
+          // Check if a request for this thumbnail is already in progress
+          if (this.pendingThumbnails.has(cacheKey)) {
+            this.pendingThumbnails.get(cacheKey)!.push(sendResponse);
+            return;
+          }
+
+          // Mark as pending
+          this.pendingThumbnails.set(cacheKey, [sendResponse]);
+
+          // Ensure offscreen document exists
+          if (!(await chrome.offscreen.hasDocument())) {
+            await chrome.offscreen.createDocument({
+              url: 'offscreen.html',
+              reasons: [chrome.offscreen.Reason.LOCAL_STORAGE],
+              justification: 'Generate video thumbnails from R2 bucket',
+            });
+          }
+
+          // Send message to offscreen document
+          chrome.runtime.sendMessage({
+            type: 'GENERATE_THUMBNAIL_INTERNAL',
+            data: { url, timeInSeconds }
+          }, (response) => {
+            const callbacks = this.pendingThumbnails.get(cacheKey) || [];
+            this.pendingThumbnails.delete(cacheKey);
+
+            if (response?.success) {
+              this.thumbnailCache.set(cacheKey, response.data);
+              callbacks.forEach(cb => cb({ success: true, data: response.data }));
+            } else {
+              callbacks.forEach(cb => cb({ success: false, error: response?.error || 'Offscreen generation failed' }));
+            }
+          });
+        } catch (e: any) {
+          sendResponse({ success: false, error: e?.message || 'Thumbnail generation failed' });
+        }
+        break;
+
       case MessageType.AUTH_LOGOUT:
         this.broadcast({ type: MessageType.AUTH_SESSION_UPDATED, data: null });
         sendResponse({ success: true });
@@ -456,28 +502,45 @@ class BackgroundService {
             return;
           }
 
-          const result = await chrome.storage.local.get(['test-blueprints']);
-          const blueprints = result['test-blueprints'] || [];
-
           // Ensure blueprint has an ID
           if (!blueprint.id) {
             blueprint.id = `rec-${Date.now()}`;
           }
 
-          // Add or update
-          const index = blueprints.findIndex((b: any) => b.id === blueprint.id);
-          if (index >= 0) {
-            blueprints[index] = blueprint;
-          } else {
-            blueprints.push(blueprint);
+          // Map TestBlueprint to TestRecording if necessary, though they are very similar
+          const recording: TestRecording = {
+            id: blueprint.id,
+            name: blueprint.name || 'Untitled Recording',
+            description: blueprint.description || '',
+            status: blueprint.status || 'ready',
+            steps: (blueprint.steps || []).map((step: any) => ({
+              action: step.action,
+              description: step.description || '',
+              selector: step.selector,
+              selectorCandidates: step.selectorCandidates || [],
+              value: step.value,
+              assertionType: step.assertionType,
+              expectedValue: step.expectedValue,
+              elementHints: {
+                tagName: step.elementHints?.tagName || 'div',
+                attributes: step.elementHints?.attributes || {},
+              },
+            })),
+            parameters: blueprint.parameters || [],
+          };
+
+          const response = await api.post<any>('/recordings', { body: recording });
+          
+          if (!response.success) {
+            sendResponse({ success: false, error: response.error });
+            return;
           }
 
-          await chrome.storage.local.set({ 'test-blueprints': blueprints });
           // Clear last blueprint after saving
           await chrome.storage.local.remove('lastBlueprint');
 
-          this.broadcast({ type: MessageType.BLUEPRINT_SAVED, data: { blueprint } });
-          sendResponse({ success: true, data: { blueprint } });
+          this.broadcast({ type: MessageType.BLUEPRINT_SAVED, data: { blueprint: response.data } });
+          sendResponse({ success: true, data: { blueprint: response.data } });
         } catch (e: any) {
           sendResponse({ success: false, error: e?.message });
         }
@@ -491,11 +554,12 @@ class BackgroundService {
             return;
           }
 
-          const result = await chrome.storage.local.get(['test-blueprints']);
-          const blueprints = result['test-blueprints'] || [];
-          const filtered = blueprints.filter((b: any) => b.id !== id);
+          const response = await api.delete<any>(`/recordings/${id}`);
+          if (!response.success) {
+            sendResponse({ success: false, error: response.error });
+            return;
+          }
 
-          await chrome.storage.local.set({ 'test-blueprints': filtered });
           sendResponse({ success: true });
         } catch (e: any) {
           sendResponse({ success: false, error: e?.message });
@@ -520,10 +584,11 @@ class BackgroundService {
 
       case MessageType.GET_RECORDED_TESTS:
         try {
-          const result = await chrome.storage.local.get(['test-blueprints']);
+          const response = await api.get<TestRecording[]>('/recordings');
           sendResponse({
-            success: true,
-            data: result['test-blueprints'] || [],
+            success: response.success,
+            data: response.data || [],
+            error: response.error,
           });
         } catch (e: any) {
           sendResponse({ success: false, error: e?.message });
@@ -1040,6 +1105,7 @@ class BackgroundService {
 
         // Generate blueprint
         const blueprint = await this.aiProcessor.generateBlueprint(allEvents);
+        console.log('[Background] AI processing complete, generating enriched steps...');
 
         const enrichedSteps = (blueprint.steps || []).map((step, index) => {
           const fallbackEvent = allEvents[index];

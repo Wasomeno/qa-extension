@@ -49,7 +49,6 @@ export const AgentPage: React.FC<{ portalContainer?: HTMLElement | null }> = ({
             <h3 className="font-semibold text-sm">QA Agent</h3>
           </div>
         </div>
-
       </div>
 
       <ScrollArea className="flex-1 w-full" ref={scrollRef}>
@@ -137,7 +136,10 @@ export const AgentPage: React.FC<{ portalContainer?: HTMLElement | null }> = ({
             animate={{ y: 0, opacity: 1 }}
             className="relative"
           >
-            <ChatInput onSend={(val) => sendMessage(val)} isLoading={isAgentLoading} />
+            <ChatInput
+              onSend={val => sendMessage(val)}
+              isLoading={isAgentLoading}
+            />
             {!isAgentLoading && messages.length === 1 && (
               <div className="absolute -top-12 left-0 right-0 flex justify-center pointer-events-none">
                 <motion.div

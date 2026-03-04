@@ -13,7 +13,7 @@ async function request<T>(
   options: RequestInit = {}
 ): Promise<ApiResponse<T>> {
   try {
-    const url = `http://localhost:3000/api${endpoint}`;
+    const url = `https://playground-qa-extension.online/api${endpoint}`;
 
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
@@ -31,11 +31,18 @@ async function request<T>(
       init: {
         ...options,
         headers,
+        credentials: 'include',
       },
       responseType: 'json',
     });
 
     if (!resp.ok) {
+      console.error(
+        `[API Service] Error for ${endpoint}:`,
+        resp.status,
+        resp.statusText,
+        resp.body
+      );
       return {
         success: false,
         error: `API Error: ${resp.status} ${resp.statusText}`,
@@ -48,6 +55,7 @@ async function request<T>(
       data: resp.body,
     };
   } catch (error) {
+    console.error(`[API Service] Network error for ${endpoint}:`, error);
     return {
       success: false,
       // error: error?.message || 'Network error calling GitLab API',
@@ -57,10 +65,11 @@ async function request<T>(
 
 export const api = {
   post: async <T>(endpoint: string, options?: RequestInit) => {
+    const { body, ...rest } = options || {};
     const resp = await request<T>(endpoint, {
       method: 'POST',
-      body: JSON.stringify(options?.body),
-      ...options,
+      body: body ? JSON.stringify(body) : undefined,
+      ...rest,
     });
 
     return resp;
@@ -82,19 +91,21 @@ export const api = {
     return resp;
   },
   put: async <T>(endpoint: string, options?: RequestInit) => {
+    const { body, ...rest } = options || {};
     const resp = await request<T>(endpoint, {
       method: 'PUT',
-      body: JSON.stringify(options?.body),
-      ...options,
+      body: body ? JSON.stringify(body) : undefined,
+      ...rest,
     });
 
     return resp;
   },
   patch: async <T>(endpoint: string, options?: RequestInit) => {
+    const { body, ...rest } = options || {};
     const resp = await request<T>(endpoint, {
       method: 'PATCH',
-      body: JSON.stringify(options?.body),
-      ...options,
+      body: body ? JSON.stringify(body) : undefined,
+      ...rest,
     });
 
     return resp;

@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { getProjects } from '@/api/project';
+import { listRecordings } from '@/api/recording';
 import { storageService } from '@/services/storage';
 import {
   generatePlaywrightTest,
@@ -34,7 +35,7 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { TestBlueprint } from '@/types/recording';
+import { TestBlueprint, TestRecording } from '@/types/recording';
 import { MessageType } from '@/types/messages';
 import { FolderItem } from './components/folder-item';
 import { RecordingItem } from './components/recording-item';
@@ -54,8 +55,7 @@ export const RecordingsPage: React.FC<{
   const { data: blueprints = [], refetch: refetchBlueprints } = useQuery({
     queryKey: ['recordings-blueprints'],
     queryFn: async () => {
-      const data = await storageService.get('test-blueprints');
-      return (data || []) as TestBlueprint[];
+      return await listRecordings() as unknown as TestBlueprint[];
     },
   });
 
