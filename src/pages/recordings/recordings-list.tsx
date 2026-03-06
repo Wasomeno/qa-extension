@@ -20,10 +20,7 @@ import {
   exportBlueprintAsJson,
   generateBlueprintFilename,
 } from '@/lib/test-generator';
-import {
-  downloadTextFile,
-  downloadJsonFile,
-} from '@/lib/download';
+import { downloadTextFile, downloadJsonFile } from '@/lib/download';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Separator } from '@/components/ui/separator';
@@ -47,7 +44,9 @@ export const RecordingsPage: React.FC<{
 }> = ({ portalContainer }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
-  const [currentFolderId, setCurrentFolderId] = useState<number | 'unassigned' | null>(null);
+  const [currentFolderId, setCurrentFolderId] = useState<
+    number | 'unassigned' | null
+  >(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [showDetails, setShowDetails] = useState(false);
   const { push } = useNavigation();
@@ -55,9 +54,11 @@ export const RecordingsPage: React.FC<{
   const { data: blueprints = [], refetch: refetchBlueprints } = useQuery({
     queryKey: ['recordings-blueprints'],
     queryFn: async () => {
-      return await listRecordings() as unknown as TestBlueprint[];
+      return (await listRecordings()) as unknown as TestBlueprint[];
     },
   });
+
+  console.log('blueprints', blueprints);
 
   const { data: lastBlueprint, refetch: refetchLastBlueprint } = useQuery({
     queryKey: ['last-blueprint'],
@@ -119,6 +120,18 @@ export const RecordingsPage: React.FC<{
       () => {
         refetchBlueprints();
         if (selectedId === id) setSelectedId(null);
+      }
+    );
+  };
+
+  const handleRename = async (id: string, newName: string) => {
+    chrome.runtime.sendMessage(
+      {
+        type: MessageType.UPDATE_BLUEPRINT,
+        data: { id, data: { name: newName } },
+      },
+      () => {
+        refetchBlueprints();
       }
     );
   };
@@ -199,7 +212,10 @@ export const RecordingsPage: React.FC<{
     const searchLower = searchQuery.toLowerCase();
     return blueprints.filter(b => {
       const matchesSearch = b.name.toLowerCase().includes(searchLower);
-      const matchesFolder = currentFolderId === null || (b.projectId === currentFolderId) || (currentFolderId === 'unassigned' && !b.projectId);
+      const matchesFolder =
+        currentFolderId === null ||
+        b.projectId === currentFolderId ||
+        (currentFolderId === 'unassigned' && !b.projectId);
       return matchesSearch && matchesFolder;
     });
   }, [blueprints, currentFolderId, searchQuery]);
@@ -227,7 +243,10 @@ export const RecordingsPage: React.FC<{
                 <Button
                   variant="ghost"
                   size="icon"
-                  className={cn("h-10 w-10", viewMode === 'list' && "text-zinc-900 bg-zinc-100")}
+                  className={cn(
+                    'h-10 w-10',
+                    viewMode === 'list' && 'text-zinc-900 bg-zinc-100'
+                  )}
                   onClick={() => setViewMode('list')}
                 >
                   <ListIcon className="w-5 h-5" />
@@ -242,7 +261,10 @@ export const RecordingsPage: React.FC<{
                 <Button
                   variant="ghost"
                   size="icon"
-                  className={cn("h-10 w-10", viewMode === 'grid' && "text-zinc-900 bg-zinc-100")}
+                  className={cn(
+                    'h-10 w-10',
+                    viewMode === 'grid' && 'text-zinc-900 bg-zinc-100'
+                  )}
                   onClick={() => setViewMode('grid')}
                 >
                   <LayoutGrid className="w-5 h-5" />
@@ -255,7 +277,10 @@ export const RecordingsPage: React.FC<{
           <Button
             variant="ghost"
             size="icon"
-            className={cn("h-10 w-10", showDetails && "text-zinc-900 bg-zinc-100")}
+            className={cn(
+              'h-10 w-10',
+              showDetails && 'text-zinc-900 bg-zinc-100'
+            )}
             onClick={() => setShowDetails(!showDetails)}
           >
             <Info className="w-5 h-5" />
@@ -266,15 +291,15 @@ export const RecordingsPage: React.FC<{
       {/* Main Container */}
       <div className="flex flex-1 min-h-0 relative">
         {/* Content Area */}
-        <div 
+        <div
           className="flex-1 flex flex-col min-w-0"
           onClick={() => setSelectedId(null)}
         >
           {/* Breadcrumbs & Actions */}
           <div className="px-6 py-3 flex items-center justify-between shrink-0 border-b">
             <div className="flex items-center gap-1 text-sm">
-              <Button 
-                variant="ghost" 
+              <Button
+                variant="ghost"
                 className="h-8 px-2 text-gray-600 hover:text-zinc-900 font-medium"
                 onClick={() => setCurrentFolderId(null)}
               >
@@ -283,36 +308,46 @@ export const RecordingsPage: React.FC<{
               {currentFolderId !== null && (
                 <>
                   <ChevronRightIcon className="w-4 h-4 text-gray-400" />
-                  <span className="px-2 text-gray-900 font-medium">{currentProjectName}</span>
+                  <span className="px-2 text-gray-900 font-medium">
+                    {currentProjectName}
+                  </span>
                 </>
               )}
             </div>
-            
-            <Button 
-                className="bg-zinc-900 hover:bg-black text-white rounded-full gap-2 px-4"
-                onClick={() => {
-                    chrome.runtime.sendMessage({ type: MessageType.CLOSE_MAIN_MENU });
-                    setTimeout(() => {
-                        chrome.runtime.sendMessage({
-                            type: MessageType.START_RECORDING,
-                            data: { projectId: currentFolderId === 'unassigned' ? undefined : (currentFolderId || undefined) },
-                        });
-                    }, 300);
-                }}
+
+            <Button
+              className="bg-zinc-900 hover:bg-black text-white rounded-full gap-2 px-4"
+              onClick={() => {
+                chrome.runtime.sendMessage({
+                  type: MessageType.CLOSE_MAIN_MENU,
+                });
+                setTimeout(() => {
+                  chrome.runtime.sendMessage({
+                    type: MessageType.START_RECORDING,
+                    data: {
+                      projectId:
+                        currentFolderId === 'unassigned'
+                          ? undefined
+                          : currentFolderId || undefined,
+                    },
+                  });
+                }, 300);
+              }}
             >
-                <Plus className="w-5 h-5" /> New Recording
+              <Plus className="w-5 h-5" /> New Recording
             </Button>
           </div>
 
-          <ScrollArea 
-            className="flex-1"
-          >
-            <div className="p-6" onClick={(e) => {
+          <ScrollArea className="flex-1">
+            <div
+              className="p-6"
+              onClick={e => {
                 // Only deselect if clicking exactly on the background, not on items
                 if (e.target === e.currentTarget) {
-                    setSelectedId(null);
+                  setSelectedId(null);
                 }
-            }}>
+              }}
+            >
               {/* Processing Section */}
               {lastBlueprint && (
                 <section className="mb-8 p-4 bg-zinc-50 border border-zinc-200 rounded-xl flex items-center justify-between">
@@ -326,11 +361,13 @@ export const RecordingsPage: React.FC<{
                     </div>
                     <div>
                       <h3 className="font-semibold text-zinc-900">
-                        {lastBlueprint.status === 'processing' ? 'Processing Recording...' : 'New Recording Ready'}
+                        {lastBlueprint.status === 'processing'
+                          ? 'Processing Recording...'
+                          : 'New Recording Ready'}
                       </h3>
                       <p className="text-sm text-zinc-600">
-                        {lastBlueprint.status === 'processing' 
-                          ? 'We are generating your test steps using AI...' 
+                        {lastBlueprint.status === 'processing'
+                          ? 'We are generating your test steps using AI...'
                           : 'You have a recently captured flow. Save it to your library.'}
                       </p>
                     </div>
@@ -338,10 +375,19 @@ export const RecordingsPage: React.FC<{
                   <div className="flex items-center gap-2">
                     {lastBlueprint.status === 'ready' && (
                       <>
-                        <Button size="sm" variant="outline" className="bg-white" onClick={() => handleRunTest(lastBlueprint)}>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="bg-white"
+                          onClick={() => handleRunTest(lastBlueprint)}
+                        >
                           Preview
                         </Button>
-                        <Button size="sm" className="bg-zinc-900 hover:bg-black text-white border-none" onClick={handleSaveLastBlueprint}>
+                        <Button
+                          size="sm"
+                          className="bg-zinc-900 hover:bg-black text-white border-none"
+                          onClick={handleSaveLastBlueprint}
+                        >
                           Save
                         </Button>
                       </>
@@ -353,19 +399,27 @@ export const RecordingsPage: React.FC<{
               {/* Folders Section - only show when at root */}
               {currentFolderId === null && (
                 <section className="mb-8">
-                  <h2 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-4">Folders</h2>
-                  <div className={cn(
-                    viewMode === 'grid' 
-                      ? "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4" 
-                      : "flex flex-col border rounded-lg overflow-hidden"
-                  )}>
+                  <h2 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-4">
+                    Folders
+                  </h2>
+                  <div
+                    className={cn(
+                      viewMode === 'grid'
+                        ? 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4'
+                        : 'flex flex-col border rounded-lg overflow-hidden'
+                    )}
+                  >
                     {categorizedBlueprints.map(([id, cat]) => (
                       <FolderItem
                         key={id}
                         name={cat.name}
                         count={cat.items.length}
                         viewMode={viewMode}
-                        onClick={() => setCurrentFolderId(id === 'unassigned' ? 'unassigned' : Number(id))}
+                        onClick={() =>
+                          setCurrentFolderId(
+                            id === 'unassigned' ? 'unassigned' : Number(id)
+                          )
+                        }
                       />
                     ))}
                   </div>
@@ -379,31 +433,57 @@ export const RecordingsPage: React.FC<{
                     {currentFolderId === null ? 'All Files' : 'Files'}
                   </h2>
                 </div>
-                <div className={cn(
-                  viewMode === 'grid' 
-                    ? "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6" 
-                    : "flex flex-col border rounded-lg overflow-hidden bg-white"
-                )}>
+                <div
+                  className={cn(
+                    viewMode === 'grid'
+                      ? 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6'
+                      : 'flex flex-col border rounded-lg overflow-hidden bg-white'
+                  )}
+                >
                   {filteredItems.map(item => (
-                    <div key={item.id} onClick={(e) => e.stopPropagation()}>
+                    <div key={item.id} onClick={e => e.stopPropagation()}>
                       <RecordingItem
                         recording={item}
                         viewMode={viewMode}
                         isSelected={selectedId === item.id}
                         onClick={() => {
-                            setSelectedId(item.id);
-                            setShowDetails(true);
+                          setSelectedId(item.id);
+                          setShowDetails(true);
                         }}
                         onDoubleClick={() => {
-                          const url = chrome.runtime.getURL(`recording-detail.html?id=${item.id}`);
-                          chrome.runtime.sendMessage({ type: MessageType.OPEN_URL, data: { url } });
+                          const url = chrome.runtime.getURL(
+                            `recording-detail.html?id=${item.id}`
+                          );
+                          chrome.runtime.sendMessage({
+                            type: MessageType.OPEN_URL,
+                            data: { url },
+                          });
                         }}
-                        onRun={(e) => { e.stopPropagation(); handleRunTest(item); }}
-                        onDelete={(e) => { e.stopPropagation(); handleDelete(item.id); }}
-                        onExportPlaywright={(e) => { e.stopPropagation(); handleExportPlaywright(item); }}
-                        onExportJson={(e) => { e.stopPropagation(); handleExportJson(item); }}
-                        onRunInAgent={(e) => { e.stopPropagation(); handleRunInAgent(item); }}
-                        onCopyScript={(e) => { e.stopPropagation(); handleShareCopyScript(item); }}
+                        onRun={e => {
+                          e.stopPropagation();
+                          handleRunTest(item);
+                        }}
+                        onDelete={e => {
+                          e.stopPropagation();
+                          handleDelete(item.id);
+                        }}
+                        onRename={handleRename}
+                        onExportPlaywright={e => {
+                          e.stopPropagation();
+                          handleExportPlaywright(item);
+                        }}
+                        onExportJson={e => {
+                          e.stopPropagation();
+                          handleExportJson(item);
+                        }}
+                        onRunInAgent={e => {
+                          e.stopPropagation();
+                          handleRunInAgent(item);
+                        }}
+                        onCopyScript={e => {
+                          e.stopPropagation();
+                          handleShareCopyScript(item);
+                        }}
                         portalContainer={portalContainer}
                       />
                     </div>
@@ -423,27 +503,38 @@ export const RecordingsPage: React.FC<{
         {/* Floating Right Details Panel */}
         <AnimatePresence>
           {showDetails && selectedRecording && (
-            <motion.div 
+            <motion.div
               initial={{ x: 320, opacity: 0 }}
               animate={{ x: 0, opacity: 1 }}
               exit={{ x: 320, opacity: 0 }}
               transition={{ type: 'spring', damping: 25, stiffness: 200 }}
               className="absolute right-0 top-0 bottom-0 w-[320px] z-50 shadow-[-10px_0_30px_rgba(0,0,0,0.1)] bg-white border-l"
-              onClick={(e) => e.stopPropagation()}
+              onClick={e => e.stopPropagation()}
             >
               <DetailsPanel
                 recording={selectedRecording}
                 onClose={() => {
-                    setShowDetails(false);
-                    setSelectedId(null);
+                  setShowDetails(false);
+                  setSelectedId(null);
                 }}
-                onRun={() => selectedRecording && handleRunTest(selectedRecording)}
-                onRunInAgent={() => selectedRecording && handleRunInAgent(selectedRecording)}
-                onDelete={() => selectedRecording && handleDelete(selectedRecording.id)}
+                onRun={() =>
+                  selectedRecording && handleRunTest(selectedRecording)
+                }
+                onRunInAgent={() =>
+                  selectedRecording && handleRunInAgent(selectedRecording)
+                }
+                onDelete={() =>
+                  selectedRecording && handleDelete(selectedRecording.id)
+                }
                 onViewDetails={() => {
                   if (!selectedRecording) return;
-                  const url = chrome.runtime.getURL(`recording-detail.html?id=${selectedRecording.id}`);
-                  chrome.runtime.sendMessage({ type: MessageType.OPEN_URL, data: { url } });
+                  const url = chrome.runtime.getURL(
+                    `recording-detail.html?id=${selectedRecording.id}`
+                  );
+                  chrome.runtime.sendMessage({
+                    type: MessageType.OPEN_URL,
+                    data: { url },
+                  });
                 }}
               />
             </motion.div>

@@ -68,7 +68,7 @@ export const CompactRecordingsList: React.FC<CompactRecordingsListProps> = ({
   } = useQuery({
     queryKey: ['recordings-blueprints'],
     queryFn: async () => {
-      return await listRecordings() as unknown as TestBlueprint[];
+      return (await listRecordings()) as unknown as TestBlueprint[];
     },
     refetchOnMount: 'always',
   });
@@ -164,36 +164,36 @@ export const CompactRecordingsList: React.FC<CompactRecordingsListProps> = ({
   const handleStartRecording = () => {
     setError(null);
     chrome.runtime.sendMessage({ type: MessageType.CLOSE_MAIN_MENU });
-    
-    setTimeout(() => {
-        if (typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
-          chrome.runtime.sendMessage(
-            {
-              type: MessageType.START_RECORDING,
-              data: {
-                projectId:
-                  selectedProjectId !== 'all'
-                    ? parseInt(selectedProjectId)
-                    : undefined,
-              },
-            },
-            response => {
-              if (chrome.runtime.lastError) {
-                setError('Communication error. Please refresh the page.');
-                return;
-              }
 
-              if (response?.success) {
-                onClose();
-              } else {
-                const errorMsg = response?.error || 'Failed to start recording';
-                setError(errorMsg);
-              }
+    setTimeout(() => {
+      if (typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
+        chrome.runtime.sendMessage(
+          {
+            type: MessageType.START_RECORDING,
+            data: {
+              projectId:
+                selectedProjectId !== 'all'
+                  ? parseInt(selectedProjectId)
+                  : undefined,
+            },
+          },
+          response => {
+            if (chrome.runtime.lastError) {
+              setError('Communication error. Please refresh the page.');
+              return;
             }
-          );
-        } else {
-          onClose();
-        }
+
+            if (response?.success) {
+              onClose();
+            } else {
+              const errorMsg = response?.error || 'Failed to start recording';
+              setError(errorMsg);
+            }
+          }
+        );
+      } else {
+        onClose();
+      }
     }, 300);
   };
 
