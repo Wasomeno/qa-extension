@@ -17,7 +17,6 @@ import { storageService } from '@/services/storage';
 import {
   generatePlaywrightTest,
   generateTestFilename,
-  exportBlueprintAsJson,
   generateBlueprintFilename,
 } from '@/lib/test-generator';
 import { downloadTextFile, downloadJsonFile } from '@/lib/download';
@@ -25,19 +24,46 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Separator } from '@/components/ui/separator';
 import { useNavigation } from '@/contexts/navigation-context';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '@/components/ui/tooltip';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { TestBlueprint, TestRecording } from '@/types/recording';
+import { Skeleton } from '@/components/ui/skeleton';
+import { TestBlueprint } from '@/types/recording';
 import { MessageType } from '@/types/messages';
 import { FolderItem } from './components/folder-item';
 import { RecordingItem } from './components/recording-item';
 import { DetailsPanel } from './components/details-panel';
 import { cn } from '@/lib/utils';
+
+const RecordingSkeleton = ({ viewMode }: { viewMode: 'grid' | 'list' }) => {
+  if (viewMode === 'list') {
+    return (
+      <div className="flex items-center gap-3 px-4 py-2.5 border-b">
+        <Skeleton className="w-5 h-5 rounded" />
+        <Skeleton className="h-4 flex-1" />
+        <Skeleton className="h-4 w-24" />
+        <div className="flex items-center gap-1">
+          <Skeleton className="h-8 w-8 rounded-full" />
+          <Skeleton className="h-8 w-8 rounded-full" />
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col border rounded-xl overflow-hidden bg-white">
+      <Skeleton className="aspect-video w-full" />
+      <div className="p-4 space-y-2">
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex-1 space-y-2">
+            <Skeleton className="h-4 w-3/4" />
+            <Skeleton className="h-3 w-1/4" />
+          </div>
+          <Skeleton className="h-8 w-8 rounded-full" />
+        </div>
+      </div>
+    </div>
+  );
+};
 
 export const RecordingsPage: React.FC<{
   portalContainer?: HTMLElement | null;
@@ -51,7 +77,11 @@ export const RecordingsPage: React.FC<{
   const [showDetails, setShowDetails] = useState(false);
   const { push } = useNavigation();
 
-  const { data: blueprints = [], refetch: refetchBlueprints } = useQuery({
+  const {
+    data: blueprints = [],
+    refetch: refetchBlueprints,
+    isLoading: isBlueprintsLoading,
+  } = useQuery({
     queryKey: ['recordings-blueprints'],
     queryFn: async () => {
       return (await listRecordings()) as unknown as TestBlueprint[];
@@ -97,10 +127,12 @@ export const RecordingsPage: React.FC<{
     return () => chrome.storage.onChanged.removeListener(handleStorageChange);
   }, [refetchBlueprints, refetchLastBlueprint]);
 
-  const { data: projectsData } = useQuery({
+  const { data: projectsData, isLoading: isProjectsLoading } = useQuery({
     queryKey: ['projects'],
     queryFn: getProjects,
   });
+
+  const isLoading = isBlueprintsLoading || isProjectsLoading;
 
   const projects = projectsData?.data?.projects || [];
 
@@ -440,55 +472,60 @@ export const RecordingsPage: React.FC<{
                       : 'flex flex-col border rounded-lg overflow-hidden bg-white'
                   )}
                 >
-                  {filteredItems.map(item => (
-                    <div key={item.id} onClick={e => e.stopPropagation()}>
-                      <RecordingItem
-                        recording={item}
-                        viewMode={viewMode}
-                        isSelected={selectedId === item.id}
-                        onClick={() => {
-                          setSelectedId(item.id);
-                          setShowDetails(true);
-                        }}
-                        onDoubleClick={() => {
-                          const url = chrome.runtime.getURL(
-                            `recording-detail.html?id=${item.id}`
-                          );
-                          chrome.runtime.sendMessage({
-                            type: MessageType.OPEN_URL,
-                            data: { url },
-                          });
-                        }}
-                        onRun={e => {
-                          e.stopPropagation();
-                          handleRunTest(item);
-                        }}
-                        onDelete={e => {
-                          e.stopPropagation();
-                          handleDelete(item.id);
-                        }}
-                        onRename={handleRename}
-                        onExportPlaywright={e => {
-                          e.stopPropagation();
-                          handleExportPlaywright(item);
-                        }}
-                        onExportJson={e => {
-                          e.stopPropagation();
-                          handleExportJson(item);
-                        }}
-                        onRunInAgent={e => {
-                          e.stopPropagation();
-                          handleRunInAgent(item);
-                        }}
-                        onCopyScript={e => {
-                          e.stopPropagation();
-                          handleShareCopyScript(item);
-                        }}
-                        portalContainer={portalContainer}
-                      />
-                    </div>
-                  ))}
-                  {filteredItems.length === 0 && (
+                  {isLoading ? (
+                    Array.from({ length: 8 }).map((_, i) => (
+                      <RecordingSkeleton key={i} viewMode={viewMode} />
+                    ))
+                  ) : filteredItems.length > 0 ? (
+                    filteredItems.map(item => (
+                      <div key={item.id} onClick={e => e.stopPropagation()}>
+                        <RecordingItem
+                          recording={item}
+                          viewMode={viewMode}
+                          isSelected={selectedId === item.id}
+                          onClick={() => {
+                            setSelectedId(item.id);
+                            setShowDetails(true);
+                          }}
+                          onDoubleClick={() => {
+                            const url = chrome.runtime.getURL(
+                              `recording-detail.html?id=${item.id}`
+                            );
+                            chrome.runtime.sendMessage({
+                              type: MessageType.OPEN_URL,
+                              data: { url },
+                            });
+                          }}
+                          onRun={e => {
+                            e.stopPropagation();
+                            handleRunTest(item);
+                          }}
+                          onDelete={e => {
+                            e.stopPropagation();
+                            handleDelete(item.id);
+                          }}
+                          onRename={handleRename}
+                          onExportPlaywright={e => {
+                            e.stopPropagation();
+                            handleExportPlaywright(item);
+                          }}
+                          onExportJson={e => {
+                            e.stopPropagation();
+                            handleExportJson(item);
+                          }}
+                          onRunInAgent={e => {
+                            e.stopPropagation();
+                            handleRunInAgent(item);
+                          }}
+                          onCopyScript={e => {
+                            e.stopPropagation();
+                            handleShareCopyScript(item);
+                          }}
+                          portalContainer={portalContainer}
+                        />
+                      </div>
+                    ))
+                  ) : (
                     <div className="col-span-full py-12 flex flex-col items-center justify-center text-gray-400 bg-gray-50/50 rounded-xl border-2 border-dashed border-gray-200">
                       <FileText className="w-12 h-12 mb-2 opacity-20" />
                       <p>No recordings found in this folder</p>
