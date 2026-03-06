@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import {
   FileText,
   Play,
@@ -8,8 +8,11 @@ import {
   ExternalLink,
   PlusCircle,
   Loader2,
+  Pencil,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Skeleton } from '@/components/ui/skeleton';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import {
   Select,
@@ -32,6 +35,23 @@ interface CompactRecordingsListProps {
   portalContainer?: HTMLDivElement | null;
 }
 
+const CompactRecordingSkeleton = () => (
+  <div className="px-4 py-3 space-y-2 border-b border-gray-50">
+    <div className="flex items-center gap-2">
+      <Skeleton className="h-4 flex-1" />
+      <div className="flex gap-1">
+        <Skeleton className="h-7 w-7 rounded-md" />
+        <Skeleton className="h-7 w-7 rounded-md" />
+        <Skeleton className="h-7 w-7 rounded-md" />
+      </div>
+    </div>
+    <div className="flex items-center gap-3">
+      <Skeleton className="h-3 w-16" />
+      <Skeleton className="h-3 w-20" />
+    </div>
+  </div>
+);
+
 export const CompactRecordingsList: React.FC<CompactRecordingsListProps> = ({
   onClose,
   onViewAll,
@@ -39,6 +59,10 @@ export const CompactRecordingsList: React.FC<CompactRecordingsListProps> = ({
 }) => {
   const [selectedProjectId, setSelectedProjectId] = useState<string>('all');
   const [error, setError] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [editName, setEditName] = useState('');
+  const editInputRef = useRef<HTMLInputElement>(null);
   const isPageRestricted = isRestrictedUrl(window.location.href);
   const containerRef = React.useRef<HTMLDivElement>(null);
   const [portalReady, setPortalReady] = useState(false);
@@ -197,6 +221,42 @@ export const CompactRecordingsList: React.FC<CompactRecordingsListProps> = ({
     }, 300);
   };
 
+  useEffect(() => {
+    if (editingId && editInputRef.current) {
+      editInputRef.current.focus();
+      editInputRef.current.select();
+    }
+  }, [editingId]);
+
+  const handleStartRename = (e: React.MouseEvent, rec: TestBlueprint) => {
+    e.stopPropagation();
+    setEditingId(rec.id);
+    setEditName(rec.name);
+  };
+
+  const handleRename = (id: string) => {
+    if (editName.trim() && editName !== recordings.find(r => r.id === id)?.name) {
+      chrome.runtime.sendMessage(
+        {
+          type: MessageType.UPDATE_BLUEPRINT,
+          data: { id, data: { name: editName.trim() } },
+        },
+        () => {
+          refetchRecordings();
+        }
+      );
+    }
+    setEditingId(null);
+  };
+
+  const handleRenameKeyDown = (e: React.KeyboardEvent, id: string) => {
+    if (e.key === 'Enter') {
+      handleRename(id);
+    } else if (e.key === 'Escape') {
+      setEditingId(null);
+    }
+  };
+
   const handleRunTest = (blueprint: TestBlueprint) => {
     chrome.runtime.sendMessage({
       type: MessageType.START_PLAYBACK,
@@ -347,12 +407,9 @@ export const CompactRecordingsList: React.FC<CompactRecordingsListProps> = ({
 
       <ScrollArea className="flex-1 overflow-auto">
         {isLoading ? (
-          <div className="p-4 space-y-3">
-            {[1, 2, 3].map(i => (
-              <div key={i} className="animate-pulse space-y-2">
-                <div className="h-4 bg-gray-100 rounded w-3/4"></div>
-                <div className="h-3 bg-gray-50 rounded w-1/2"></div>
-              </div>
+          <div className="divide-y divide-gray-50">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <CompactRecordingSkeleton key={i} />
             ))}
           </div>
         ) : filteredRecordings.length === 0 ? (
@@ -389,6 +446,7 @@ export const CompactRecordingsList: React.FC<CompactRecordingsListProps> = ({
                 key={rec.id}
                 className="px-4 py-3 hover:bg-gray-50/80 transition-colors group cursor-pointer"
                 onClick={() => {
+                  if (editingId === rec.id) return;
                   const url = chrome.runtime.getURL(
                     `recording-detail.html?id=${rec.id}`
                   );
@@ -399,32 +457,86 @@ export const CompactRecordingsList: React.FC<CompactRecordingsListProps> = ({
                 }}
               >
                 <div className="flex items-center gap-2 mb-1.5">
-                  <span className="font-medium text-sm text-gray-900 truncate group-hover:text-red-600 transition-colors flex-1 min-w-0">
-                    {rec.name}
-                  </span>
+                  {editingId === rec.id ? (
+                    <Input
+                      ref={editInputRef}
+                      value={editName}
+                      onChange={e => setEditName(e.target.value)}
+                      onBlur={() => handleRename(rec.id)}
+                      onKeyDown={e => handleRenameKeyDown(e, rec.id)}
+                      onClick={e => e.stopPropagation()}
+                      className="h-7 text-sm py-0 flex-1"
+                    />
+                  ) : (
+                    <span className="font-medium text-sm text-gray-900 truncate group-hover:text-red-600 transition-colors flex-1 min-w-0">
+                      {rec.name}
+                    </span>
+                  )}
                   <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-7 w-7 hover:bg-green-50 hover:text-green-600"
-                      onClick={e => {
-                        e.stopPropagation();
-                        handleRunTest(rec);
-                      }}
-                    >
-                      <Play className="w-3.5 h-3.5 fill-current" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-7 w-7 hover:bg-red-50 hover:text-red-600"
-                      onClick={e => {
-                        e.stopPropagation();
-                        handleDelete(rec.id);
-                      }}
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </Button>
+                    {confirmDeleteId === rec.id ? (
+                      <div className="flex items-center gap-1 bg-red-50 px-1.5 py-0.5 rounded border border-red-100">
+                        <span className="text-[9px] font-bold text-red-600 uppercase tracking-tighter">
+                          Delete?
+                        </span>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6 text-red-600 hover:bg-red-100"
+                          onClick={e => {
+                            e.stopPropagation();
+                            handleDelete(rec.id);
+                            setConfirmDeleteId(null);
+                          }}
+                        >
+                          <X className="w-3 h-3 invisible" /> {/* Placeholder for alignment */}
+                          <span className="absolute inset-0 flex items-center justify-center font-bold text-[9px]">YES</span>
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6 text-gray-500 hover:bg-gray-100"
+                          onClick={e => {
+                            e.stopPropagation();
+                            setConfirmDeleteId(null);
+                          }}
+                        >
+                          <span className="font-bold text-[9px]">NO</span>
+                        </Button>
+                      </div>
+                    ) : !editingId && (
+                      <>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 hover:bg-zinc-100"
+                          onClick={e => handleStartRename(e, rec)}
+                        >
+                          <Pencil className="w-3.5 h-3.5" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 hover:bg-green-50 hover:text-green-600"
+                          onClick={e => {
+                            e.stopPropagation();
+                            handleRunTest(rec);
+                          }}
+                        >
+                          <Play className="w-3.5 h-3.5 fill-current" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 hover:bg-red-50 hover:text-red-600"
+                          onClick={e => {
+                            e.stopPropagation();
+                            setConfirmDeleteId(rec.id);
+                          }}
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </Button>
+                      </>
+                    )}
                   </div>
                 </div>
                 <div className="flex items-center gap-3 text-[11px] text-gray-500">
