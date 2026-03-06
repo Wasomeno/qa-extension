@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   FileText,
   Play,
@@ -10,9 +10,13 @@ import {
   Copy,
   Trash2,
   Download,
+  Pencil,
+  Check,
+  X,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { TestBlueprint } from '@/types/recording';
 import {
   DropdownMenu,
@@ -33,6 +37,7 @@ interface RecordingItemProps {
   viewMode?: 'grid' | 'list';
   onRun: (e: React.MouseEvent) => void;
   onDelete: (e: React.MouseEvent) => void;
+  onRename: (id: string, newName: string) => void;
   onExportPlaywright: (e: React.MouseEvent) => void;
   onExportJson: (e: React.MouseEvent) => void;
   onRunInAgent: (e: React.MouseEvent) => void;
@@ -48,12 +53,47 @@ export const RecordingItem: React.FC<RecordingItemProps> = ({
   viewMode = 'grid',
   onRun,
   onDelete,
+  onRename,
   onExportPlaywright,
   onExportJson,
   onRunInAgent,
   onCopyScript,
   portalContainer,
 }) => {
+  const [isEditing, setIsEditing] = useState(false);
+  const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
+  const [editName, setEditName] = useState(recording.name);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (isEditing) {
+      inputRef.current?.focus();
+      inputRef.current?.select();
+    }
+  }, [isEditing]);
+
+  const handleStartEdit = (e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    setIsEditing(true);
+    setEditName(recording.name);
+  };
+
+  const handleSave = () => {
+    if (editName.trim() && editName !== recording.name) {
+      onRename(recording.id, editName.trim());
+    }
+    setIsEditing(false);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      handleSave();
+    } else if (e.key === 'Escape') {
+      setEditName(recording.name);
+      setIsEditing(false);
+    }
+  };
+
   const Actions = () => (
     <DropdownMenu>
       <DropdownMenuTrigger asChild onClick={e => e.stopPropagation()}>
@@ -68,6 +108,10 @@ export const RecordingItem: React.FC<RecordingItemProps> = ({
       >
         <DropdownMenuItem className="gap-2" onClick={onRunInAgent}>
           <Bot className="w-4 h-4 text-gray-900" /> Run in Agent
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem className="gap-2" onClick={handleStartEdit}>
+          <Pencil className="w-4 h-4" /> Rename
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuSub>
@@ -89,12 +133,45 @@ export const RecordingItem: React.FC<RecordingItemProps> = ({
         <DropdownMenuSeparator />
         <DropdownMenuItem
           className="gap-2 text-red-600 focus:text-red-600"
-          onClick={onDelete}
+          onClick={e => {
+            e.stopPropagation();
+            setIsConfirmingDelete(true);
+          }}
         >
           <Trash2 className="w-4 h-4" /> Delete
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
+  );
+
+  const DeleteConfirmation = () => (
+    <div
+      className="flex items-center gap-1 bg-red-50 px-2 py-1 rounded-md border border-red-100"
+      onClick={e => e.stopPropagation()}
+    >
+      <span className="text-[10px] font-bold text-red-600 uppercase tracking-tighter mr-1">
+        Delete?
+      </span>
+      <Button
+        variant="ghost"
+        size="icon"
+        className="h-6 w-6 text-red-600 hover:bg-red-100"
+        onClick={onDelete}
+      >
+        <Check className="w-3.5 h-3.5" />
+      </Button>
+      <Button
+        variant="ghost"
+        size="icon"
+        className="h-6 w-6 text-gray-500 hover:bg-gray-100"
+        onClick={e => {
+          e.stopPropagation();
+          setIsConfirmingDelete(false);
+        }}
+      >
+        <X className="w-3.5 h-3.5" />
+      </Button>
+    </div>
   );
 
   if (viewMode === 'list') {
@@ -108,22 +185,42 @@ export const RecordingItem: React.FC<RecordingItemProps> = ({
         onDoubleClick={onDoubleClick}
       >
         <FileText className="w-5 h-5 text-zinc-600" />
-        <span className="flex-1 font-medium text-gray-700 truncate">
-          {recording.name}
-        </span>
+        <div className="flex-1 min-w-0">
+          {isEditing ? (
+            <Input
+              ref={inputRef}
+              value={editName}
+              onChange={e => setEditName(e.target.value)}
+              onBlur={handleSave}
+              onKeyDown={handleKeyDown}
+              onClick={e => e.stopPropagation()}
+              className="h-7 text-sm py-0"
+            />
+          ) : (
+            <span className="font-medium text-gray-700 truncate block">
+              {recording.name}
+            </span>
+          )}
+        </div>
         <span className="text-xs text-gray-500 w-24 text-right flex items-center justify-end gap-1">
           <Clock className="w-3 h-3" /> {recording.steps.length} steps
         </span>
         <div className="flex items-center gap-1">
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8 text-zinc-900 opacity-0 group-hover:opacity-100"
-            onClick={onRun}
-          >
-            <Play className="w-4 h-4 fill-current" />
-          </Button>
-          <Actions />
+          {isConfirmingDelete ? (
+            <DeleteConfirmation />
+          ) : (
+            <>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 text-zinc-900 opacity-0 group-hover:opacity-100"
+                onClick={onRun}
+              >
+                <Play className="w-4 h-4 fill-current" />
+              </Button>
+              <Actions />
+            </>
+          )}
         </div>
       </div>
     );
@@ -132,7 +229,7 @@ export const RecordingItem: React.FC<RecordingItemProps> = ({
   return (
     <div
       className={cn(
-        'flex flex-col border rounded-xl overflow-hidden hover:shadow-md hover:border-zinc-300 cursor-pointer transition-all bg-white group',
+        'flex flex-col border rounded-xl overflow-hidden hover:shadow-md hover:border-zinc-300 cursor-pointer transition-all bg-white group relative',
         isSelected
           ? 'border-zinc-900 bg-zinc-50 ring-1 ring-zinc-900'
           : 'border-gray-200'
@@ -140,6 +237,39 @@ export const RecordingItem: React.FC<RecordingItemProps> = ({
       onClick={onClick}
       onDoubleClick={onDoubleClick}
     >
+      {isConfirmingDelete && (
+        <div
+          className="absolute inset-0 z-10 bg-white/95 backdrop-blur-sm flex flex-col items-center justify-center p-4 text-center animate-in fade-in duration-200"
+          onClick={e => e.stopPropagation()}
+        >
+          <Trash2 className="w-8 h-8 text-red-500 mb-2" />
+          <p className="text-sm font-bold text-gray-900 mb-1">
+            Delete this recording?
+          </p>
+          <p className="text-xs text-gray-500 mb-4">
+            This action cannot be undone.
+          </p>
+          <div className="flex items-center gap-2 w-full">
+            <Button
+              variant="outline"
+              className="flex-1 h-9 text-xs"
+              onClick={e => {
+                e.stopPropagation();
+                setIsConfirmingDelete(false);
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              className="flex-1 h-9 text-xs bg-red-600 hover:bg-red-700"
+              onClick={onDelete}
+            >
+              Delete
+            </Button>
+          </div>
+        </div>
+      )}
       <div className="aspect-video bg-gray-100 flex items-center justify-center relative overflow-hidden">
         <FileText className="w-10 h-10 text-gray-300" />
         <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 flex items-center justify-center transition-all">
@@ -160,9 +290,21 @@ export const RecordingItem: React.FC<RecordingItemProps> = ({
       <div className="p-4">
         <div className="flex items-start justify-between gap-2">
           <div className="flex-1 min-w-0">
-            <p className="font-semibold text-gray-900 truncate group-hover:text-zinc-900 transition-colors">
-              {recording.name}
-            </p>
+            {isEditing ? (
+              <Input
+                ref={inputRef}
+                value={editName}
+                onChange={e => setEditName(e.target.value)}
+                onBlur={handleSave}
+                onKeyDown={handleKeyDown}
+                onClick={e => e.stopPropagation()}
+                className="h-7 text-sm py-0"
+              />
+            ) : (
+              <p className="font-semibold text-gray-900 truncate group-hover:text-zinc-900 transition-colors">
+                {recording.name}
+              </p>
+            )}
             <p className="text-xs text-gray-500 flex items-center gap-1 mt-1">
               <Clock className="w-3 h-3" /> {recording.steps.length} steps
             </p>
