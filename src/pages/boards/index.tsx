@@ -91,13 +91,13 @@ export const BoardsPage: React.FC<BoardsPageProps> = ({
         id: selectedBoardData.id.toString(),
         name: selectedBoardData.name,
         avatarUrl: activeProject?.avatar_url,
-        columns: selectedBoardData.lists
+        columns: (selectedBoardData.lists ?? [])
           .map(list => ({
             id: list.id.toString(),
             title: list.label?.name || `List ${list.position}`,
             color: list.label?.color,
             textColor: list.label?.text_color,
-            issues: list.issues.map(issue => ({
+            issues: (list.issues ?? []).map(issue => ({
               id: issue.id.toString(),
               iid: issue.iid,
               title: issue.title,
@@ -108,7 +108,7 @@ export const BoardsPage: React.FC<BoardsPageProps> = ({
               webUrl: activeProject?.web_url
                 ? `${activeProject.web_url}/-/issues/${issue.iid}`
                 : '',
-              assignee: issue.assignees[0]
+              assignee: issue.assignees?.[0]
                 ? {
                     id: issue.assignees[0].id.toString(),
                     name: issue.assignees[0].name,
@@ -116,7 +116,7 @@ export const BoardsPage: React.FC<BoardsPageProps> = ({
                     avatarUrl: issue.assignees[0].avatar_url,
                   }
                 : undefined,
-              labels: issue.labels.map(label => ({
+              labels: (issue.labels ?? []).map(label => ({
                 id: label.id.toString(),
                 name: label.name,
                 color: label.color,
@@ -143,7 +143,12 @@ export const BoardsPage: React.FC<BoardsPageProps> = ({
             <Skeleton className="h-9 w-[250px]" />
           ) : (
             <ProjectFilter
-              projects={projects}
+              projects={projects.map(p => ({
+                id: p.id,
+                name: p.name,
+                name_with_namespace: p.name_with_namespace,
+                avatar_url: p.avatar_url,
+              }))}
               selectedProjectIds={activeProjectId ? [activeProjectId] : []}
               onSelect={handleProjectSelect}
               portalContainer={portalContainer}
@@ -195,8 +200,8 @@ export const BoardsPage: React.FC<BoardsPageProps> = ({
                             },
                           ]
                         : [],
-                      labels: issue.labels.map(l => l.name),
-                      label_details: issue.labels.map(l => ({
+                      labels: (issue.labels ?? []).map(l => l.name),
+                      label_details: (issue.labels ?? []).map(l => ({
                         id: Number(l.id.split('-')[0]) || 0, // Best effort parse if id is composite
                         name: l.name,
                         color: l.color,

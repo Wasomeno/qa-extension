@@ -20,6 +20,7 @@ import {
 export interface FilterableProject {
   id: number | string;
   name: string;
+  name_with_namespace?: string;
   avatar_url?: string;
   avatarUrl?: string; // Handle both cases for now
 }
@@ -60,7 +61,7 @@ export function ProjectFilter({
           <div className="flex items-center gap-2 truncate">
             <Filter className="h-4 w-4 shrink-0 opacity-50" />
             {singleSelect && selectedProject ? (
-              <span className="truncate">{selectedProject.name}</span>
+              <span className="truncate">{selectedProject.name_with_namespace || selectedProject.name}</span>
             ) : selectedCount === 0 ? (
               <span>Filter projects...</span>
             ) : (
@@ -106,7 +107,7 @@ export function ProjectFilter({
                         className="h-4 w-4 rounded-full border border-gray-200"
                       />
                     )}
-                    <span className="truncate">{project.name}</span>
+                    <span className="truncate">{project.name_with_namespace || project.name}</span>
                   </div>
                 </CommandItem>
               ))}
