@@ -671,6 +671,9 @@ class BackgroundService {
             name: blueprint.name || 'Untitled Recording',
             description: blueprint.description || '',
             status: blueprint.status || 'ready',
+            projectId: blueprint.projectId?.toString(),
+            issueId: blueprint.issueId,
+            createdAt: blueprint.createdAt || Date.now(),
             steps: (blueprint.steps || []).map((step: any) => ({
               action: step.action,
               description: step.description || '',
@@ -686,6 +689,8 @@ class BackgroundService {
             })),
             parameters: blueprint.parameters || [],
           };
+
+          console.log('[Background] Saving recording payload:', recording);
 
           const response = await api.post<any>('/recordings', {
             body: recording as any,
