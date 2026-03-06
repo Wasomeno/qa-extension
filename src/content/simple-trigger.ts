@@ -25,20 +25,20 @@ class SimpleTrigger {
         : '';
     const isMac = /mac|darwin/.test(platform);
 
-          if (
-            isMac &&
-            event.metaKey &&
-            event.shiftKey &&
-            !event.ctrlKey &&
-            !event.altKey
-          ) {
-            // Only trigger if it's a modifier key itself (not another key with modifiers)
-            const isModifierOnly = event.key === 'Meta' || event.key === 'Shift';
-            if (isModifierOnly) {
-              void this.setFloatingTriggerOpacity(0.1);
-              return;
-            }
-          }
+    if (
+      isMac &&
+      event.metaKey &&
+      event.shiftKey &&
+      !event.ctrlKey &&
+      !event.altKey
+    ) {
+      // Only trigger if it's a modifier key itself (not another key with modifiers)
+      const isModifierOnly = event.key === 'Meta' || event.key === 'Shift';
+      if (isModifierOnly) {
+        void this.setFloatingTriggerOpacity(0.1);
+        return;
+      }
+    }
     if (this.isNativeScreenshotShortcut(event)) {
       this.handleNativeScreenshot();
     }
@@ -123,8 +123,7 @@ class SimpleTrigger {
         passive: true,
       });
       this.screenshotListenersAttached = true;
-    } catch (error) {
-    }
+    } catch (error) {}
   }
 
   private async handleToggleShortcut(): Promise<void> {
@@ -141,8 +140,7 @@ class SimpleTrigger {
       } else {
         await this.activate();
       }
-    } catch (error) {
-    }
+    } catch (error) {}
   }
 
   private isNativeScreenshotShortcut(event: KeyboardEvent): boolean {
@@ -183,8 +181,7 @@ class SimpleTrigger {
           detail: { opacity },
         })
       );
-    } catch (error) {
-    }
+    } catch (error) {}
   }
 
   private handleNativeScreenshot(): void {
@@ -197,8 +194,7 @@ class SimpleTrigger {
           this.scheduleScreenshotRestore();
         }
       })
-      .catch(error => {
-      });
+      .catch(error => {});
   }
 
   private scheduleScreenshotRestore(): void {
@@ -209,12 +205,10 @@ class SimpleTrigger {
         if (this.hiddenReason === 'auto') {
           try {
             await this.setFloatingTriggerVisibility(true, 'auto');
-          } catch (error) {
-          }
+          } catch (error) {}
         }
       }, this.SCREENSHOT_RESTORE_DELAY);
-    } catch (error) {
-    }
+    } catch (error) {}
   }
 
   private clearScreenshotHideTimeout(): void {
@@ -341,8 +335,7 @@ class SimpleTrigger {
       if (this.floatingTriggerContainer?.ownerDocument?.defaultView) {
         return this.floatingTriggerContainer.ownerDocument.defaultView;
       }
-    } catch (error) {
-    }
+    } catch (error) {}
     return window;
   }
 
@@ -516,8 +509,7 @@ class SimpleTrigger {
           onClose: () => this.removeFloatingTrigger(),
         })
       );
-    } catch (error) {
-    }
+    } catch (error) {}
   }
 
   private removeFloatingTrigger(): void {

@@ -20,9 +20,9 @@ export const listRecordings = async (): Promise<TestRecording[]> => {
 };
 
 export const deleteRecording = async (id: string) => {
-    const response = await api.delete<any>(`/recordings/${id}`);
-    if (!response.success) {
-        throw new Error(response.error || 'Failed to delete recording');
-    }
-    return response.data;
-}
+  const response = await api.delete<any>(`/recordings/${id}`);
+  if (!response.success) {
+    throw new Error(response.error || 'Failed to delete recording');
+  }
+  return response.data;
+};
