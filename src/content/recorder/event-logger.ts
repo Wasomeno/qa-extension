@@ -88,21 +88,32 @@ export class EventLogger {
     if (!target) return null;
 
     if (eventType === 'input' || eventType === 'change') {
-      return (
-        target.closest(
-          'input, textarea, select, [contenteditable="true"], [contenteditable=""]'
-        ) || target
-      ) as HTMLElement;
+      return (target.closest(
+        'input, textarea, select, [contenteditable="true"], [contenteditable=""]'
+      ) || target) as HTMLElement;
     }
 
     // Traverse up to find semantic interactive element to avoid capturing SVGs/spans inside buttons
     let current: HTMLElement | null = target;
     const interactiveSelectors = [
-      'button', 'a[href]', 'input', 'textarea', 'select', 
-      '[role="button"]', '[role="link"]', '[role="menuitem"]', '[role="tab"]',
-      '[role="option"]', '[role="gridcell"]', '[role="treeitem"]',
-      'label', '[data-testid]', '[data-test-id]', '[data-qa]', '[data-cy]',
-      'td[title]' // Common for datepickers like Ant Design
+      'button',
+      'a[href]',
+      'input',
+      'textarea',
+      'select',
+      '[role="button"]',
+      '[role="link"]',
+      '[role="menuitem"]',
+      '[role="tab"]',
+      '[role="option"]',
+      '[role="gridcell"]',
+      '[role="treeitem"]',
+      'label',
+      '[data-testid]',
+      '[data-test-id]',
+      '[data-qa]',
+      '[data-cy]',
+      'td[title]', // Common for datepickers like Ant Design
     ].join(', ');
 
     while (current && current !== document.body) {

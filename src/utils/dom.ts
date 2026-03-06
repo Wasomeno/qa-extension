@@ -40,7 +40,18 @@ const STABLE_ATTRIBUTES = [
   'alt',
 ];
 
-const STABLE_TAGS = ['button', 'a', 'input', 'select', 'textarea', 'nav', 'header', 'footer', 'section', 'article'];
+const STABLE_TAGS = [
+  'button',
+  'a',
+  'input',
+  'select',
+  'textarea',
+  'nav',
+  'header',
+  'footer',
+  'section',
+  'article',
+];
 
 export interface XPathCandidate {
   xpath: string;
@@ -62,7 +73,12 @@ function isLikelyStableClassName(className: string): boolean {
 function isStableId(id: string | undefined): boolean {
   if (!id) return false;
   if (/^\d+$/.test(id)) return false;
-  if (id.includes('rc-tabs-') || id.includes('rc-menu-') || id.includes('rc-select-')) return false;
+  if (
+    id.includes('rc-tabs-') ||
+    id.includes('rc-menu-') ||
+    id.includes('rc-select-')
+  )
+    return false;
   if (/^id-[a-zA-Z0-9]{6,}$/.test(id)) return false; // e.g. id-b3x9z2
   return true;
 }
@@ -88,13 +104,19 @@ export function generateXPathCandidates(element: Element): XPathCandidate[] {
   const textContent = element.textContent?.trim();
   if (textContent && textContent.length > 0 && textContent.length < 60) {
     const escaped = escapeXPathValue(textContent);
-    // Exact match
-    candidates.push({ xpath: `//${tagName}[text()="${escaped}"]`, type: 'text' });
-    // Normalize space match
-    candidates.push({ xpath: `//${tagName}[normalize-space()="${escaped}"]`, type: 'text' });
-    // Partial match
+    // Exact match using dot (includes nested text)
+    candidates.push({ xpath: `//${tagName}[.='${escaped}']`, type: 'text' });
+    // Normalize space match (best for multi-line or spaced text)
+    candidates.push({
+      xpath: `//${tagName}[normalize-space(.)='${escaped}']`,
+      type: 'text',
+    });
+    // Partial match (very robust)
     if (textContent.length > 5) {
-      candidates.push({ xpath: `//${tagName}[contains(text(), "${escaped.substring(0, 30)}")]`, type: 'text' });
+      candidates.push({
+        xpath: `//${tagName}[contains(., '${escaped.substring(0, 30)}')]`,
+        type: 'text',
+      });
     }
   }
 
@@ -102,19 +124,33 @@ export function generateXPathCandidates(element: Element): XPathCandidate[] {
   for (const attr of ['data-testid', 'data-test-id', 'data-qa', 'data-cy']) {
     const val = element.getAttribute(attr);
     if (val) {
-      candidates.push({ xpath: `//*[@${attr}="${escapeXPathValue(val)}"]`, type: 'attribute' });
+      candidates.push({
+        xpath: `//*[@${attr}='${escapeXPathValue(val)}']`,
+        type: 'attribute',
+      });
     }
   }
 
   // 3. ARIA Roles and Labels
   const role = element.getAttribute('role') || getImplicitRole(element);
-  const ariaLabel = element.getAttribute('aria-label') || element.getAttribute('aria-labelledby');
+  const ariaLabel =
+    element.getAttribute('aria-label') ||
+    element.getAttribute('aria-labelledby');
   if (role) {
     if (ariaLabel) {
-      candidates.push({ xpath: `//${tagName}[@role="${role}" and (@aria-label="${ariaLabel}" or @aria-labelledby="${ariaLabel}")]`, type: 'attribute' });
-      candidates.push({ xpath: `//*[@role="${role}" and @aria-label="${ariaLabel}"]`, type: 'attribute' });
+      candidates.push({
+        xpath: `//${tagName}[@role='${role}' and (@aria-label='${ariaLabel}' or @aria-labelledby='${ariaLabel}')]`,
+        type: 'attribute',
+      });
+      candidates.push({
+        xpath: `//*[@role='${role}' and @aria-label='${ariaLabel}']`,
+        type: 'attribute',
+      });
     } else {
-      candidates.push({ xpath: `//${tagName}[@role="${role}"]`, type: 'attribute' });
+      candidates.push({
+        xpath: `//${tagName}[@role='${role}']`,
+        type: 'attribute',
+      });
     }
   }
 
@@ -122,13 +158,16 @@ export function generateXPathCandidates(element: Element): XPathCandidate[] {
   for (const attr of ['name', 'placeholder', 'alt', 'title']) {
     const val = element.getAttribute(attr);
     if (val) {
-      candidates.push({ xpath: `//${tagName}[@${attr}="${escapeXPathValue(val)}"]`, type: 'attribute' });
+      candidates.push({
+        xpath: `//${tagName}[@${attr}='${escapeXPathValue(val)}']`,
+        type: 'attribute',
+      });
     }
   }
 
   // 5. Stable ID
   if (isStableId(element.id)) {
-    candidates.push({ xpath: `//*[@id="${element.id}"]`, type: 'id' });
+    candidates.push({ xpath: `//*[@id='${element.id}']`, type: 'id' });
   }
 
   return candidates;
@@ -182,9 +221,14 @@ export function findAllByXPath(xpath: string): Element[] {
  * Escape value for XPath string
  */
 function escapeXPathValue(value: string): string {
-  return value
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, "&apos;");
+  return value.replace(/'/g, '&apos;');
+}
+
+/**
+ * Escape value for Playwright-style selectors using single quotes
+ */
+function escapeSelectorValue(value: string): string {
+  return value.replace(/'/g, "\\'");
 }
 
 /**
@@ -199,13 +243,13 @@ export function generateXPath(element: Element): string {
   for (const attr of STABLE_ATTRIBUTES) {
     const value = element.getAttribute(attr);
     if (value) {
-      return `//${element.tagName.toLowerCase()}[@${attr}="${escapeXPathValue(value)}"]`;
+      return `//${element.tagName.toLowerCase()}[@${attr}='${escapeXPathValue(value)}']`;
     }
   }
 
   // Check ID
   if (isStableId(element.id)) {
-    return `//*[@id="${CSS.escape(element.id)}"]`;
+    return `//*[@id='${CSS.escape(element.id)}']`;
   }
 
   // Build path
@@ -218,16 +262,22 @@ export function generateXPath(element: Element): string {
     for (const attr of STABLE_ATTRIBUTES) {
       const value = current.getAttribute(attr);
       if (value) {
-        segment += `[@${attr}="${escapeXPathValue(value)}"]`;
+        segment += `[@${attr}='${escapeXPathValue(value)}']`;
         break;
       }
     }
 
-    if (!current.getAttribute('data-testid') && !current.getAttribute('data-cy') && 
-        !current.getAttribute('data-qa') && !isStableId(current.id)) {
+    if (
+      !current.getAttribute('data-testid') &&
+      !current.getAttribute('data-cy') &&
+      !current.getAttribute('data-qa') &&
+      !isStableId(current.id)
+    ) {
       const parent = current.parentElement;
       if (parent) {
-        const siblings = Array.from(parent.children).filter(c => c.tagName === current!.tagName);
+        const siblings = Array.from(parent.children).filter(
+          c => c.tagName === current!.tagName
+        );
         if (siblings.length > 1) {
           const index = siblings.indexOf(current) + 1;
           segment += `[${index}]`;
@@ -253,46 +303,63 @@ export function generateSelectorCandidates(element: Element): string[] {
   for (const attr of testIdAttrs) {
     const value = element.getAttribute(attr);
     if (value) {
-      candidates.push(`[${attr}="${CSS.escape(value)}"]`);
+      candidates.push(`[${attr}='${CSS.escape(value)}']`);
     }
   }
 
   // 2. Role + Accessible Name (Semantic Priority)
   const role = element.getAttribute('role') || getImplicitRole(element);
-  const ariaLabel = element.getAttribute('aria-label') || element.getAttribute('aria-labelledby');
+  const ariaLabel =
+    element.getAttribute('aria-label') ||
+    element.getAttribute('aria-labelledby');
   const textContent = element.textContent?.trim().substring(0, 50);
 
   if (role) {
     if (ariaLabel) {
-      candidates.push(`${tagName}[role="${CSS.escape(role)}"][aria-label="${CSS.escape(ariaLabel)}"]`);
-      candidates.push(`[role="${CSS.escape(role)}"][aria-label="${CSS.escape(ariaLabel)}"]`);
+      candidates.push(
+        `${tagName}[role='${CSS.escape(role)}'][aria-label='${CSS.escape(ariaLabel)}']`
+      );
+      candidates.push(
+        `[role='${CSS.escape(role)}'][aria-label='${CSS.escape(ariaLabel)}']`
+      );
     }
     if (textContent && textContent.length > 0) {
-      // Note: CSS doesn't have a :text selector, but we'll use this as a hint for the AI/Matcher
-      candidates.push(`${tagName}[role="${CSS.escape(role)}"]`);
+      // Playwright-style :has-text() for better targeting in both extension and backend
+      candidates.push(
+        `${tagName}[role='${CSS.escape(role)}']:has-text('${escapeSelectorValue(textContent)}')`
+      );
+      candidates.push(
+        `[role='${CSS.escape(role)}']:has-text('${escapeSelectorValue(textContent)}')`
+      );
     }
   }
 
   // 3. Labels (for inputs)
-  if (element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement || element instanceof HTMLSelectElement) {
+  if (
+    element instanceof HTMLInputElement ||
+    element instanceof HTMLTextAreaElement ||
+    element instanceof HTMLSelectElement
+  ) {
     const label = findAssociatedLabel(element);
     if (label && label.textContent) {
       const labelText = label.textContent.trim().substring(0, 50);
-      // Again, a semantic hint
-      candidates.push(`label:has-text("${CSS.escape(labelText)}") + ${tagName}`);
+      // Playwright-style for labels
+      candidates.push(
+        `label:has-text('${escapeSelectorValue(labelText)}') + ${tagName}`
+      );
     }
   }
 
   // 4. Name attribute
   const name = element.getAttribute('name');
   if (name) {
-    candidates.push(`${tagName}[name="${CSS.escape(name)}"]`);
+    candidates.push(`${tagName}[name='${CSS.escape(name)}']`);
   }
 
   // 5. Placeholder
   const placeholder = element.getAttribute('placeholder');
   if (placeholder) {
-    candidates.push(`${tagName}[placeholder="${CSS.escape(placeholder)}"]`);
+    candidates.push(`${tagName}[placeholder='${CSS.escape(placeholder)}']`);
   }
 
   // 6. Stable ID
@@ -335,7 +402,8 @@ function getImplicitRole(element: Element): string | null {
   if (tag === 'button') return 'button';
   if (tag === 'a' && element.hasAttribute('href')) return 'link';
   if (tag === 'input') {
-    if (['button', 'submit', 'reset', 'image'].includes(type || '')) return 'button';
+    if (['button', 'submit', 'reset', 'image'].includes(type || ''))
+      return 'button';
     if (type === 'checkbox') return 'checkbox';
     if (type === 'radio') return 'radio';
     return 'textbox';
@@ -348,7 +416,9 @@ function getImplicitRole(element: Element): string | null {
  */
 function findAssociatedLabel(element: HTMLElement): HTMLElement | null {
   if (element.id) {
-    const label = document.querySelector(`label[for="${CSS.escape(element.id)}"]`);
+    const label = document.querySelector(
+      `label[for="${CSS.escape(element.id)}"]`
+    );
     if (label instanceof HTMLElement) return label;
   }
   return element.closest('label');
@@ -363,11 +433,20 @@ export function generateSelector(element: Element): string {
   }
 
   // 1. Try simple unique attributes first
-  const uniqueAttrs = ['data-testid', 'data-test-id', 'data-qa', 'data-cy', 'id'];
+  const uniqueAttrs = [
+    'data-testid',
+    'data-test-id',
+    'data-qa',
+    'data-cy',
+    'id',
+  ];
   for (const attr of uniqueAttrs) {
     const val = element.getAttribute(attr);
     if (val && (attr !== 'id' || isStableId(val))) {
-      const sel = attr === 'id' ? `#${CSS.escape(val)}` : `[${attr}="${CSS.escape(val)}"]`;
+      const sel =
+        attr === 'id'
+          ? `#${CSS.escape(val)}`
+          : `[${attr}='${CSS.escape(val)}']`;
       if (isUniqueSelector(sel)) return sel;
     }
   }
@@ -379,7 +458,7 @@ export function generateSelector(element: Element): string {
 
   while (current && current.tagName.toLowerCase() !== 'html' && depth < 3) {
     let selector = current.tagName.toLowerCase();
-    
+
     // Use ID if stable
     if (isStableId(current.id)) {
       selector = `#${CSS.escape(current.id)}`;
@@ -389,10 +468,15 @@ export function generateSelector(element: Element): string {
     }
 
     // Use stable classes
-    const classes = current.className && typeof current.className === 'string' 
-      ? current.className.trim().split(/\s+/).filter(isLikelyStableClassName).slice(0, 2)
-      : [];
-    
+    const classes =
+      current.className && typeof current.className === 'string'
+        ? current.className
+            .trim()
+            .split(/\s+/)
+            .filter(isLikelyStableClassName)
+            .slice(0, 2)
+        : [];
+
     if (classes.length > 0) {
       selector += '.' + classes.map(c => CSS.escape(c)).join('.');
     }
@@ -400,7 +484,9 @@ export function generateSelector(element: Element): string {
     // Add nth-child only if necessary
     const currentParent: Element | null = current.parentElement;
     if (currentParent) {
-      const siblings = Array.from(currentParent.children).filter(c => (c as Element).tagName === current!.tagName);
+      const siblings = Array.from(currentParent.children).filter(
+        c => (c as Element).tagName === current!.tagName
+      );
       if (siblings.length > 1) {
         const index = Array.from(currentParent.children).indexOf(current) + 1;
         selector += `:nth-child(${index})`;
@@ -409,7 +495,7 @@ export function generateSelector(element: Element): string {
 
     path.unshift(selector);
     if (isUniqueSelector(path.join(' > '))) return path.join(' > ');
-    
+
     current = currentParent;
     depth++;
   }
@@ -445,18 +531,31 @@ export function getElementInfo(element: Element): ElementInfo {
   if (parent) {
     const parentAttributes: Record<string, string> = {};
     for (const attr of parent.attributes) {
-      if (['id', 'data-testid', 'data-test-id', 'data-qa', 'data-cy', 'name', 'role'].includes(attr.name)) {
+      if (
+        [
+          'id',
+          'data-testid',
+          'data-test-id',
+          'data-qa',
+          'data-cy',
+          'name',
+          'role',
+        ].includes(attr.name)
+      ) {
         parentAttributes[attr.name] = attr.value;
       }
     }
 
-    const siblings = Array.from(parent.children).filter(c => c.tagName === element.tagName);
+    const siblings = Array.from(parent.children).filter(
+      c => c.tagName === element.tagName
+    );
 
     parentInfo = {
       tagName: parent.tagName.toLowerCase(),
       id: parent.id || undefined,
       selector: parent.id ? `#${CSS.escape(parent.id)}` : undefined,
-      attributes: Object.keys(parentAttributes).length > 0 ? parentAttributes : undefined,
+      attributes:
+        Object.keys(parentAttributes).length > 0 ? parentAttributes : undefined,
     };
 
     structuralInfo = {
@@ -469,7 +568,9 @@ export function getElementInfo(element: Element): ElementInfo {
   // Generate XPath candidates
   const xpathCandidates = generateXPathCandidates(element);
   const role = element.getAttribute('role') || getImplicitRole(element);
-  const ariaLabel = element.getAttribute('aria-label') || element.getAttribute('aria-labelledby');
+  const ariaLabel =
+    element.getAttribute('aria-label') ||
+    element.getAttribute('aria-labelledby');
 
   return {
     tagName: element.tagName.toLowerCase(),
@@ -539,14 +640,18 @@ export function queryAllShadows(
   // Find all shadow hosts under the current root
   const walker = document.createTreeWalker(root, NodeFilter.SHOW_ELEMENT, {
     acceptNode(node) {
-      return (node as Element).shadowRoot ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_SKIP;
+      return (node as Element).shadowRoot
+        ? NodeFilter.FILTER_ACCEPT
+        : NodeFilter.FILTER_SKIP;
     },
   });
 
   let currentNode = walker.nextNode() as Element | null;
   while (currentNode) {
     if (currentNode.shadowRoot) {
-      results = results.concat(queryAllShadows(selector, currentNode.shadowRoot));
+      results = results.concat(
+        queryAllShadows(selector, currentNode.shadowRoot)
+      );
     }
     currentNode = walker.nextNode() as Element | null;
   }
@@ -574,7 +679,10 @@ export async function isElementActionable(element: Element): Promise<boolean> {
 
   // Check if it's disabled
   if (element instanceof HTMLElement) {
-    if (element.hasAttribute('disabled') || element.getAttribute('aria-disabled') === 'true') {
+    if (
+      element.hasAttribute('disabled') ||
+      element.getAttribute('aria-disabled') === 'true'
+    ) {
       return false;
     }
   }
@@ -611,7 +719,7 @@ export async function isElementActionable(element: Element): Promise<boolean> {
   }
 
   let elAtPoint = document.elementFromPoint(centerX, centerY);
-  
+
   // Pierce Shadow DOM to find the actual element at point
   while (elAtPoint && elAtPoint.shadowRoot) {
     const shadowEl = elAtPoint.shadowRoot.elementFromPoint(centerX, centerY);
@@ -626,7 +734,10 @@ export async function isElementActionable(element: Element): Promise<boolean> {
     return true;
   }
 
-  console.log(`[Actionable] Occlusion check: Element at (${Math.round(centerX)}, ${Math.round(centerY)}) is blocked by:`, elAtPoint);
+  console.log(
+    `[Actionable] Occlusion check: Element at (${Math.round(centerX)}, ${Math.round(centerY)}) is blocked by:`,
+    elAtPoint
+  );
   return false; // Covered by something else
 }
 
@@ -678,7 +789,7 @@ export function highlightElement(
   const {
     color = '#ff6b6b',
     duration = 2000,
-    className = 'qa-extension-highlight',
+    className = 'extension-highlight',
   } = options;
 
   // Remove existing highlights
@@ -706,7 +817,7 @@ export function highlightElement(
   // Add pulse animation
   if (!document.querySelector('#qa-extension-styles')) {
     const style = document.createElement('style');
-    style.id = 'qa-extension-styles';
+    style.id = 'extension-styles';
     style.textContent = `
       @keyframes qa-pulse {
         0% { opacity: 0.6; transform: scale(1); }

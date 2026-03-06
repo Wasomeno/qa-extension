@@ -11,15 +11,18 @@ export class AIProcessor {
     this.genAI = new GoogleGenerativeAI(apiKey);
   }
 
-  public async generateBlueprint(events: RawEvent[]): Promise<TestBlueprint> {
+  public async generateBlueprint(
+    events: RawEvent[],
+    startUrl?: string
+  ): Promise<TestBlueprint> {
     const model = this.genAI.getGenerativeModel({
-      model: 'gemini-1.5-flash',
+      model: 'gemini-3.1-flash-lite-preview',
       generationConfig: {
         responseMimeType: 'application/json',
       },
     });
 
-    const prompt = this.constructPrompt(events);
+    const prompt = this.constructPrompt(events, startUrl);
 
     try {
       const result = await model.generateContent(prompt);
@@ -37,7 +40,7 @@ export class AIProcessor {
     }
   }
 
-  private constructPrompt(events: RawEvent[]): string {
+  private constructPrompt(events: RawEvent[], startUrl?: string): string {
     const eventsSummary = events.map(e => ({
       type: e.type,
       tagName: e.element.tagName,
@@ -55,21 +58,28 @@ export class AIProcessor {
 
 Analyze the events and follow these STRICT guidelines for selector selection:
 
-1. SELECTOR PRIORITY (Highest to Lowest):
+1. INITIAL NAVIGATION (MANDATORY):
+   - The first step in 'steps' MUST ALWAYS be a 'navigate' action to the starting URL: ${startUrl || events[0]?.url || 'the current page'}.
+
+2. SELECTOR PRIORITY (Highest to Lowest):
    - Unique IDs: #submit-button
    - Data Test Attributes: [data-testid="login-btn"]
-   - Semantic Roles + Text (The Playwright Way): If you use a role like "menuitem" or "link", you MUST combine it with visible text. 
-     Example: "div[role='menuitem']:has-text('Master Data')" or "a[role='link']:has-text('District')"
+   - Semantic Roles + Text (Playwright-First): If you combine role and text, use the Playwright-style :has-text() pseudo-class.
+     Example: "li[role='menuitem']:has-text('Master Data')" or "a[role='link']:has-text('District')"
    - Unique XPath: Use a stable XPath from 'xpathCandidates' if CSS is too generic.
 
-2. FORBIDDEN SELECTORS:
+3. FORBIDDEN SELECTORS:
+   - NEVER use double quotes (") inside the 'selector' string. ALWAYS use single quotes ('). This is CRITICAL to avoid backslash escaping in JSON.
+     Correct: "//li[@role='menuitem']"
+     Incorrect: "//li[@role=\"menuitem\"]"
    - NEVER use naked generic tags like "div", "span", "a", "li", "input" without identifying attributes or text.
    - NEVER use naked roles like "[role='menuitem']" or "[role='link']" if they appear multiple times on a page.
    - Avoid brittle nth-child selectors (e.g., "li:nth-child(9) > div") unless absolutely no other option exists.
 
-3. STICKINESS & DISAMBIGUATION:
+4. STICKINESS & DISAMBIGUATION:
    - Every selector you choose must be "strict". It should ideally point to exactly one element.
    - Use 'elementHints' to provide extra context (tagName, textContent, attributes) to the execution engine.
+   - For 'has-text' filters, use the most unique part of the text.
 
 Input Events:
 ${JSON.stringify(eventsSummary, null, 2)}
@@ -77,7 +87,7 @@ ${JSON.stringify(eventsSummary, null, 2)}
 Return ONLY a JSON object matching this TypeScript interface:
 interface TestStep {
   action: 'click' | 'type' | 'navigate' | 'select' | 'assert';
-  selector: string;
+  selector: string; // MANDATORY: Use Playwright-compatible selector with single quotes
   selectorCandidates?: string[];
   elementHints?: {
     tagName?: string;
@@ -100,12 +110,13 @@ interface TestBlueprint {
 Guidelines:
 1. For 'navigate' actions, use the 'url' from the input event as the 'value' property.
 2. For 'type' actions, use the 'value' from the input event.
-3. Prefer stable selectors from 'selectorCandidates' or 'xpathCandidates' over brittle full DOM paths. Keep 'selectorCandidates' when available.
-4. Add 'elementHints' from input event data for click/type/select/assert steps (tagName, textContent, attributes).
-5. Group repetitive clicks or inputs into logical high-level steps.
-6. If a step is a verification (e.g., checking if a login was successful by looking for a username or success message), use the 'assert' action with 'assertionType': 'contains' or 'equals' and set 'expectedValue' to the text recorded in that event.
-7. Do NOT parameterize values. Never output placeholders like \${baseUrl} or \${inputValue}. Preserve literal recorded values in 'value' and 'expectedValue'.
-8. Always return "parameters": [].
+3. Prefer Playwright selectors (using :has-text) from 'selectorCandidates' or stable XPaths.
+4. ENSURE ALL SELECTORS USE SINGLE QUOTES (') TO PREVENT BACKSLASH ESCAPING IN JSON.
+5. Add 'elementHints' from input event data for click/type/select/assert steps (tagName, textContent, attributes).
+6. Group repetitive clicks or inputs into logical high-level steps.
+7. If a step is a verification (e.g., checking if a login was successful by looking for a username or success message), use the 'assert' action with 'assertionType': 'contains' or 'equals' and set 'expectedValue' to the text recorded in that event.
+8. Do NOT parameterize values. Never output placeholders like \${baseUrl} or \${inputValue}. Preserve literal recorded values in 'value' and 'expectedValue'.
+9. Always return "parameters": [].
 `;
   }
 }

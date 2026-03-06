@@ -12,17 +12,27 @@ export class Executor {
   private static readonly DEFAULT_TIMEOUT = 30000;
   private static readonly RETRY_DELAY_MS = 300;
 
-  private static async sendCDPMessage(type: MessageType, data: any): Promise<void> {
-    const response = await new Promise<{ success: boolean; error?: string }>(resolve => {
-      chrome.runtime.sendMessage({ type, data }, resolve);
-    });
+  private static async sendCDPMessage(
+    type: MessageType,
+    data: any
+  ): Promise<void> {
+    const response = await new Promise<{ success: boolean; error?: string }>(
+      resolve => {
+        chrome.runtime.sendMessage({ type, data }, resolve);
+      }
+    );
     if (!response?.success) {
-      throw new Error(`CDP command failed: ${response?.error || 'Unknown error'}`);
+      throw new Error(
+        `CDP command failed: ${response?.error || 'Unknown error'}`
+      );
     }
   }
 
   private static async getTabId(): Promise<number> {
-    const response = await new Promise<{ success: boolean; data?: { tabId: number } }>(resolve => {
+    const response = await new Promise<{
+      success: boolean;
+      data?: { tabId: number };
+    }>(resolve => {
       chrome.runtime.sendMessage({ type: MessageType.GET_TAB_ID }, resolve);
     });
     if (!response?.success || !response.data?.tabId) {
@@ -58,7 +68,10 @@ export class Executor {
       await new Promise(resolve => setTimeout(resolve, 100));
     }
 
-    await this.waitForDomQuiet(Math.max(1000, timeout - (Date.now() - start)), quietWindowMs);
+    await this.waitForDomQuiet(
+      Math.max(1000, timeout - (Date.now() - start)),
+      quietWindowMs
+    );
   }
 
   public static async executeStep(step: TestStep): Promise<string | undefined> {
@@ -81,10 +94,15 @@ export class Executor {
   private static async handleClick(
     step: TestStep
   ): Promise<string | undefined> {
-    console.log(`[Executor] Handling click for selectors:`, this.getSelectors(step));
+    console.log(
+      `[Executor] Handling click for selectors:`,
+      this.getSelectors(step)
+    );
     const element = await this.resolveElement(step, this.DEFAULT_TIMEOUT, true);
     if (!element) {
-      console.error(`[Executor] Click failed: Element not found or actionable.`);
+      console.error(
+        `[Executor] Click failed: Element not found or actionable.`
+      );
       throw new Error(
         `Click failed: Element not found or not interactable for selectors [${this.getSelectors(step).join(', ')}] after ${this.DEFAULT_TIMEOUT}ms`
       );
@@ -101,7 +119,9 @@ export class Executor {
     const rect = element.getBoundingClientRect();
     const tabId = await this.getTabId();
 
-    console.log(`[Executor] Sending CDP click to (${Math.round(rect.left + rect.width / 2)}, ${Math.round(rect.top + rect.height / 2)})`);
+    console.log(
+      `[Executor] Sending CDP click to (${Math.round(rect.left + rect.width / 2)}, ${Math.round(rect.top + rect.height / 2)})`
+    );
     await this.sendCDPMessage(MessageType.CDP_CLICK, {
       tabId,
       x: Math.round(rect.left + rect.width / 2),
@@ -112,7 +132,10 @@ export class Executor {
   }
 
   private static async handleType(step: TestStep): Promise<string | undefined> {
-    console.log(`[Executor] Handling type "${step.value}" for selectors:`, this.getSelectors(step));
+    console.log(
+      `[Executor] Handling type "${step.value}" for selectors:`,
+      this.getSelectors(step)
+    );
     const element = await this.resolveElement(step, this.DEFAULT_TIMEOUT, true);
     if (!element) {
       console.error(`[Executor] Type failed: Element not found or actionable.`);
@@ -153,12 +176,15 @@ export class Executor {
     return getElementValue(element);
   }
 
-  private static async ensureElementInViewport(element: Element): Promise<void> {
+  private static async ensureElementInViewport(
+    element: Element
+  ): Promise<void> {
     const rect = element.getBoundingClientRect();
     const inViewport =
       rect.top >= 0 &&
       rect.left >= 0 &&
-      rect.bottom <= (window.innerHeight || document.documentElement.clientHeight) &&
+      rect.bottom <=
+        (window.innerHeight || document.documentElement.clientHeight) &&
       rect.right <= (window.innerWidth || document.documentElement.clientWidth);
 
     if (!inViewport) {
@@ -226,7 +252,7 @@ export class Executor {
     if (element instanceof HTMLSelectElement) {
       const tabId = await this.getTabId();
       const rect = element.getBoundingClientRect();
-      
+
       // Click to open select
       await this.sendCDPMessage(MessageType.CDP_CLICK, {
         tabId,
@@ -271,31 +297,33 @@ export class Executor {
         });
         return step.value;
       }
-      
-      throw new Error(`Select failed: Could not find option \"${step.value}\" in custom combobox`);
+
+      throw new Error(
+        `Select failed: Could not find option \"${step.value}\" in custom combobox`
+      );
     }
 
     // If it's some other input, try setting its value and triggering change
     if (element instanceof HTMLInputElement) {
-       const tabId = await this.getTabId();
-       const rect = element.getBoundingClientRect();
+      const tabId = await this.getTabId();
+      const rect = element.getBoundingClientRect();
 
-       await this.sendCDPMessage(MessageType.CDP_CLICK, {
-         tabId,
-         x: Math.round(rect.left + rect.width / 2),
-         y: Math.round(rect.top + rect.height / 2),
-       });
+      await this.sendCDPMessage(MessageType.CDP_CLICK, {
+        tabId,
+        x: Math.round(rect.left + rect.width / 2),
+        y: Math.round(rect.top + rect.height / 2),
+      });
 
-       await this.sendCDPMessage(MessageType.CDP_TYPE, {
-         tabId,
-         text: step.value,
-       });
+      await this.sendCDPMessage(MessageType.CDP_TYPE, {
+        tabId,
+        text: step.value,
+      });
 
-       return getElementValue(element);
+      return getElementValue(element);
     }
-    
+
     throw new Error(
-        `Select failed: Element is not a recognized select or combobox type: ${step.selector}`
+      `Select failed: Element is not a recognized select or combobox type: ${step.selector}`
     );
   }
 
@@ -303,7 +331,11 @@ export class Executor {
     step: TestStep
   ): Promise<string | undefined> {
     // Simple assertion: check if element exists
-    const element = await this.resolveElement(step, this.DEFAULT_TIMEOUT, false);
+    const element = await this.resolveElement(
+      step,
+      this.DEFAULT_TIMEOUT,
+      false
+    );
     if (!element) {
       if (step.assertionType === 'not_exists') {
         return 'Not Exists';
@@ -368,9 +400,16 @@ export class Executor {
     timeout: number,
     requireActionable: boolean
   ): Promise<Element | null> {
-    const selectors = this.getSelectors(step);
+    const selectors = this.getSelectors(step).map(s => {
+      if (s.includes(':has-text(')) {
+        console.warn(
+          `[Executor] Found Playwright-specific selector ":has-text()". This is not standard CSS and might fail: ${s}`
+        );
+      }
+      return s;
+    });
     const xpathSelectors = this.getXPathSelectors(step);
-    
+
     if (selectors.length === 0 && xpathSelectors.length === 0) {
       return null;
     }
@@ -379,7 +418,9 @@ export class Executor {
     let lastBest: Element | null = null;
     let attempts = 0;
 
-    console.log(`[Executor] Starting Playwright-style polling for [${selectors.join(', ')}]...`);
+    console.log(
+      `[Executor] Starting Playwright-style polling for [${selectors.join(', ')}]...`
+    );
 
     while (Date.now() - start < timeout) {
       const elapsed = Date.now() - start;
@@ -387,9 +428,11 @@ export class Executor {
 
       // Try CSS selectors first (including Shadow DOM)
       const matches = this.findAllMatches(selectors, xpathSelectors, step);
-      
+
       if (matches.length > 1) {
-        console.warn(`[Executor] Strictness Violation: Found ${matches.length} elements matching. Disambiguating...`);
+        console.warn(
+          `[Executor] Strictness Violation: Found ${matches.length} elements matching. Disambiguating...`
+        );
       }
 
       if (matches.length > 0) {
@@ -397,17 +440,26 @@ export class Executor {
         const bestMatch = matches[0].element;
         lastBest = bestMatch;
 
-        if (!requireActionable || shouldForce || await isElementActionable(bestMatch)) {
-          if (shouldForce) console.warn(`[Executor] Forcing interaction with element after 15s timeout.`);
+        if (
+          !requireActionable ||
+          shouldForce ||
+          (await isElementActionable(bestMatch))
+        ) {
+          if (shouldForce)
+            console.warn(
+              `[Executor] Forcing interaction with element after 15s timeout.`
+            );
           return bestMatch;
         }
-        
-        console.log(`[Executor] Element found but not yet actionable (Visibility/Stability/Occlusion). Retrying...`);
+
+        console.log(
+          `[Executor] Element found but not yet actionable (Visibility/Stability/Occlusion). Retrying...`
+        );
       }
 
       attempts += 1;
       await new Promise(resolve => setTimeout(resolve, this.RETRY_DELAY_MS));
-      
+
       // Periodically wait for DOM to be quiet to avoid race conditions with dynamic loading
       if (attempts % 5 === 0) {
         await this.waitForDomQuiet(500, 150);
@@ -425,16 +477,40 @@ export class Executor {
     const results: { element: Element; score: number }[] = [];
     const seen = new Set<Element>();
 
-    // 1. CSS matches
+    // 1. Playwright-style CSS and text matches
     selectors.forEach((selector, priority) => {
       try {
-        const matches = queryAllShadows(selector);
+        let baseSelector = selector;
+        let textFilter: string | null = null;
+
+        const hasTextMatch =
+          selector.match(/:has-text\('(.+?)'\)/) ||
+          selector.match(/:has-text\("(.+?)"\)/);
+        const textMatch =
+          selector.match(/:text\('(.+?)'\)/) ||
+          selector.match(/:text\("(.+?)"\)/);
+
+        if (hasTextMatch) {
+          baseSelector = selector.replace(hasTextMatch[0], '');
+          textFilter = hasTextMatch[1];
+        } else if (textMatch) {
+          baseSelector = selector.replace(textMatch[0], '');
+          textFilter = textMatch[1];
+        }
+
+        if (!baseSelector) baseSelector = '*';
+
+        const matches = queryAllShadows(baseSelector);
         matches.forEach((el, index) => {
           if (el.isConnected && !seen.has(el)) {
+            if (textFilter && !(el.textContent || '').includes(textFilter)) {
+              return;
+            }
+
             seen.add(el);
             results.push({
               element: el,
-              score: this.scoreElementMatch(el, step, priority, index)
+              score: this.scoreElementMatch(el, step, priority, index),
             });
           }
         });
@@ -450,7 +526,7 @@ export class Executor {
             seen.add(el);
             results.push({
               element: el,
-              score: this.scoreXPathMatch(el, step, priority, index)
+              score: this.scoreXPathMatch(el, step, priority, index),
             });
           }
         });
@@ -469,25 +545,35 @@ export class Executor {
   ): number {
     const hints = step.elementHints;
     const text = (element.textContent || '').trim();
-    // XPath selectors are generally more stable, so start with higher base score
     let score = 30 - selectorPriority * 5 - matchIndex;
 
     if (hints?.tagName) {
-      score += element.tagName.toLowerCase() === hints.tagName.toLowerCase() ? 10 : -5;
+      score +=
+        element.tagName.toLowerCase() === hints.tagName.toLowerCase() ? 10 : -5;
     }
 
     if (hints?.textContent) {
       const normalizedHint = hints.textContent.trim().toLowerCase();
       const normalizedText = text.toLowerCase();
       if (normalizedHint && normalizedText === normalizedHint) {
-        score += 20; // Exact text match is very strong
-      } else if (normalizedHint && normalizedText.includes(normalizedHint.slice(0, 40))) {
+        score += 20;
+      } else if (
+        normalizedHint &&
+        normalizedText.includes(normalizedHint.slice(0, 40))
+      ) {
         score += 8;
       }
     }
 
     if (hints?.attributes) {
-      const highPriorityAttrs = ['data-testid', 'data-test-id', 'data-qa', 'data-cy', 'aria-label', 'role'];
+      const highPriorityAttrs = [
+        'data-testid',
+        'data-test-id',
+        'data-qa',
+        'data-cy',
+        'aria-label',
+        'role',
+      ];
       highPriorityAttrs.forEach(attr => {
         const expected = hints.attributes?.[attr];
         if (expected && element.getAttribute(attr) === expected) {
@@ -502,25 +588,12 @@ export class Executor {
         if (hints.parentInfo.id && parent.id === hints.parentInfo.id) {
           score += 8;
         }
-        if (hints.parentInfo.tagName && parent.tagName.toLowerCase() === hints.parentInfo.tagName.toLowerCase()) {
+        if (
+          hints.parentInfo.tagName &&
+          parent.tagName.toLowerCase() ===
+            hints.parentInfo.tagName.toLowerCase()
+        ) {
           score += 4;
-        }
-      }
-    }
-
-    if (hints?.structuralInfo) {
-      const siblings = element.parentElement 
-        ? Array.from(element.parentElement.children).filter(c => c.tagName === element.tagName)
-        : [];
-      if (siblings.length > 0) {
-        const index = siblings.indexOf(element) + 1;
-        if (index === hints.structuralInfo.siblingIndex) {
-          score += 3;
-        }
-        // Bonus if element is in similar position among siblings
-        const relativePos = Math.abs(index / siblings.length - hints.structuralInfo.siblingIndex / Math.max(hints.structuralInfo.totalSiblings, 1));
-        if (relativePos < 0.2) {
-          score += 2;
         }
       }
     }
@@ -539,22 +612,32 @@ export class Executor {
     let score = 30 - selectorPriority * 5 - matchIndex;
 
     if (hints?.tagName) {
-      score += element.tagName.toLowerCase() === hints.tagName.toLowerCase() ? 10 : -5;
+      score +=
+        element.tagName.toLowerCase() === hints.tagName.toLowerCase() ? 10 : -5;
     }
 
     if (hints?.textContent) {
       const normalizedHint = hints.textContent.trim().toLowerCase();
       const normalizedText = text.toLowerCase();
       if (normalizedHint && normalizedText === normalizedHint) {
-        score += 20; // Exact text match is very strong
-      } else if (normalizedHint && normalizedText.includes(normalizedHint.slice(0, 40))) {
+        score += 20;
+      } else if (
+        normalizedHint &&
+        normalizedText.includes(normalizedHint.slice(0, 40))
+      ) {
         score += 8;
       }
     }
 
     if (hints?.attributes) {
-      const highPriorityAttrs = ['data-testid', 'data-test-id', 'data-qa', 'data-cy', 'aria-label', 'role'];
-      
+      const highPriorityAttrs = [
+        'data-testid',
+        'data-test-id',
+        'data-qa',
+        'data-cy',
+        'aria-label',
+        'role',
+      ];
       highPriorityAttrs.forEach(attr => {
         const expected = hints.attributes?.[attr];
         if (expected && element.getAttribute(attr) === expected) {
@@ -571,31 +654,38 @@ export class Executor {
       });
     }
 
-    // Score parent info if available
     if (hints?.parentInfo) {
       const parent = element.parentElement;
       if (parent) {
         if (hints.parentInfo.id && parent.id === hints.parentInfo.id) {
           score += 8;
         }
-        if (hints.parentInfo.tagName && parent.tagName.toLowerCase() === hints.parentInfo.tagName.toLowerCase()) {
+        if (
+          hints.parentInfo.tagName &&
+          parent.tagName.toLowerCase() ===
+            hints.parentInfo.tagName.toLowerCase()
+        ) {
           score += 4;
         }
       }
     }
 
-    // Score structural info if available
     if (hints?.structuralInfo) {
-      const siblings = element.parentElement 
-        ? Array.from(element.parentElement.children).filter(c => c.tagName === element.tagName)
+      const siblings = element.parentElement
+        ? Array.from(element.parentElement.children).filter(
+            c => c.tagName === element.tagName
+          )
         : [];
       if (siblings.length > 0) {
         const index = siblings.indexOf(element) + 1;
         if (index === hints.structuralInfo.siblingIndex) {
           score += 3;
         }
-        // Bonus if element is in similar position among siblings
-        const relativePos = Math.abs(index / siblings.length - hints.structuralInfo.siblingIndex / Math.max(hints.structuralInfo.totalSiblings, 1));
+        const relativePos = Math.abs(
+          index / siblings.length -
+            hints.structuralInfo.siblingIndex /
+              Math.max(hints.structuralInfo.totalSiblings, 1)
+        );
         if (relativePos < 0.2) {
           score += 2;
         }
@@ -605,16 +695,11 @@ export class Executor {
     return score;
   }
 
-  private static async waitForDomQuiet(
+  private static waitForDomQuiet(
     timeout: number,
     quietWindowMs: number
   ): Promise<void> {
-    if (!document.body) {
-      await new Promise(resolve => setTimeout(resolve, 100));
-      return;
-    }
-
-    await new Promise<void>(resolve => {
+    return new Promise(resolve => {
       let settled = false;
       let quietTimer: number | null = null;
 
