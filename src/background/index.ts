@@ -8,14 +8,13 @@ import { RawEvent, TestRecording } from '../types/recording';
 import { api } from '../services/api';
 import { SAMPLE_BLUEPRINT } from '../lib/seed-data';
 import { isRestrictedUrl } from '../utils/domain-matcher';
-import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
-
+import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 
 const accountId = process.env.R2_ACCOUNT_ID;
 const bucketName = process.env.R2_BUCKET_NAME;
 
 const s3Client = new S3Client({
-  region: "auto",
+  region: 'auto',
   endpoint: `https://${accountId}.r2.cloudflarestorage.com`,
   credentials: {
     accessKeyId: process.env.R2_ACCESS_KEY_ID || 'placeholder',
@@ -28,7 +27,7 @@ export class CDPHandler {
 
   public static async attach(tabId: number): Promise<void> {
     if (this.attachedTabs.has(tabId)) return;
-    
+
     return new Promise((resolve, reject) => {
       chrome.debugger.attach({ tabId }, '1.3', () => {
         if (chrome.runtime.lastError) {
@@ -43,7 +42,7 @@ export class CDPHandler {
 
   public static async detach(tabId: number): Promise<void> {
     if (!this.attachedTabs.has(tabId)) return;
-    
+
     return new Promise((resolve, reject) => {
       chrome.debugger.detach({ tabId }, () => {
         if (chrome.runtime.lastError) {
@@ -56,10 +55,14 @@ export class CDPHandler {
     });
   }
 
-  public static async sendCommand(tabId: number, method: string, params: any): Promise<any> {
+  public static async sendCommand(
+    tabId: number,
+    method: string,
+    params: any
+  ): Promise<any> {
     await this.attach(tabId);
     return new Promise((resolve, reject) => {
-      chrome.debugger.sendCommand({ tabId }, method, params, (result) => {
+      chrome.debugger.sendCommand({ tabId }, method, params, result => {
         if (chrome.runtime.lastError) {
           reject(chrome.runtime.lastError);
         } else {
@@ -69,7 +72,11 @@ export class CDPHandler {
     });
   }
 
-  public static async click(tabId: number, x: number, y: number): Promise<void> {
+  public static async click(
+    tabId: number,
+    x: number,
+    y: number
+  ): Promise<void> {
     // Playwright-style click: move, press, release
     await this.sendCommand(tabId, 'Input.dispatchMouseEvent', {
       type: 'mousePressed',
@@ -102,7 +109,13 @@ export class CDPHandler {
     }
   }
 
-  public static async scroll(tabId: number, x: number, y: number, deltaX: number, deltaY: number): Promise<void> {
+  public static async scroll(
+    tabId: number,
+    x: number,
+    y: number,
+    deltaX: number,
+    deltaY: number
+  ): Promise<void> {
     await this.sendCommand(tabId, 'Input.dispatchMouseEvent', {
       type: 'mouseWheel',
       x,
@@ -119,7 +132,8 @@ class BackgroundService {
   private pendingPlaybacks: Map<string, (result: any) => void> = new Map();
   private isStartingRecording = false;
   private thumbnailCache: Map<string, string> = new Map();
-  private pendingThumbnails: Map<string, Array<(response: any) => void>> = new Map();
+  private pendingThumbnails: Map<string, Array<(response: any) => void>> =
+    new Map();
 
   constructor() {
     this.aiProcessor = new AIProcessor(__GOOGLE_API_KEY__);
@@ -139,7 +153,8 @@ class BackgroundService {
     });
 
     await s3Client.send(command);
-    const publicDomain = process.env.R2_PUBLIC_DOMAIN || 'YOUR_R2_PUBLIC_DOMAIN_HERE';
+    const publicDomain =
+      process.env.R2_PUBLIC_DOMAIN || 'YOUR_R2_PUBLIC_DOMAIN_HERE';
     return `${publicDomain}/${fileName}`;
   }
 
@@ -221,7 +236,124 @@ class BackgroundService {
     // Port-based bridge
     chrome.runtime.onConnect.addListener(port => {
       if (!port) return;
-      
+
+      if (port.name === 'agent-chat-sse') {
+        port.onMessage.addListener(async msg => {
+          if (msg.type !== MessageType.AGENT_CHAT_SSE) return;
+          const { input, session_id } = msg.data;
+
+          try {
+            const response = await fetch(
+              'https://playground-qa-extension.online/api/agent/chat',
+              {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                  input,
+                  session_id,
+                }),
+              }
+            );
+
+            if (!response.ok) {
+              port.postMessage({
+                event: 'error',
+                data: `HTTP error! status: ${response.status}`,
+              });
+              return;
+            }
+
+            const reader = response.body?.getReader();
+            if (!reader) {
+              port.postMessage({
+                event: 'error',
+                data: 'Failed to get reader from response body',
+              });
+              return;
+            }
+
+            const decoder = new TextDecoder();
+            let buffer = '';
+
+            const processBuffer = (text: string, isFinal: boolean = false) => {
+              buffer += text;
+
+              // Handle both \n\n and \r\n\r\n as event separators
+              const blocks = buffer.split(/\r?\n\r?\n/);
+
+              // If not final, the last block might be incomplete, keep it in buffer
+              if (!isFinal) {
+                buffer = blocks.pop() || '';
+              } else {
+                // If it is final, everything in buffer should be processed
+                buffer = '';
+              }
+
+              for (const eventBlock of blocks) {
+                const trimmedBlock = eventBlock.trim();
+                if (!trimmedBlock) continue;
+
+                const lines = trimmedBlock.split(/\r?\n/);
+                let eventType = 'message';
+                let dataString = '';
+
+                for (const line of lines) {
+                  const trimmedLine = line.trim();
+                  if (trimmedLine.startsWith('event:')) {
+                    eventType = trimmedLine.substring(6).trim();
+                  } else if (trimmedLine.startsWith('data:')) {
+                    dataString = trimmedLine.substring(5).trim();
+                  }
+                }
+
+                if (!dataString) {
+                  console.log(
+                    `[Background] SSE Block with no data:`,
+                    trimmedBlock
+                  );
+                  continue;
+                }
+
+                let data = null;
+                try {
+                  data = JSON.parse(dataString);
+                } catch (e) {
+                  data = dataString;
+                }
+
+                console.log(
+                  `[Background] SSE Forwarding - Event: ${eventType}`,
+                  data
+                );
+                port.postMessage({ event: eventType, data });
+              }
+            };
+
+            while (true) {
+              const { value, done } = await reader.read();
+              if (done) {
+                console.log(
+                  '[Background] SSE Stream Done. Finalizing buffer:',
+                  buffer
+                );
+                processBuffer('', true);
+                break;
+              }
+
+              processBuffer(decoder.decode(value, { stream: true }));
+            }
+          } catch (error: any) {
+            port.postMessage({
+              event: 'error',
+              data: error.message || 'Unknown stream error',
+            });
+          }
+        });
+        return;
+      }
+
       if (port.name !== 'bridge') return;
       port.onMessage.addListener(async msg => {
         let _reqId: string | undefined;
@@ -306,8 +438,6 @@ class BackgroundService {
       this.setupContextMenus();
     });
 
-
-
     // Listen for tab updates
     chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
       if (changeInfo.status === 'complete' && tab.url) {
@@ -331,10 +461,13 @@ class BackgroundService {
           }
 
           const cacheKey = `${url}_${timeInSeconds}`;
-          
+
           // Check memory cache first
           if (this.thumbnailCache.has(cacheKey)) {
-            sendResponse({ success: true, data: this.thumbnailCache.get(cacheKey) });
+            sendResponse({
+              success: true,
+              data: this.thumbnailCache.get(cacheKey),
+            });
             return;
           }
 
@@ -357,22 +490,35 @@ class BackgroundService {
           }
 
           // Send message to offscreen document
-          chrome.runtime.sendMessage({
-            type: 'GENERATE_THUMBNAIL_INTERNAL',
-            data: { url, timeInSeconds }
-          }, (response) => {
-            const callbacks = this.pendingThumbnails.get(cacheKey) || [];
-            this.pendingThumbnails.delete(cacheKey);
+          chrome.runtime.sendMessage(
+            {
+              type: 'GENERATE_THUMBNAIL_INTERNAL',
+              data: { url, timeInSeconds },
+            },
+            response => {
+              const callbacks = this.pendingThumbnails.get(cacheKey) || [];
+              this.pendingThumbnails.delete(cacheKey);
 
-            if (response?.success) {
-              this.thumbnailCache.set(cacheKey, response.data);
-              callbacks.forEach(cb => cb({ success: true, data: response.data }));
-            } else {
-              callbacks.forEach(cb => cb({ success: false, error: response?.error || 'Offscreen generation failed' }));
+              if (response?.success) {
+                this.thumbnailCache.set(cacheKey, response.data);
+                callbacks.forEach(cb =>
+                  cb({ success: true, data: response.data })
+                );
+              } else {
+                callbacks.forEach(cb =>
+                  cb({
+                    success: false,
+                    error: response?.error || 'Offscreen generation failed',
+                  })
+                );
+              }
             }
-          });
+          );
         } catch (e: any) {
-          sendResponse({ success: false, error: e?.message || 'Thumbnail generation failed' });
+          sendResponse({
+            success: false,
+            error: e?.message || 'Thumbnail generation failed',
+          });
         }
         break;
 
@@ -383,9 +529,13 @@ class BackgroundService {
 
       case MessageType.FILE_UPLOAD:
         try {
-          const { projectId, base64, fileName, contentType } = message.data || {};
+          const { projectId, base64, fileName, contentType } =
+            message.data || {};
           if (!projectId || !base64) {
-            sendResponse({ success: false, error: 'Missing projectId or file data' });
+            sendResponse({
+              success: false,
+              error: 'Missing projectId or file data',
+            });
             return;
           }
 
@@ -408,7 +558,9 @@ class BackgroundService {
             const errorData = await uploadResp.json().catch(() => ({}));
             sendResponse({
               success: false,
-              error: errorData.message || `Upload failed: ${uploadResp.status} ${uploadResp.statusText}`,
+              error:
+                errorData.message ||
+                `Upload failed: ${uploadResp.status} ${uploadResp.statusText}`,
             });
             return;
           }
@@ -416,7 +568,10 @@ class BackgroundService {
           const data = await uploadResp.json();
           sendResponse({ success: true, data });
         } catch (e: any) {
-          sendResponse({ success: false, error: e?.message || 'Upload failed' });
+          sendResponse({
+            success: false,
+            error: e?.message || 'Upload failed',
+          });
         }
         break;
 
@@ -433,7 +588,10 @@ class BackgroundService {
           const url = await this.uploadToR2(data, fileName, contentType);
           sendResponse({ success: true, data: url });
         } catch (e: any) {
-          sendResponse({ success: false, error: e?.message || 'R2 Upload failed' });
+          sendResponse({
+            success: false,
+            error: e?.message || 'R2 Upload failed',
+          });
         }
         break;
 
@@ -529,8 +687,10 @@ class BackgroundService {
             parameters: blueprint.parameters || [],
           };
 
-          const response = await api.post<any>('/recordings', { body: recording });
-          
+          const response = await api.post<any>('/recordings', {
+            body: recording,
+          });
+
           if (!response.success) {
             sendResponse({ success: false, error: response.error });
             return;
@@ -539,8 +699,36 @@ class BackgroundService {
           // Clear last blueprint after saving
           await chrome.storage.local.remove('lastBlueprint');
 
-          this.broadcast({ type: MessageType.BLUEPRINT_SAVED, data: { blueprint: response.data } });
+          this.broadcast({
+            type: MessageType.BLUEPRINT_SAVED,
+            data: { blueprint: response.data },
+          });
           sendResponse({ success: true, data: { blueprint: response.data } });
+        } catch (e: any) {
+          sendResponse({ success: false, error: e?.message });
+        }
+        break;
+
+      case MessageType.UPDATE_BLUEPRINT:
+        try {
+          const { id, data } = message.data || {};
+          if (!id || !data) {
+            sendResponse({
+              success: false,
+              error: 'Missing blueprint ID or data',
+            });
+            return;
+          }
+
+          const response = await api.patch<any>(`/recordings/${id}`, {
+            body: data,
+          });
+          if (!response.success) {
+            sendResponse({ success: false, error: response.error });
+            return;
+          }
+
+          sendResponse({ success: true, data: response.data });
         } catch (e: any) {
           sendResponse({ success: false, error: e?.message });
         }
@@ -565,8 +753,6 @@ class BackgroundService {
           sendResponse({ success: false, error: e?.message });
         }
         break;
-
-
 
       case MessageType.OPEN_URL:
         try {
@@ -606,10 +792,15 @@ class BackgroundService {
           const firstNavigateStep = blueprint.steps.find(
             (s: any) => s.action === 'navigate'
           );
-          let startUrl = firstNavigateStep?.value || blueprint.baseUrl || 'about:blank';
+          let startUrl =
+            firstNavigateStep?.value || blueprint.baseUrl || 'about:blank';
 
           // Resolve relative URLs against baseUrl
-          if (startUrl && !/^https?:\/\//i.test(startUrl) && blueprint.baseUrl) {
+          if (
+            startUrl &&
+            !/^https?:\/\//i.test(startUrl) &&
+            blueprint.baseUrl
+          ) {
             try {
               startUrl = new URL(startUrl, blueprint.baseUrl).href;
             } catch {
@@ -618,7 +809,10 @@ class BackgroundService {
           }
 
           // Create tab
-          const tab = await chrome.tabs.create({ url: startUrl, active: message.data.active ?? true });
+          const tab = await chrome.tabs.create({
+            url: startUrl,
+            active: message.data.active ?? true,
+          });
 
           if (!tab.id) {
             sendResponse({
@@ -671,7 +865,9 @@ class BackgroundService {
           message.data.status === 'failed'
         ) {
           // Stop recording if active
-          const { isRecording } = await chrome.storage.local.get(['isRecording']);
+          const { isRecording } = await chrome.storage.local.get([
+            'isRecording',
+          ]);
           if (isRecording) {
             await this.stopRecording();
           }
@@ -776,7 +972,11 @@ class BackgroundService {
 
       case MessageType.CDP_CLICK:
         try {
-          await CDPHandler.click(message.data.tabId, message.data.x, message.data.y);
+          await CDPHandler.click(
+            message.data.tabId,
+            message.data.x,
+            message.data.y
+          );
           sendResponse({ success: true });
         } catch (e: any) {
           sendResponse({ success: false, error: e.message });
@@ -946,11 +1146,18 @@ class BackgroundService {
 
       // 1. Immediate State
       this.recordingEvents = [];
+      const [tab] = await chrome.tabs.query({
+        active: true,
+        currentWindow: true,
+      });
+      const startUrl = tab?.url;
+
       await chrome.storage.session.remove('currentRecording');
       await chrome.storage.local.set({
         isRecording: true,
         currentRecordingProjectId: projectId,
         currentRecordingId,
+        currentRecordingStartUrl: startUrl,
       });
 
       chrome.action.setBadgeText({ text: 'REC' });
@@ -969,18 +1176,35 @@ class BackgroundService {
       currentWindow: true,
     });
 
-    // Get the pre-generated ID
-    const { currentRecordingId } = await chrome.storage.local.get([
-      'currentRecordingId',
-    ]);
+    // Get the pre-generated ID and start URL
+    const { currentRecordingId, currentRecordingStartUrl } =
+      await chrome.storage.local.get([
+        'currentRecordingId',
+        'currentRecordingStartUrl',
+      ]);
     const tempId = currentRecordingId || `rec-${Date.now()}`;
-    console.log(`[Background] Stopping recording session: ${tempId}`);
+    const startUrl = currentRecordingStartUrl || tab?.url;
+    console.log(
+      `[Background] Stopping recording session: ${tempId} (Started at: ${startUrl})`
+    );
 
     // Set immediate processing state to update UI instantly
+    const initialSteps = [];
+    if (startUrl) {
+      initialSteps.push({
+        id: 'start-nav',
+        action: 'navigate',
+        value: startUrl,
+        description: `Navigate to ${startUrl}`,
+        selector: 'body',
+        selectorCandidates: ['body'],
+      });
+    }
+
     const processingBlueprint = {
       id: tempId,
       name: `Recording ${new Date().toLocaleTimeString()}`,
-      steps: [],
+      steps: initialSteps,
       status: 'processing',
     };
     await chrome.storage.local.set({ lastBlueprint: processingBlueprint });
@@ -1077,7 +1301,9 @@ class BackgroundService {
             id: i.toString(),
             action: e.type,
             selector: e.element.selector,
-            selectorCandidates: e.element.selectorCandidates || [e.element.selector],
+            selectorCandidates: e.element.selectorCandidates || [
+              e.element.selector,
+            ],
             elementHints: {
               tagName: e.element.tagName,
               textContent: e.element.textContent,
@@ -1097,16 +1323,29 @@ class BackgroundService {
           data: { blueprint: tempBlueprint },
         });
 
-        console.log(
-          '[Background] Running AI processing...'
-        );
+        console.log('[Background] Running AI processing...');
 
         // Generate blueprint
-        const blueprint = await this.aiProcessor.generateBlueprint(allEvents);
-        console.log('[Background] AI processing complete, generating enriched steps...');
+        const blueprint = await this.aiProcessor.generateBlueprint(
+          allEvents,
+          startUrl
+        );
+        console.log(
+          '[Background] AI processing complete, generating enriched steps...'
+        );
 
         const enrichedSteps = (blueprint.steps || []).map((step, index) => {
-          const fallbackEvent = allEvents[index];
+          // Find the corresponding event. Note that AI might group events, so this is heuristic.
+          // If the first step is navigate and we prepended it, we need to adjust indexing
+          const isPrependedNav =
+            index === 0 &&
+            step.action === 'navigate' &&
+            step.value === startUrl;
+          const eventIndex = isPrependedNav
+            ? -1
+            : index - (blueprint.steps[0]?.action === 'navigate' ? 1 : 0);
+
+          const fallbackEvent = eventIndex >= 0 ? allEvents[eventIndex] : null;
           const isPlaceholder = (value?: string) =>
             typeof value === 'string' && /\$\{[^}]+\}/.test(value);
 
@@ -1148,7 +1387,8 @@ class BackgroundService {
             expectedValue: resolvedExpectedValue,
             selector: step.selector || fallbackSelector || 'body',
             selectorCandidates,
-            elementHints: step.elementHints ||
+            elementHints:
+              step.elementHints ||
               (fallbackEvent
                 ? {
                     tagName: fallbackEvent.element.tagName,
@@ -1164,6 +1404,7 @@ class BackgroundService {
           steps: enrichedSteps,
           id: tempId,
           status: 'ready',
+          baseUrl: startUrl,
         };
         await chrome.storage.local.set({ lastBlueprint: finalBlueprint });
 
@@ -1219,9 +1460,7 @@ class BackgroundService {
 
     this.recordingEvents = [];
     await chrome.storage.session.remove('currentRecording');
-    await chrome.storage.local.remove([
-      'currentRecordingId',
-    ]);
+    await chrome.storage.local.remove(['currentRecordingId']);
   }
 }
 

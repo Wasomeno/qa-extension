@@ -10,7 +10,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 export const AgentPage: React.FC<{ portalContainer?: HTMLElement | null }> = ({
   portalContainer,
 }) => {
-  const { messages, isAgentLoading, sendMessage } = useAgent();
+  const { messages, isAgentLoading, sendMessage, progressMessage } = useAgent();
   const { current } = useNavigation();
 
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -26,7 +26,7 @@ export const AgentPage: React.FC<{ portalContainer?: HTMLElement | null }> = ({
         scrollContainer.scrollTop = scrollContainer.scrollHeight;
       }
     }
-  }, [messages, isAgentLoading]);
+  }, [messages, isAgentLoading, progressMessage]);
 
   // Handle initial message from navigation
   useEffect(() => {
@@ -89,37 +89,48 @@ export const AgentPage: React.FC<{ portalContainer?: HTMLElement | null }> = ({
                       className="absolute inset-0 rounded-full bg-primary/20"
                     />
                   </div>
-                  <div className="flex items-center space-x-1.5 px-4 py-3 bg-muted/40 backdrop-blur-sm rounded-2xl rounded-tl-none border shadow-sm">
-                    <motion.div
-                      animate={{ y: [0, -4, 0], opacity: [0.4, 1, 0.4] }}
-                      transition={{
-                        repeat: Infinity,
-                        duration: 1.2,
-                        delay: 0,
-                        ease: 'easeInOut',
-                      }}
-                      className="w-1.5 h-1.5 bg-primary/60 rounded-full"
-                    />
-                    <motion.div
-                      animate={{ y: [0, -4, 0], opacity: [0.4, 1, 0.4] }}
-                      transition={{
-                        repeat: Infinity,
-                        duration: 1.2,
-                        delay: 0.15,
-                        ease: 'easeInOut',
-                      }}
-                      className="w-1.5 h-1.5 bg-primary/60 rounded-full"
-                    />
-                    <motion.div
-                      animate={{ y: [0, -4, 0], opacity: [0.4, 1, 0.4] }}
-                      transition={{
-                        repeat: Infinity,
-                        duration: 1.2,
-                        delay: 0.3,
-                        ease: 'easeInOut',
-                      }}
-                      className="w-1.5 h-1.5 bg-primary/60 rounded-full"
-                    />
+                  <div className="flex flex-col gap-2">
+                    <div className="flex items-center space-x-1.5 px-4 py-3 bg-muted/40 backdrop-blur-sm rounded-2xl rounded-tl-none border shadow-sm">
+                      <motion.div
+                        animate={{ y: [0, -4, 0], opacity: [0.4, 1, 0.4] }}
+                        transition={{
+                          repeat: Infinity,
+                          duration: 1.2,
+                          delay: 0,
+                          ease: 'easeInOut',
+                        }}
+                        className="w-1.5 h-1.5 bg-primary/60 rounded-full"
+                      />
+                      <motion.div
+                        animate={{ y: [0, -4, 0], opacity: [0.4, 1, 0.4] }}
+                        transition={{
+                          repeat: Infinity,
+                          duration: 1.2,
+                          delay: 0.15,
+                          ease: 'easeInOut',
+                        }}
+                        className="w-1.5 h-1.5 bg-primary/60 rounded-full"
+                      />
+                      <motion.div
+                        animate={{ y: [0, -4, 0], opacity: [0.4, 1, 0.4] }}
+                        transition={{
+                          repeat: Infinity,
+                          duration: 1.2,
+                          delay: 0.3,
+                          ease: 'easeInOut',
+                        }}
+                        className="w-1.5 h-1.5 bg-primary/60 rounded-full"
+                      />
+                    </div>
+                    {progressMessage && (
+                      <motion.div
+                        initial={{ opacity: 0, x: -10 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        className="text-[10px] text-muted-foreground px-1 font-medium italic"
+                      >
+                        {progressMessage}
+                      </motion.div>
+                    )}
                   </div>
                 </motion.div>
               )}
