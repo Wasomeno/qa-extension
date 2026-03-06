@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import {
-  FileText,
-  Play,
+  Terminal,
+  Zap,
   MoreVertical,
   Clock,
   Bot,
@@ -184,7 +184,7 @@ export const RecordingItem: React.FC<RecordingItemProps> = ({
         onClick={onClick}
         onDoubleClick={onDoubleClick}
       >
-        <FileText className="w-5 h-5 text-zinc-600" />
+        <Terminal className="w-5 h-5 text-zinc-600" />
         <div className="flex-1 min-w-0">
           {isEditing ? (
             <Input
@@ -212,11 +212,11 @@ export const RecordingItem: React.FC<RecordingItemProps> = ({
             <>
               <Button
                 variant="ghost"
-                size="icon"
-                className="h-8 w-8 text-zinc-900 opacity-0 group-hover:opacity-100"
+                size="sm"
+                className="h-8 px-2 text-xs gap-1.5 text-zinc-600 hover:text-zinc-900 opacity-0 group-hover:opacity-100 bg-zinc-50 hover:bg-zinc-100 border transition-all"
                 onClick={onRun}
               >
-                <Play className="w-4 h-4 fill-current" />
+                <Zap className="w-3.5 h-3.5 fill-current" /> Run Test
               </Button>
               <Actions />
             </>
@@ -244,7 +244,7 @@ export const RecordingItem: React.FC<RecordingItemProps> = ({
         >
           <Trash2 className="w-8 h-8 text-red-500 mb-2" />
           <p className="text-sm font-bold text-gray-900 mb-1">
-            Delete this recording?
+            Delete this test script?
           </p>
           <p className="text-xs text-gray-500 mb-4">
             This action cannot be undone.
@@ -270,15 +270,18 @@ export const RecordingItem: React.FC<RecordingItemProps> = ({
           </div>
         </div>
       )}
-      <div className="aspect-video bg-gray-100 flex items-center justify-center relative overflow-hidden">
-        <FileText className="w-10 h-10 text-gray-300" />
-        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 flex items-center justify-center transition-all">
+      <div className="aspect-[4/3] bg-zinc-900 flex items-center justify-center relative overflow-hidden group/thumb">
+        <div className="absolute inset-0 opacity-20 pointer-events-none overflow-hidden p-2 font-mono text-[8px] leading-tight text-white select-none">
+          {`// Test Script: ${recording.name}\n// Steps: ${recording.steps.length}\n\nawait page.goto(baseUrl);\nawait page.click('[data-testid="login"]');\nawait page.fill('#user', 'test_user');\nawait page.fill('#pass', '********');\nawait page.click('button[type="submit"]');\nawait expect(page).toHaveURL(/dashboard/);`}
+        </div>
+        <Terminal className="w-12 h-12 text-zinc-700/50" />
+        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-all duration-200 backdrop-blur-[1px]">
           <Button
-            size="icon"
-            className="w-12 h-12 rounded-full bg-zinc-900 hover:bg-black text-white scale-90 opacity-0 group-hover:scale-100 group-hover:opacity-100 transition-all shadow-lg"
+            size="sm"
+            className="rounded-full bg-white hover:bg-zinc-100 text-zinc-900 gap-2 px-4 shadow-xl translate-y-2 group-hover:translate-y-0 transition-all duration-300"
             onClick={onRun}
           >
-            <Play className="w-6 h-6 fill-current ml-1" />
+            <Zap className="w-4 h-4 fill-current" /> Run Test
           </Button>
         </div>
         {recording.projectId && (

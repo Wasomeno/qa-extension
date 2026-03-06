@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  FileText,
+  Terminal,
   Search,
   Plus,
   Loader2,
@@ -51,7 +51,7 @@ const RecordingSkeleton = ({ viewMode }: { viewMode: 'grid' | 'list' }) => {
 
   return (
     <div className="flex flex-col border rounded-xl overflow-hidden bg-white">
-      <Skeleton className="aspect-video w-full" />
+      <Skeleton className="aspect-[4/3] w-full bg-slate-100" />
       <div className="p-4 space-y-2">
         <div className="flex items-start justify-between gap-2">
           <div className="flex-1 space-y-2">
@@ -234,7 +234,7 @@ export const RecordingsPage: React.FC<{
   }, [selectedId, blueprints]);
 
   const currentProjectName = useMemo(() => {
-    if (currentFolderId === null) return 'All Recordings';
+    if (currentFolderId === null) return 'All Test Scripts';
     if (currentFolderId === 'unassigned') return 'Unassigned';
     const proj = projects.find(p => p.id === currentFolderId);
     return proj ? proj.name_with_namespace : 'Unknown Project';
@@ -257,7 +257,7 @@ export const RecordingsPage: React.FC<{
       {/* Top Header */}
       <header className="px-6 py-4 border-b flex items-center justify-between shrink-0">
         <div className="flex items-center gap-4">
-          <h1 className="text-xl font-bold text-gray-900">Recordings</h1>
+          <h1 className="text-xl font-bold text-gray-900">Test Scripts</h1>
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
             <Input
@@ -335,7 +335,7 @@ export const RecordingsPage: React.FC<{
                 className="h-8 px-2 text-gray-600 hover:text-zinc-900 font-medium"
                 onClick={() => setCurrentFolderId(null)}
               >
-                My Recordings
+                My Test Scripts
               </Button>
               {currentFolderId !== null && (
                 <>
@@ -366,7 +366,7 @@ export const RecordingsPage: React.FC<{
                 }, 300);
               }}
             >
-              <Plus className="w-5 h-5" /> New Recording
+              <Plus className="w-5 h-5" /> New Test Script
             </Button>
           </div>
 
@@ -388,14 +388,14 @@ export const RecordingsPage: React.FC<{
                       {lastBlueprint.status === 'processing' ? (
                         <Loader2 className="w-5 h-5 text-zinc-600 animate-spin" />
                       ) : (
-                        <FileText className="w-5 h-5 text-zinc-600" />
+                        <Terminal className="w-5 h-5 text-zinc-600" />
                       )}
                     </div>
                     <div>
                       <h3 className="font-semibold text-zinc-900">
                         {lastBlueprint.status === 'processing'
-                          ? 'Processing Recording...'
-                          : 'New Recording Ready'}
+                          ? 'Processing Test Script...'
+                          : 'New Test Script Ready'}
                       </h3>
                       <p className="text-sm text-zinc-600">
                         {lastBlueprint.status === 'processing'
@@ -527,8 +527,8 @@ export const RecordingsPage: React.FC<{
                     ))
                   ) : (
                     <div className="col-span-full py-12 flex flex-col items-center justify-center text-gray-400 bg-gray-50/50 rounded-xl border-2 border-dashed border-gray-200">
-                      <FileText className="w-12 h-12 mb-2 opacity-20" />
-                      <p>No recordings found in this folder</p>
+                      <Terminal className="w-12 h-12 mb-2 opacity-20" />
+                      <p>No test scripts found in this folder</p>
                     </div>
                   )}
                 </div>
