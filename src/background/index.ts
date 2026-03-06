@@ -926,7 +926,7 @@ class BackgroundService {
       case MessageType.ACTUAL_START_RECORDING:
         try {
           const { projectId, id } = message.data || {};
-          let targetTabId = sender.tab?.id;
+          const targetTabId = sender.tab?.id;
           if (targetTabId) {
             this.startRecordingFlow(projectId, targetTabId, id).catch(
               console.error
@@ -1222,7 +1222,7 @@ class BackgroundService {
     chrome.action.setBadgeText({ text: '' });
 
     // 1. Collect events from all possible sources
-    let allEvents: RawEvent[] = [...this.recordingEvents];
+    const allEvents: RawEvent[] = [...this.recordingEvents];
     console.log(
       `[Background] Collected ${allEvents.length} events from internal buffer`
     );
