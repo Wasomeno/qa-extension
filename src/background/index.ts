@@ -688,7 +688,7 @@ class BackgroundService {
           };
 
           const response = await api.post<any>('/recordings', {
-            body: recording,
+            body: recording as any,
           });
 
           if (!response.success) {
@@ -721,7 +721,7 @@ class BackgroundService {
           }
 
           const response = await api.patch<any>(`/recordings/${id}`, {
-            body: data,
+            body: data as any,
           });
           if (!response.success) {
             sendResponse({ success: false, error: response.error });

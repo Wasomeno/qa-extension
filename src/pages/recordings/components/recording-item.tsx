@@ -28,6 +28,10 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuSubContent,
 } from '@/components/ui/dropdown-menu';
+import { RecordingProjectPicker } from './recording-project-picker';
+import { useQuery } from '@tanstack/react-query';
+import { getProjects } from '@/api/project';
+import { MessageType } from '@/types/messages';
 
 interface RecordingItemProps {
   recording: TestBlueprint;
@@ -64,6 +68,25 @@ export const RecordingItem: React.FC<RecordingItemProps> = ({
   const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
   const [editName, setEditName] = useState(recording.name);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  const { data: projectsData } = useQuery({
+    queryKey: ['projects'],
+    queryFn: getProjects,
+  });
+
+  const projects = projectsData?.data?.projects || [];
+
+  const handleUpdateProject = (projectId: number | null) => {
+    chrome.runtime.sendMessage(
+        {
+          type: MessageType.UPDATE_BLUEPRINT,
+          data: { id: recording.id, data: { projectId: projectId } },
+        },
+        () => {
+          // This should trigger refetching if set up correctly in the parent list
+        }
+    );
+  };
 
   useEffect(() => {
     if (isEditing) {
@@ -202,9 +225,28 @@ export const RecordingItem: React.FC<RecordingItemProps> = ({
             </span>
           )}
         </div>
-        <span className="text-xs text-gray-500 w-24 text-right flex items-center justify-end gap-1">
-          <Clock className="w-3 h-3" /> {recording.steps.length} steps
-        </span>
+        <div className="flex items-center gap-4 text-xs text-gray-500 w-auto justify-end">
+          {recording.createdAt && (
+            <span className="text-gray-400 tabular-nums">
+              {new Date(recording.createdAt).toLocaleDateString('en-US', {
+                month: 'short',
+                day: 'numeric',
+                year: 'numeric'
+              })}
+            </span>
+          )}
+          <div onClick={e => e.stopPropagation()}>
+            <RecordingProjectPicker
+              currentProjectId={recording.projectId}
+              projects={projects}
+              onSelect={handleUpdateProject}
+              portalContainer={portalContainer}
+            />
+          </div>
+          <span className="flex items-center gap-1 min-w-[60px] justify-end">
+            <Clock className="w-3 h-3" /> {recording.steps.length} steps
+          </span>
+        </div>
         <div className="flex items-center gap-1">
           {isConfirmingDelete ? (
             <DeleteConfirmation />
@@ -229,7 +271,7 @@ export const RecordingItem: React.FC<RecordingItemProps> = ({
   return (
     <div
       className={cn(
-        'flex flex-col border rounded-xl overflow-hidden hover:shadow-md hover:border-zinc-300 cursor-pointer transition-all bg-white group relative',
+        'flex flex-col border rounded-xl overflow-hidden hover:shadow-md hover:border-zinc-300 cursor-pointer transition-all bg-white group relative h-full',
         isSelected
           ? 'border-zinc-900 bg-zinc-50 ring-1 ring-zinc-900'
           : 'border-gray-200'
@@ -270,28 +312,10 @@ export const RecordingItem: React.FC<RecordingItemProps> = ({
           </div>
         </div>
       )}
-      <div className="aspect-[4/3] bg-zinc-900 flex items-center justify-center relative overflow-hidden group/thumb">
-        <div className="absolute inset-0 opacity-20 pointer-events-none overflow-hidden p-2 font-mono text-[8px] leading-tight text-white select-none">
-          {`// Test Script: ${recording.name}\n// Steps: ${recording.steps.length}\n\nawait page.goto(baseUrl);\nawait page.click('[data-testid="login"]');\nawait page.fill('#user', 'test_user');\nawait page.fill('#pass', '********');\nawait page.click('button[type="submit"]');\nawait expect(page).toHaveURL(/dashboard/);`}
-        </div>
-        <Terminal className="w-12 h-12 text-zinc-700/50" />
-        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-all duration-200 backdrop-blur-[1px]">
-          <Button
-            size="sm"
-            className="rounded-full bg-white hover:bg-zinc-100 text-zinc-900 gap-2 px-4 shadow-xl translate-y-2 group-hover:translate-y-0 transition-all duration-300"
-            onClick={onRun}
-          >
-            <Zap className="w-4 h-4 fill-current" /> Run Test
-          </Button>
-        </div>
-        {recording.projectId && (
-          <div className="absolute top-2 left-2 bg-white/90 backdrop-blur-sm px-2 py-0.5 rounded text-[10px] font-bold text-gray-600 uppercase">
-            Project {recording.projectId}
-          </div>
-        )}
-      </div>
-      <div className="p-4">
-        <div className="flex items-start justify-between gap-2">
+
+      <div className="p-4 flex flex-col h-full">
+        {/* Header */}
+        <div className="flex items-start justify-between gap-2 mb-3">
           <div className="flex-1 min-w-0">
             {isEditing ? (
               <Input
@@ -301,18 +325,74 @@ export const RecordingItem: React.FC<RecordingItemProps> = ({
                 onBlur={handleSave}
                 onKeyDown={handleKeyDown}
                 onClick={e => e.stopPropagation()}
-                className="h-7 text-sm py-0"
+                className="h-7 text-sm py-0 mb-1"
               />
             ) : (
-              <p className="font-semibold text-gray-900 truncate group-hover:text-zinc-900 transition-colors">
+              <p className="font-bold text-gray-900 truncate group-hover:text-zinc-900 transition-colors">
                 {recording.name}
               </p>
             )}
-            <p className="text-xs text-gray-500 flex items-center gap-1 mt-1">
-              <Clock className="w-3 h-3" /> {recording.steps.length} steps
+            <p className="text-xs text-gray-500 line-clamp-2 mt-0.5 leading-relaxed">
+              {recording.description || 'No description'}
             </p>
           </div>
           <Actions />
+        </div>
+
+        {/* Steps Snippet */}
+        <div className="flex-1 min-h-[80px] bg-zinc-50 rounded-lg p-3 border border-zinc-100 mb-4 group-hover:bg-zinc-100/50 transition-colors">
+          <div className="flex items-center gap-1.5 mb-2">
+            <Terminal className="w-3.5 h-3.5 text-zinc-500" />
+            <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">
+              Test Steps
+            </span>
+          </div>
+          <div className="space-y-1.5">
+            {recording.steps.slice(0, 4).map((step, idx) => (
+              <div key={idx} className="flex gap-2 text-[11px]">
+                <span className="text-zinc-400 font-medium tabular-nums shrink-0">
+                  {idx + 1}.
+                </span>
+                <span className="text-zinc-600 truncate leading-tight">
+                  {step.description || step.action}
+                </span>
+              </div>
+            ))}
+            {recording.steps.length > 4 && (
+              <div className="flex gap-2 text-[11px] text-zinc-400 italic pl-5 mt-1">
+                + {recording.steps.length - 4} more steps
+              </div>
+            )}
+            {recording.steps.length === 0 && (
+              <div className="text-[11px] text-zinc-400 italic py-2 text-center">
+                No steps recorded
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div className="flex items-center justify-between mt-auto pt-3 border-t border-zinc-100">
+          <div className="flex items-center gap-3">
+            <span className="text-[10px] font-medium text-gray-500 flex items-center gap-1">
+              <Clock className="w-3 h-3" /> {recording.steps.length} steps
+            </span>
+            <RecordingProjectPicker
+              currentProjectId={recording.projectId}
+              projects={projects}
+              onSelect={handleUpdateProject}
+              portalContainer={portalContainer}
+            />
+          </div>
+          {recording.createdAt && (
+            <span className="text-[10px] text-gray-400 font-medium">
+              {new Date(recording.createdAt).toLocaleDateString('en-US', {
+                month: 'short',
+                day: 'numeric',
+                year: 'numeric'
+              })}
+            </span>
+          )}
         </div>
       </div>
     </div>

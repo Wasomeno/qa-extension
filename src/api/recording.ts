@@ -3,7 +3,7 @@ import { TestRecording, ListRecordingsParams } from '@/types/recording';
 
 export const saveRecording = async (recording: TestRecording) => {
   const response = await api.post<any>('/recordings', {
-    body: recording,
+    body: recording as any,
   });
   if (!response.success) {
     throw new Error(response.error || 'Failed to save recording');
@@ -39,7 +39,7 @@ export const deleteRecording = async (id: string) => {
 
 export const updateRecording = async (id: string, data: Partial<TestRecording>) => {
   const response = await api.patch<any>(`/recordings/${id}`, {
-    body: data,
+    body: data as any,
   });
   if (!response.success) {
     throw new Error(response.error || 'Failed to update recording');

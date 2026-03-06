@@ -9,6 +9,7 @@ import {
   PlusCircle,
   Loader2,
   Pencil,
+  X,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -21,6 +22,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { RecordingProjectPicker } from './recording-project-picker';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { getProjects } from '@/api/project';
 import { listRecordings } from '@/api/recording';
@@ -115,9 +117,13 @@ export const CompactRecordingsList: React.FC<CompactRecordingsListProps> = ({
     const handleMessage = (message: any) => {
       if (
         message.type === MessageType.BLUEPRINT_GENERATED ||
-        message.type === MessageType.BLUEPRINT_PROCESSING
+        message.type === MessageType.BLUEPRINT_PROCESSING ||
+        message.type === MessageType.BLUEPRINT_SAVED
       ) {
         refetchLastBlueprint();
+        if (message.type === MessageType.BLUEPRINT_SAVED) {
+          refetchRecordings();
+        }
       }
     };
     chrome.runtime.onMessage.addListener(handleMessage);
@@ -544,9 +550,24 @@ export const CompactRecordingsList: React.FC<CompactRecordingsListProps> = ({
                     <Clock className="w-3 h-3" /> {rec.steps.length} steps
                   </span>
                   {rec.projectId && (
-                    <span className="bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded text-[10px] font-medium">
-                      Project #{rec.projectId}
-                    </span>
+                    <div onClick={e => e.stopPropagation()}>
+                    <RecordingProjectPicker
+                    currentProjectId={rec.projectId}
+                    projects={projects}
+                    onSelect={(projectId) => {
+                      chrome.runtime.sendMessage(
+                          {
+                            type: MessageType.UPDATE_BLUEPRINT,
+                            data: { id: rec.id, data: { projectId: projectId } },
+                          },
+                          () => {
+                            refetchRecordings();
+                          }
+                      );
+                    }}
+                    portalContainer={getPortalContainer()}
+                  />
+                  </div>
                   )}
                 </div>
               </div>

@@ -81,6 +81,7 @@ export interface TestRecording {
   issueId?: string;
   steps: RecordingStep[];
   parameters: any[];
+  createdAt?: string | number;
 }
 
 export interface ListRecordingsParams {
@@ -122,4 +123,5 @@ export interface TestBlueprint {
   parameters: string[];
   status?: 'processing' | 'ready' | 'failed';
   error?: string;
+  createdAt?: string | number;
 }

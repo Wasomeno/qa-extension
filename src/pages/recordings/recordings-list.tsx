@@ -61,15 +61,19 @@ const RecordingSkeleton = ({ viewMode }: { viewMode: 'grid' | 'list' }) => {
   }
 
   return (
-    <div className="flex flex-col border rounded-xl overflow-hidden bg-white">
-      <Skeleton className="aspect-[4/3] w-full bg-slate-100" />
-      <div className="p-4 space-y-2">
-        <div className="flex items-start justify-between gap-2">
+    <div className="flex flex-col border rounded-xl overflow-hidden bg-white shadow-sm h-full">
+      <div className="p-4 space-y-4">
+        <div className="flex items-start justify-between gap-4">
           <div className="flex-1 space-y-2">
-            <Skeleton className="h-4 w-3/4" />
-            <Skeleton className="h-3 w-1/4" />
+            <Skeleton className="h-5 w-3/4" />
+            <Skeleton className="h-3 w-1/2" />
           </div>
           <Skeleton className="h-8 w-8 rounded-full" />
+        </div>
+        <Skeleton className="h-24 w-full rounded-lg" />
+        <div className="flex items-center justify-between pt-2 border-t">
+          <Skeleton className="h-3 w-20" />
+          <Skeleton className="h-3 w-16" />
         </div>
       </div>
     </div>
@@ -257,7 +261,10 @@ export const RecordingsPage: React.FC<{
             <SearchablePicker
               options={[
                 { label: 'Unassigned', value: 'unassigned' },
-                ...projects.map(p => ({ label: p.name, value: p.id.toString() }))
+                ...projects.map(p => ({
+                  label: p.name,
+                  value: p.id.toString(),
+                })),
               ]}
               value={selectedProjectId}
               onSelect={val => setSelectedProjectId(val as string)}
@@ -329,15 +336,10 @@ export const RecordingsPage: React.FC<{
           onClick={() => setSelectedId(null)}
         >
           {/* Breadcrumbs & Actions */}
-          <div className="px-6 py-3 flex items-center justify-between shrink-0 border-b">
-            <div className="flex items-center gap-1 text-sm">
-              <span className="px-2 text-gray-900 font-medium">
-                My Test Recordings
-              </span>
-            </div>
-
+          <div className="px-6 py-3 flex items-center justify-end shrink-0">
             <Button
-              className="bg-zinc-900 hover:bg-black text-white rounded-full gap-2 px-4"
+              variant="ghost"
+              className="hover:bg-zinc-50 border text-zinc-900 rounded-full gap-2 px-4"
               onClick={() => {
                 chrome.runtime.sendMessage({
                   type: MessageType.CLOSE_MAIN_MENU,
@@ -423,7 +425,7 @@ export const RecordingsPage: React.FC<{
                 <div
                   className={cn(
                     viewMode === 'grid'
-                      ? 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6'
+                      ? 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6'
                       : 'flex flex-col border rounded-lg overflow-hidden bg-white'
                   )}
                 >
@@ -483,7 +485,7 @@ export const RecordingsPage: React.FC<{
                   ) : (
                     <div className="col-span-full py-12 flex flex-col items-center justify-center text-gray-400 bg-gray-50/50 rounded-xl border-2 border-dashed border-gray-200">
                       <Terminal className="w-12 h-12 mb-2 opacity-20" />
-                      <p>No test scripts found in this folder</p>
+                      <p>No test recordings found for this project</p>
                     </div>
                   )}
                 </div>
