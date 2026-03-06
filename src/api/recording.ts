@@ -2,6 +2,7 @@ import { api } from '@/services/api';
 import { TestRecording, ListRecordingsParams } from '@/types/recording';
 
 export const saveRecording = async (recording: TestRecording) => {
+  console.log('[Recording API] Saving recording payload:', recording);
   const response = await api.post<any>('/recordings', {
     body: recording as any,
   });
