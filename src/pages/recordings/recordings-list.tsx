@@ -7,9 +7,15 @@ import {
   Loader2,
   LayoutGrid,
   List as ListIcon,
-  ChevronRight as ChevronRightIcon,
   Info,
 } from 'lucide-react';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { useQuery } from '@tanstack/react-query';
 import { getProjects } from '@/api/project';
 import { listRecordings } from '@/api/recording';
@@ -24,14 +30,19 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Separator } from '@/components/ui/separator';
 import { useNavigation } from '@/contexts/navigation-context';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Skeleton } from '@/components/ui/skeleton';
 import { TestBlueprint } from '@/types/recording';
 import { MessageType } from '@/types/messages';
-import { FolderItem } from './components/folder-item';
 import { RecordingItem } from './components/recording-item';
 import { DetailsPanel } from './components/details-panel';
+import { SearchablePicker } from '../issues/components/searchable-picker';
 import { cn } from '@/lib/utils';
 
 const RecordingSkeleton = ({ viewMode }: { viewMode: 'grid' | 'list' }) => {
@@ -70,9 +81,7 @@ export const RecordingsPage: React.FC<{
 }> = ({ portalContainer }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
-  const [currentFolderId, setCurrentFolderId] = useState<
-    number | 'unassigned' | null
-  >(null);
+  const [selectedProjectId, setSelectedProjectId] = useState<string>('all');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [showDetails, setShowDetails] = useState(false);
   const { push } = useNavigation();
@@ -82,9 +91,18 @@ export const RecordingsPage: React.FC<{
     refetch: refetchBlueprints,
     isLoading: isBlueprintsLoading,
   } = useQuery({
-    queryKey: ['recordings-blueprints'],
+    queryKey: ['recordings-blueprints', selectedProjectId],
     queryFn: async () => {
-      return (await listRecordings()) as unknown as TestBlueprint[];
+      const params: any = {
+        sort_by: 'created_at',
+        order: 'desc',
+      };
+
+      if (selectedProjectId !== 'all' && selectedProjectId !== 'unassigned') {
+        params.project_id = selectedProjectId;
+      }
+
+      return (await listRecordings(params)) as unknown as TestBlueprint[];
     },
   });
 
@@ -204,67 +222,50 @@ export const RecordingsPage: React.FC<{
     );
   };
 
-  const categorizedBlueprints = useMemo(() => {
-    const categories: Record<
-      number | string,
-      { name: string; items: TestBlueprint[] }
-    > = {
-      unassigned: { name: 'Unassigned', items: [] },
-    };
-
-    projects.forEach(p => {
-      categories[p.id] = { name: p.name_with_namespace, items: [] };
-    });
-
-    blueprints.forEach(b => {
-      const categoryId = b.projectId || 'unassigned';
-      if (!categories[categoryId]) {
-        categories[categoryId] = { name: 'Unknown Project', items: [] };
-      }
-      categories[categoryId].items.push(b);
-    });
-
-    return Object.entries(categories).filter(
-      ([id, cat]) => id === 'unassigned' || cat.items.length > 0
-    );
-  }, [blueprints, projects]);
-
   const selectedRecording = useMemo(() => {
     return blueprints.find(b => b.id === selectedId) || null;
   }, [selectedId, blueprints]);
-
-  const currentProjectName = useMemo(() => {
-    if (currentFolderId === null) return 'All Test Scripts';
-    if (currentFolderId === 'unassigned') return 'Unassigned';
-    const proj = projects.find(p => p.id === currentFolderId);
-    return proj ? proj.name_with_namespace : 'Unknown Project';
-  }, [currentFolderId, projects]);
 
   const filteredItems = useMemo(() => {
     const searchLower = searchQuery.toLowerCase();
     return blueprints.filter(b => {
       const matchesSearch = b.name.toLowerCase().includes(searchLower);
-      const matchesFolder =
-        currentFolderId === null ||
-        b.projectId === currentFolderId ||
-        (currentFolderId === 'unassigned' && !b.projectId);
-      return matchesSearch && matchesFolder;
+      const matchesProject =
+        selectedProjectId === 'all' ||
+        b.projectId?.toString() === selectedProjectId ||
+        (selectedProjectId === 'unassigned' && !b.projectId);
+      return matchesSearch && matchesProject;
     });
-  }, [blueprints, currentFolderId, searchQuery]);
+  }, [blueprints, selectedProjectId, searchQuery]);
 
   return (
     <div className="flex flex-col h-full bg-white overflow-hidden relative">
       {/* Top Header */}
       <header className="px-6 py-4 border-b flex items-center justify-between shrink-0">
         <div className="flex items-center gap-4">
-          <h1 className="text-xl font-bold text-gray-900">Test Scripts</h1>
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-            <Input
-              placeholder="Search in Drive..."
-              className="pl-9 w-80 h-10 bg-gray-100 border-none rounded-lg focus-visible:ring-2 focus-visible:ring-zinc-900"
-              value={searchQuery}
-              onChange={e => setSearchQuery(e.target.value)}
+          <h1 className="text-xl font-bold text-gray-900">Test Recordings</h1>
+          <div className="flex items-center gap-2">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <Input
+                placeholder="Search recordings..."
+                className="pl-9 w-64 h-10 bg-gray-100 border-none rounded-lg focus-visible:ring-2 focus-visible:ring-zinc-900"
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+              />
+            </div>
+            <SearchablePicker
+              options={[
+                { label: 'Unassigned', value: 'unassigned' },
+                ...projects.map(p => ({ label: p.name, value: p.id.toString() }))
+              ]}
+              value={selectedProjectId}
+              onSelect={val => setSelectedProjectId(val as string)}
+              placeholder="All Projects"
+              searchPlaceholder="Search projects..."
+              allOption={{ label: 'All Projects', value: 'all' }}
+              portalContainer={portalContainer}
+              className="h-10 w-[180px] bg-gray-100 border-none rounded-lg focus:ring-2 focus:ring-zinc-900 pointer-events-auto"
             />
           </div>
         </div>
@@ -330,21 +331,9 @@ export const RecordingsPage: React.FC<{
           {/* Breadcrumbs & Actions */}
           <div className="px-6 py-3 flex items-center justify-between shrink-0 border-b">
             <div className="flex items-center gap-1 text-sm">
-              <Button
-                variant="ghost"
-                className="h-8 px-2 text-gray-600 hover:text-zinc-900 font-medium"
-                onClick={() => setCurrentFolderId(null)}
-              >
-                My Test Scripts
-              </Button>
-              {currentFolderId !== null && (
-                <>
-                  <ChevronRightIcon className="w-4 h-4 text-gray-400" />
-                  <span className="px-2 text-gray-900 font-medium">
-                    {currentProjectName}
-                  </span>
-                </>
-              )}
+              <span className="px-2 text-gray-900 font-medium">
+                My Test Recordings
+              </span>
             </div>
 
             <Button
@@ -358,9 +347,10 @@ export const RecordingsPage: React.FC<{
                     type: MessageType.START_RECORDING,
                     data: {
                       projectId:
-                        currentFolderId === 'unassigned'
+                        selectedProjectId === 'all' ||
+                        selectedProjectId === 'unassigned'
                           ? undefined
-                          : currentFolderId || undefined,
+                          : parseInt(selectedProjectId),
                     },
                   });
                 }, 300);
@@ -428,43 +418,8 @@ export const RecordingsPage: React.FC<{
                 </section>
               )}
 
-              {/* Folders Section - only show when at root */}
-              {currentFolderId === null && (
-                <section className="mb-8">
-                  <h2 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-4">
-                    Folders
-                  </h2>
-                  <div
-                    className={cn(
-                      viewMode === 'grid'
-                        ? 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4'
-                        : 'flex flex-col border rounded-lg overflow-hidden'
-                    )}
-                  >
-                    {categorizedBlueprints.map(([id, cat]) => (
-                      <FolderItem
-                        key={id}
-                        name={cat.name}
-                        count={cat.items.length}
-                        viewMode={viewMode}
-                        onClick={() =>
-                          setCurrentFolderId(
-                            id === 'unassigned' ? 'unassigned' : Number(id)
-                          )
-                        }
-                      />
-                    ))}
-                  </div>
-                </section>
-              )}
-
               {/* Recordings Section */}
               <section>
-                <div className="flex items-center justify-between mb-4">
-                  <h2 className="text-xs font-bold text-gray-500 uppercase tracking-wider">
-                    {currentFolderId === null ? 'All Files' : 'Files'}
-                  </h2>
-                </div>
                 <div
                   className={cn(
                     viewMode === 'grid'

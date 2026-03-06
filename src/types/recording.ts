@@ -64,10 +64,10 @@ export interface ElementHints {
 export interface RecordingStep {
   action: string;
   description: string;
-  elementHints: ElementHints;
   selector: string;
-  selectorCandidates: string[];
   value?: string;
+  elementHints?: ElementHints;
+  selectorCandidates?: string[];
   assertionType?: string;
   expectedValue?: string;
 }
@@ -75,10 +75,19 @@ export interface RecordingStep {
 export interface TestRecording {
   id: string; // Required for saving
   name: string;
-  description: string;
+  description?: string;
   status: string;
+  projectId?: string;
+  issueId?: string;
   steps: RecordingStep[];
   parameters: any[];
+}
+
+export interface ListRecordingsParams {
+  project_id?: string;
+  issue_id?: string;
+  sort_by?: 'created_at' | 'name';
+  order?: 'desc' | 'asc';
 }
 
 // Result types (used by the Agent/Runner)
