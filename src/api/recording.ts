@@ -26,3 +26,13 @@ export const deleteRecording = async (id: string) => {
   }
   return response.data;
 };
+
+export const updateRecording = async (id: string, data: Partial<TestRecording>) => {
+  const response = await api.put<any>(`/recordings/${id}`, {
+    body: data,
+  });
+  if (!response.success) {
+    throw new Error(response.error || 'Failed to update recording');
+  }
+  return response.data;
+};

@@ -728,6 +728,10 @@ class BackgroundService {
             return;
           }
 
+          this.broadcast({
+            type: MessageType.BLUEPRINT_SAVED,
+            data: { blueprint: response.data },
+          });
           sendResponse({ success: true, data: response.data });
         } catch (e: any) {
           sendResponse({ success: false, error: e?.message });
