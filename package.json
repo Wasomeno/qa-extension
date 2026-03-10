@@ -1,5 +1,5 @@
 {
-  "name": "qa-command-center-extension",
+  "name": "flowg-extension",
   "version": "1.0.1",
   "description": "Browser extension for Flowg",
   "main": "dist/chrome/background.js",
