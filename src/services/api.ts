@@ -26,12 +26,25 @@ async function request<T>(
       });
     }
 
+    const isFormData = options.body instanceof FormData;
+    let finalBody: any = options.body;
+    let finalHeaders = { ...headers };
+
+    if (isFormData) {
+      // Background bridge cannot serialize FormData directly via sendMessage
+      // Instead of relying on api.post intercepting FormData, let's just use the normal JSON path
+      // if it's not FormData. Wait, for FormData we must extract the file to Base64 first!
+      // But `request` is sync (await bridgeFetch). We can't easily async iterate FormData here reliably without FileReader.
+      // So instead, we let the specific `uploadScenario` use the `TEST_SCENARIO_UPLOAD` message directly OR we fix API service.
+    }
+
     const resp = await bridgeFetch<T>({
       url,
       init: {
         ...options,
-        headers,
+        headers: finalHeaders,
         credentials: 'include',
+        body: finalBody,
       },
       responseType: 'json',
     });
@@ -66,10 +79,14 @@ async function request<T>(
 export const api = {
   post: async <T>(endpoint: string, options?: RequestInit) => {
     const { body, ...rest } = options || {};
+
+    // Check if body is FormData
+    const isFormData = body instanceof FormData;
+
     const resp = await request<T>(endpoint, {
       method: 'POST',
-      body: body ? JSON.stringify(body) : undefined,
       ...rest,
+      body: isFormData ? body : body ? JSON.stringify(body) : undefined,
     });
 
     return resp;

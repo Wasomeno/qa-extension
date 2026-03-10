@@ -78,13 +78,13 @@ export const RecordingItem: React.FC<RecordingItemProps> = ({
 
   const handleUpdateProject = (projectId: number | null) => {
     chrome.runtime.sendMessage(
-        {
-          type: MessageType.UPDATE_BLUEPRINT,
-          data: { id: recording.id, data: { projectId: projectId } },
-        },
-        () => {
-          // This should trigger refetching if set up correctly in the parent list
-        }
+      {
+        type: MessageType.UPDATE_BLUEPRINT,
+        data: { id: recording.id, data: { project_id: projectId?.toString() } },
+      },
+      () => {
+        // This should trigger refetching if set up correctly in the parent list
+      }
     );
   };
 
@@ -226,18 +226,18 @@ export const RecordingItem: React.FC<RecordingItemProps> = ({
           )}
         </div>
         <div className="flex items-center gap-4 text-xs text-gray-500 w-auto justify-end">
-          {recording.createdAt && (
+          {recording.created_at && (
             <span className="text-gray-400 tabular-nums">
-              {new Date(recording.createdAt).toLocaleDateString('en-US', {
+              {new Date(recording.created_at).toLocaleDateString('en-US', {
                 month: 'short',
                 day: 'numeric',
-                year: 'numeric'
+                year: 'numeric',
               })}
             </span>
           )}
           <div onClick={e => e.stopPropagation()}>
             <RecordingProjectPicker
-              currentProjectId={recording.projectId}
+              currentProjectId={recording.project_id}
               projects={projects}
               onSelect={handleUpdateProject}
               portalContainer={portalContainer}
@@ -378,18 +378,18 @@ export const RecordingItem: React.FC<RecordingItemProps> = ({
               <Clock className="w-3 h-3" /> {recording.steps.length} steps
             </span>
             <RecordingProjectPicker
-              currentProjectId={recording.projectId}
+              currentProjectId={recording.project_id}
               projects={projects}
               onSelect={handleUpdateProject}
               portalContainer={portalContainer}
             />
           </div>
-          {recording.createdAt && (
+          {recording.created_at && (
             <span className="text-[10px] text-gray-400 font-medium">
-              {new Date(recording.createdAt).toLocaleDateString('en-US', {
+              {new Date(recording.created_at).toLocaleDateString('en-US', {
                 month: 'short',
                 day: 'numeric',
-                year: 'numeric'
+                year: 'numeric',
               })}
             </span>
           )}

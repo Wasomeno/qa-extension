@@ -9,6 +9,7 @@ import {
   Info,
   Check,
   X,
+  Sheet,
 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { TestScenario } from '@/types/test-scenario';
@@ -185,7 +186,6 @@ export const ScenarioItem: React.FC<ScenarioItemProps> = ({
             className="flex items-center gap-2 text-xs text-zinc-500 min-w-0"
             title={scenario.projectName || projectName || 'Unassigned Project'}
           >
-            <Key className="w-3 h-3 shrink-0" />
             <span className="truncate">
               {scenario.projectName || projectName || 'Unassigned'}
             </span>

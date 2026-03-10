@@ -118,8 +118,8 @@ export const RecordingPicker: React.FC<RecordingPickerProps> = ({
                     </span>
                     <span className="text-[10px] text-gray-400">
                       {recording.steps?.length || 0} steps •{' '}
-                      {recording.projectId
-                        ? `Project #${recording.projectId}`
+                      {recording.project_id
+                        ? `Project #${recording.project_id}`
                         : 'No project'}
                     </span>
                   </div>

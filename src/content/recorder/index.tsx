@@ -46,7 +46,7 @@ async function initializeRecorder() {
       iframe.style.border = 'none';
       iframe.style.zIndex = '2147483647';
       iframe.style.background = 'transparent';
-      iframe.allow = 'display-capture'; // Essential for screen recording!
+      iframe.allow = 'camera; microphone; display-capture'; // Essential for screen recording!
       document.body.appendChild(iframe);
 
       setIframeStyles('hidden');

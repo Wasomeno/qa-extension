@@ -18,6 +18,7 @@ import { getGitlabLoginSession } from '@/api/auth';
 import { MessageType } from '@/types/messages';
 import { useSessionUser } from '@/hooks/use-session-user';
 import { ViewType } from '@/types/navigation';
+import { SessionProvider, useSession } from '@/contexts/session-context';
 
 interface FloatingTriggerProps {
   onClose?: () => void;
@@ -35,7 +36,11 @@ const queryClient = new QueryClient({
 });
 
 const FloatingTriggerInner: React.FC<FloatingTriggerProps> = ({ onClose }) => {
-  const { user, clearUser, syncUser } = useSessionUser();
+  const sessionUser = useSession();
+  // Fallback to hook if provider is missing (though it shouldn't be here)
+  const hookUser = useSessionUser();
+  const { user, clearUser, syncUser } = sessionUser || hookUser;
+
   const [activeFeature, setActiveFeature] = useState<
     'issue' | 'issues' | 'pinned' | 'menu' | 'login' | 'record' | null
   >(null);
@@ -49,7 +54,9 @@ const FloatingTriggerInner: React.FC<FloatingTriggerProps> = ({ onClose }) => {
     null
   );
   const [isHovered, setIsHovered] = useState<boolean>(false);
-  const [popupContainer, setPopupContainer] = useState<HTMLDivElement | null>(null);
+  const [popupContainer, setPopupContainer] = useState<HTMLDivElement | null>(
+    null
+  );
   const [buttonContainer, setButtonContainer] = useState<HTMLDivElement | null>(
     null
   );
@@ -168,7 +175,7 @@ const FloatingTriggerInner: React.FC<FloatingTriggerProps> = ({ onClose }) => {
     setPopupPosition({ x: popupX, y: popupY });
     setActiveFeature(action);
     if (action === 'menu') {
-      // When opening the menu via the main menu icon, 
+      // When opening the menu via the main menu icon,
       // we don't want to force a dashboard reset anymore
       // so that it preserves the last state.
       setInitialView('dashboard');
@@ -181,8 +188,9 @@ const FloatingTriggerInner: React.FC<FloatingTriggerProps> = ({ onClose }) => {
     setSelectedIssue(null);
   };
 
-  const handleLoginSuccess = async () => {
-    await syncUser();
+  const handleLoginSuccess = () => {
+    // Don't await syncUser here to allow immediate UI update
+    // The LoginPopup already calls syncUser which updates the shared context
     session.refetch();
     handleClose();
   };
@@ -262,7 +270,7 @@ const FloatingTriggerInner: React.FC<FloatingTriggerProps> = ({ onClose }) => {
           position={popupPosition}
           onClose={handleClose}
           containerRef={{ current: popupContainer } as any}
-          onContainerRef={(el) => setPopupContainer(el)}
+          onContainerRef={el => setPopupContainer(el)}
           width={360}
         >
           {renderPopupContent()}
@@ -284,7 +292,9 @@ const FloatingTriggerInner: React.FC<FloatingTriggerProps> = ({ onClose }) => {
 const FloatingTrigger: React.FC<FloatingTriggerProps> = props => {
   return (
     <QueryClientProvider client={queryClient}>
-      <FloatingTriggerInner {...props} />
+      <SessionProvider>
+        <FloatingTriggerInner {...props} />
+      </SessionProvider>
     </QueryClientProvider>
   );
 };

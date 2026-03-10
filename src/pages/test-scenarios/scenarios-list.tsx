@@ -6,7 +6,6 @@ import { Search, Plus, Terminal } from 'lucide-react';
 import { testScenarioApi } from '@/api/test-scenario';
 import { getProjects } from '@/api/project';
 import { MessageType } from '@/types/messages';
-import { useNavigation } from '@/contexts/navigation-context';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -106,9 +105,7 @@ export const TestScenariosPage: React.FC<{
       {/* Top Header */}
       <header className="px-6 py-4 border-b flex items-center justify-between shrink-0">
         <div className="flex items-center gap-4">
-          <h1 className="text-xl font-bold text-gray-900">
-            Document Generator
-          </h1>
+          <h1 className="text-xl font-bold text-gray-900">Test Scenarios</h1>
           <div className="flex items-center gap-2">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -150,7 +147,8 @@ export const TestScenariosPage: React.FC<{
           {/* Breadcrumbs & Actions */}
           <div className="px-6 py-3 flex items-center justify-end shrink-0">
             <Button
-              className="bg-zinc-900 text-white rounded-full gap-2 px-4 shadow-sm hover:bg-zinc-800"
+              variant="ghost"
+              className="hover:bg-zinc-50 border text-zinc-900 rounded-full gap-2 px-4"
               onClick={e => {
                 e.stopPropagation();
                 setIsWizardOpen(true);
@@ -218,11 +216,11 @@ export const TestScenariosPage: React.FC<{
         <AnimatePresence>
           {showDetails && selectedScenario && (
             <motion.div
-              initial={{ x: 320, opacity: 0 }}
+              initial={{ x: 480, opacity: 0 }}
               animate={{ x: 0, opacity: 1 }}
-              exit={{ x: 320, opacity: 0 }}
+              exit={{ x: 480, opacity: 0 }}
               transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-              className="absolute right-0 top-0 bottom-0 w-[350px] z-50 shadow-[-10px_0_30px_rgba(0,0,0,0.1)] bg-white border-l"
+              className="absolute right-0 top-0 bottom-0 w-[480px] z-50 shadow-[-10px_0_30px_rgba(0,0,0,0.1)] bg-white border-l"
               onClick={e => e.stopPropagation()}
             >
               <ScenarioDetail

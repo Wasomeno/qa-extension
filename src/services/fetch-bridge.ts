@@ -20,8 +20,8 @@ function isExtensionPage(): boolean {
 function isNode(): boolean {
   return (
     typeof process !== 'undefined' &&
-    !!process.versions &&
-    !!process.versions.node
+    !!(process as any).versions &&
+    !!(process as any).versions.node
   );
 }
 

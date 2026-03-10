@@ -9,13 +9,6 @@ import {
   List as ListIcon,
   Info,
 } from 'lucide-react';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import { useQuery } from '@tanstack/react-query';
 import { getProjects } from '@/api/project';
 import { listRecordings } from '@/api/recording';
@@ -236,8 +229,8 @@ export const RecordingsPage: React.FC<{
       const matchesSearch = b.name.toLowerCase().includes(searchLower);
       const matchesProject =
         selectedProjectId === 'all' ||
-        b.projectId?.toString() === selectedProjectId ||
-        (selectedProjectId === 'unassigned' && !b.projectId);
+        b.project_id?.toString() === selectedProjectId ||
+        (selectedProjectId === 'unassigned' && !b.project_id);
       return matchesSearch && matchesProject;
     });
   }, [blueprints, selectedProjectId, searchQuery]);
@@ -358,7 +351,7 @@ export const RecordingsPage: React.FC<{
                 }, 300);
               }}
             >
-              <Plus className="w-5 h-5" /> New Test Script
+              <Plus className="w-5 h-5" /> Test Recording
             </Button>
           </div>
 

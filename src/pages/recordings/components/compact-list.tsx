@@ -1,3 +1,4 @@
+import { motion, AnimatePresence } from 'framer-motion';
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import {
   FileText,
@@ -63,6 +64,8 @@ export const CompactRecordingsList: React.FC<CompactRecordingsListProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [isDeletingId, setIsDeletingId] = useState<string | null>(null);
+  const [deletedId, setDeletedId] = useState<string | null>(null);
   const [editName, setEditName] = useState('');
   const editInputRef = useRef<HTMLInputElement>(null);
   const isPageRestricted = isRestrictedUrl(window.location.href);
@@ -187,7 +190,7 @@ export const CompactRecordingsList: React.FC<CompactRecordingsListProps> = ({
     .filter(
       rec =>
         selectedProjectId === 'all' ||
-        rec.projectId?.toString() === selectedProjectId
+        rec.project_id?.toString() === selectedProjectId
     )
     .slice(0, 5);
 
@@ -272,10 +275,26 @@ export const CompactRecordingsList: React.FC<CompactRecordingsListProps> = ({
   };
 
   const handleDelete = async (id: string) => {
-    chrome.runtime.sendMessage({
-      type: MessageType.DELETE_BLUEPRINT,
-      data: { id },
-    });
+    setIsDeletingId(id);
+    chrome.runtime.sendMessage(
+      {
+        type: MessageType.DELETE_BLUEPRINT,
+        data: { id },
+      },
+      response => {
+        setIsDeletingId(null);
+        if (response?.success) {
+          setDeletedId(id);
+          setConfirmDeleteId(null);
+          setTimeout(() => {
+            setDeletedId(null);
+            queryClient.invalidateQueries({ queryKey: ['recordings-blueprints'] });
+          }, 1500);
+        } else {
+          setError(response?.error || 'Failed to delete recording');
+        }
+      }
+    );
   };
 
   return (
@@ -450,7 +469,7 @@ export const CompactRecordingsList: React.FC<CompactRecordingsListProps> = ({
             {filteredRecordings.map(rec => (
               <div
                 key={rec.id}
-                className="px-4 py-3 hover:bg-gray-50/80 transition-colors group cursor-pointer"
+                className="px-4 py-3 hover:bg-gray-50/80 transition-colors group cursor-pointer relative"
                 onClick={() => {
                   if (editingId === rec.id) return;
                   const url = chrome.runtime.getURL(
@@ -479,37 +498,7 @@ export const CompactRecordingsList: React.FC<CompactRecordingsListProps> = ({
                     </span>
                   )}
                   <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
-                    {confirmDeleteId === rec.id ? (
-                      <div className="flex items-center gap-1 bg-red-50 px-1.5 py-0.5 rounded border border-red-100">
-                        <span className="text-[9px] font-bold text-red-600 uppercase tracking-tighter">
-                          Delete?
-                        </span>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-6 w-6 text-red-600 hover:bg-red-100"
-                          onClick={e => {
-                            e.stopPropagation();
-                            handleDelete(rec.id);
-                            setConfirmDeleteId(null);
-                          }}
-                        >
-                          <X className="w-3 h-3 invisible" /> {/* Placeholder for alignment */}
-                          <span className="absolute inset-0 flex items-center justify-center font-bold text-[9px]">YES</span>
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-6 w-6 text-gray-500 hover:bg-gray-100"
-                          onClick={e => {
-                            e.stopPropagation();
-                            setConfirmDeleteId(null);
-                          }}
-                        >
-                          <span className="font-bold text-[9px]">NO</span>
-                        </Button>
-                      </div>
-                    ) : !editingId && (
+                    {!editingId && !confirmDeleteId && !isDeletingId && !deletedId && (
                       <>
                         <Button
                           variant="ghost"
@@ -545,20 +534,70 @@ export const CompactRecordingsList: React.FC<CompactRecordingsListProps> = ({
                     )}
                   </div>
                 </div>
+                {/* Delete Confirmation Overlays */}
+                <AnimatePresence mode="wait">
+                  {(confirmDeleteId === rec.id || isDeletingId === rec.id || deletedId === rec.id) && (
+                    <motion.div
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                      className="absolute inset-0 z-10 bg-white/95 px-4 flex items-center justify-between"
+                    >
+                      {confirmDeleteId === rec.id && (
+                        <motion.div
+                          key="confirm"
+                          initial={{ opacity: 0, x: 10 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          exit={{ opacity: 0, x: -10 }}
+                          className="flex items-center justify-between w-full"
+                        >
+                          <span className="text-xs font-medium text-gray-700">Delete this recording?</span>
+                          <div className="flex gap-2">
+                            <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={e => { e.stopPropagation(); setConfirmDeleteId(null); }}>Cancel</Button>
+                            <Button size="sm" variant="destructive" className="h-7 text-xs" onClick={e => { e.stopPropagation(); handleDelete(rec.id); }}>Delete</Button>
+                          </div>
+                        </motion.div>
+                      )}
+                      {isDeletingId === rec.id && (
+                        <motion.div
+                          key="deleting"
+                          initial={{ opacity: 0 }}
+                          animate={{ opacity: 1 }}
+                          exit={{ opacity: 0 }}
+                          className="flex items-center gap-2 text-xs text-gray-500"
+                        >
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          Deleting...
+                        </motion.div>
+                      )}
+                      {deletedId === rec.id && (
+                        <motion.div
+                          key="success"
+                          initial={{ opacity: 0 }}
+                          animate={{ opacity: 1 }}
+                          exit={{ opacity: 0 }}
+                          className="flex items-center gap-2 text-xs text-green-700 font-medium"
+                        >
+                          Deleted successfully
+                        </motion.div>
+                      )}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
                 <div className="flex items-center gap-3 text-[11px] text-gray-500">
                   <span className="flex items-center gap-1.5">
                     <Clock className="w-3 h-3" /> {rec.steps.length} steps
                   </span>
-                  {rec.projectId && (
+                  {rec.project_id && (
                     <div onClick={e => e.stopPropagation()}>
                     <RecordingProjectPicker
-                    currentProjectId={rec.projectId}
+                    currentProjectId={rec.project_id}
                     projects={projects}
                     onSelect={(projectId) => {
                       chrome.runtime.sendMessage(
                           {
                             type: MessageType.UPDATE_BLUEPRINT,
-                            data: { id: rec.id, data: { projectId: projectId } },
+                            data: { id: rec.id, data: { project_id: projectId } },
                           },
                           () => {
                             refetchRecordings();

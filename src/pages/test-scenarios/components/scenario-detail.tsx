@@ -12,6 +12,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { TestScenario } from '@/types/test-scenario';
 
 interface ScenarioDetailProps {
@@ -93,12 +94,12 @@ export const ScenarioDetail: React.FC<ScenarioDetailProps> = ({
               animate={{ x: 0, opacity: 1 }}
               exit={{ x: -20, opacity: 0 }}
               transition={{ duration: 0.2, ease: 'easeOut' }}
-              className="absolute inset-0 flex flex-col"
+              className="absolute inset-0 flex flex-col w-full overflow-hidden"
             >
-              <ScrollArea className="flex-1">
-                <div className="p-6 space-y-6">
+              <ScrollArea className="flex-1 w-full">
+                <div className="p-6 space-y-6 w-full max-w-[480px]">
                   {/* Status Section */}
-                  <div className="space-y-4">
+                  <div className="space-y-4 min-w-0">
                     <h3 className="text-sm font-medium text-zinc-900 border-b pb-2">
                       Status
                     </h3>
@@ -109,15 +110,19 @@ export const ScenarioDetail: React.FC<ScenarioDetailProps> = ({
                       </span>
                     </div>
                     {scenario.error && (
-                      <div className="text-sm text-red-600 bg-red-50 p-3 rounded-lg border border-red-100 flex items-start gap-2">
+                      <div className="text-sm text-red-600 bg-red-50 p-3 rounded-lg border border-red-100 flex items-start gap-2 max-w-full">
                         <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
-                        <span>{scenario.error}</span>
+                        <span className="break-words min-w-0">
+                          {scenario.error}
+                        </span>
                       </div>
                     )}
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-zinc-500">Target Project</span>
+                    <div className="flex items-center justify-between text-sm min-w-0">
+                      <span className="text-zinc-500 shrink-0">
+                        Target Project
+                      </span>
                       <span
-                        className="font-medium text-zinc-900 truncate ml-4"
+                        className="font-medium text-zinc-900 truncate ml-4 min-w-0"
                         title={
                           scenario.projectName ||
                           projectName ||
@@ -130,51 +135,68 @@ export const ScenarioDetail: React.FC<ScenarioDetailProps> = ({
                   </div>
 
                   {/* Test Cases Overview */}
-                  <div className="space-y-4">
+                  <div className="space-y-4 min-w-0 w-full overflow-hidden">
                     <h3 className="text-sm font-medium text-zinc-900 border-b pb-2 flex items-center justify-between">
                       <span>Test Cases Breakdown</span>
                     </h3>
 
-                    <div className="space-y-3">
+                    <Tabs
+                      defaultValue={scenario.sheets[0]?.name}
+                      className="w-full min-w-0 max-w-full flex-col flex"
+                    >
+                      <div className="w-full overflow-x-auto border-b relative">
+                        <TabsList className="flex w-max bg-transparent p-0 h-auto gap-6 rounded-none px-1">
+                          {scenario.sheets.map(sheet => (
+                            <TabsTrigger
+                              key={sheet.name}
+                              value={sheet.name}
+                              className="rounded-none border-b-2 border-transparent data-[state=active]:border-zinc-900 data-[state=active]:bg-transparent data-[state=active]:shadow-none px-0 pb-2 pt-0 text-zinc-500 data-[state=active]:text-zinc-900 transition-all whitespace-nowrap"
+                            >
+                              <span className="flex items-center gap-2">
+                                {sheet.name}
+                                <span className="bg-zinc-100 text-zinc-500 px-1.5 py-0.5 rounded-md text-[10px] font-bold">
+                                  {sheet.testCases.length}
+                                </span>
+                              </span>
+                            </TabsTrigger>
+                          ))}
+                        </TabsList>
+                      </div>
+
                       {scenario.sheets.map(sheet => (
-                        <div
+                        <TabsContent
                           key={sheet.name}
-                          className="border rounded-lg overflow-hidden"
+                          value={sheet.name}
+                          className="mt-4 outline-none min-w-0"
                         >
-                          <div className="bg-zinc-50 px-3 py-2 text-sm font-medium border-b flex justify-between">
-                            <span>{sheet.name}</span>
-                            <span className="text-zinc-500">
-                              {sheet.testCases.length} TC
-                            </span>
-                          </div>
-                          <div className="text-xs">
-                            {sheet.testCases.map(tc => (
-                              <div
-                                key={tc.id}
-                                className="p-3 border-b last:border-0 hover:bg-zinc-50 transition-colors"
-                              >
-                                <div className="flex gap-2">
-                                  <span className="font-medium shrink-0 text-zinc-700 min-w-[70px]">
-                                    {tc.id}
-                                  </span>
-                                  <span className="line-clamp-2">
-                                    {tc.name}
-                                  </span>
-                                </div>
-                                <div className="text-zinc-500 mt-1 pl-[78px] flex gap-3">
-                                  <span>{tc.steps.length} steps</span>
-                                  {tc.status && (
-                                    <span className="capitalize">
-                                      {tc.status}
+                          <div className="border rounded-xl overflow-hidden bg-white shadow-sm min-w-0">
+                            <div className="text-xs divide-y divide-zinc-100 min-w-0">
+                              {sheet.testCases.map(tc => (
+                                <div
+                                  key={tc.id}
+                                  className="p-4 hover:bg-zinc-50 transition-colors group min-w-0"
+                                >
+                                  <div className="flex gap-3 min-w-0">
+                                    <span className="font-mono font-bold shrink-0 text-zinc-400 bg-zinc-50 px-2 py-0.5 rounded h-fit">
+                                      {tc.id}
                                     </span>
-                                  )}
+                                    <span className="font-medium text-zinc-800 leading-snug flex-1 min-w-0 break-words overflow-hidden">
+                                      {tc.name}
+                                    </span>
+                                  </div>
+                                  <div className="text-xs text-zinc-500 mt-2 justify-end flex flex-wrap gap-x-4 gap-y-2 items-center">
+                                    <span className="flex items-center gap-1.5 whitespace-nowrap">
+                                      <div className="w-1 h-1 rounded-full bg-zinc-300" />
+                                      {tc.steps.length} steps
+                                    </span>
+                                  </div>
                                 </div>
-                              </div>
-                            ))}
+                              ))}
+                            </div>
                           </div>
-                        </div>
+                        </TabsContent>
                       ))}
-                    </div>
+                    </Tabs>
                   </div>
 
                   {/* Generated Recordings Linked */}

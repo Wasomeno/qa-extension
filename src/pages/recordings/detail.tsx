@@ -10,6 +10,7 @@ import {
   Navigation,
   ListFilter,
   AlertCircle,
+  Video,
 } from 'lucide-react';
 import { useNavigation } from '@/contexts/navigation-context';
 import { TestBlueprint } from '@/types/recording';
@@ -83,6 +84,29 @@ export const RecordingDetailPage: React.FC<RecordingDetailProps> = ({
             </section>
           )}
 
+          {/* Video Player Section */}
+          <section className="space-y-2">
+            <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider flex items-center gap-2">
+              <Video className="w-4 h-4" /> Recording Playback
+            </h2>
+            {blueprint.video_url ? (
+              <div className="aspect-video w-full overflow-hidden rounded-xl border border-zinc-200 bg-black shadow-sm">
+                <video
+                  src={blueprint.video_url}
+                  controls
+                  className="h-full w-full object-contain"
+                >
+                  Your browser does not support the video tag.
+                </video>
+              </div>
+            ) : (
+              <div className="flex aspect-video w-full flex-col items-center justify-center rounded-xl border-2 border-dashed border-zinc-100 bg-zinc-50 text-zinc-400">
+                <AlertCircle className="mb-2 h-8 w-8 opacity-20" />
+                <span className="text-xs">No video recording available</span>
+              </div>
+            )}
+          </section>
+
           {/* Metadata */}
           <div className="flex gap-4">
             <div className="flex-1 p-3 bg-zinc-50 rounded-lg border border-zinc-100">
@@ -98,7 +122,7 @@ export const RecordingDetailPage: React.FC<RecordingDetailProps> = ({
                 <Database className="w-3 h-3" /> Project
               </div>
               <div className="text-sm font-semibold text-zinc-900 truncate">
-                {blueprint.projectId || 'Unassigned'}
+                {blueprint.project_id || 'Unassigned'}
               </div>
             </div>
           </div>

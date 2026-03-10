@@ -7,12 +7,14 @@ import { IssueCardSkeleton } from '@/pages/issues/components/issue-card-skeleton
 import { PinColorPicker } from './components/pin-color-picker';
 import { PinNoteModal } from './components/pin-note-modal';
 import { usePinnedIssues, PinnedIssue } from '@/hooks/use-pinned-issues';
+import { useNavigation } from '@/contexts/navigation-context';
 
 interface PinnedPageProps {
   portalContainer?: HTMLElement | null;
 }
 
 export const PinnedPage: React.FC<PinnedPageProps> = ({ portalContainer }) => {
+  const { push } = useNavigation();
   const { pinnedIssues, isLoading, togglePin, updatePinMeta } =
     usePinnedIssues();
 
@@ -74,11 +76,7 @@ export const PinnedPage: React.FC<PinnedPageProps> = ({ portalContainer }) => {
                 <IssueCard
                   issue={issue}
                   variant="pinned"
-                  onClick={() => {
-                    // Navigate logic if needed, or open external
-                    // For main page, maybe open issue detail modal handled by parent?
-                    // Currently IssueCard handles click
-                  }}
+                  onClick={(iss) => push('issue-detail', iss)}
                   onUnpin={togglePin}
                   onSetPinColor={iss => setEditingColorIssueId(iss.id)}
                   onAddNote={iss => setEditingNoteIssue(iss as PinnedIssue)}

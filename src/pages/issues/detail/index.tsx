@@ -52,11 +52,10 @@ const statusConfig: Record<
 > = {
   opened: { color: 'text-green-700', bg: 'bg-green-100', label: 'Open' },
   closed: { color: 'text-gray-700', bg: 'bg-gray-100', label: 'Closed' },
-  // Default fallbacks
 };
 
-// Helper to format date
 const formatDate = (dateStr: string): string => {
+  if (!dateStr) return '';
   const date = new Date(dateStr);
   return date.toLocaleDateString('en-US', {
     month: 'short',
@@ -159,9 +158,7 @@ export const IssueDetailPage: React.FC<IssueDetailPageProps> = ({
   onBack,
   portalContainer,
 }) => {
-  // Removed history state, using props directly
   const containerRef = React.useRef<HTMLDivElement>(null);
-
   const queryClient = useQueryClient();
   const projectId = propProjectId || issue?.project_id;
   const issueId = propIssueId || issue?.iid;
@@ -172,23 +169,20 @@ export const IssueDetailPage: React.FC<IssueDetailPageProps> = ({
   );
   const currentIssue = fetchedIssueData?.data || issue;
 
-  // Edit States
   const [editingField, setEditingField] = useState<
     'description' | 'status' | 'assignee' | 'labels' | null
   >(null);
   const [isSaving, setIsSaving] = useState(false);
-
   const { togglePin, isPinned } = usePinnedIssues();
 
-  // Form States
-  const [description, setDescription] = useState(currentIssue?.description || '');
+  const [description, setDescription] = useState(
+    currentIssue?.description || ''
+  );
   const [status, setStatus] = useState<string>(
     currentIssue?.state === 'closed' ? 'closed' : 'opened'
   );
 
   const comments = useGetIssueComments(projectId!, issueId!);
-
-  // Comments Mutation Logic
   const [newComment, setNewComment] = useState('');
   const [editingCommentId, setEditingCommentId] = useState<number | null>(null);
   const [editCommentBody, setEditCommentBody] = useState('');
@@ -199,7 +193,6 @@ export const IssueDetailPage: React.FC<IssueDetailPageProps> = ({
     deleteComment,
     isCreating,
     isUpdating,
-    isDeleting,
   } = useIssueCommentMutations(projectId!, issueId!);
 
   const handleCreateComment = async () => {
@@ -220,7 +213,6 @@ export const IssueDetailPage: React.FC<IssueDetailPageProps> = ({
     }
   };
 
-  // Adapting to single assignee for now as per previous code assumption, though API supports array
   const [selectedAssignee, setSelectedAssignee] = useState(
     currentIssue?.assignees?.[0]
       ? {
@@ -252,11 +244,12 @@ export const IssueDetailPage: React.FC<IssueDetailPageProps> = ({
         }))
   );
 
-  // Data Fetching for Pickers
-  const { data: members, isLoading: isLoadingMembers } =
-    useGetProjectMembers(projectId!);
-  const { data: labels, isLoading: isLoadingLabels } =
-    useGetProjectLabels(projectId!);
+  const { data: members, isLoading: isLoadingMembers } = useGetProjectMembers(
+    projectId!
+  );
+  const { data: labels, isLoading: isLoadingLabels } = useGetProjectLabels(
+    projectId!
+  );
 
   useEffect(() => {
     if (fetchedIssueData?.data) {
@@ -301,14 +294,45 @@ export const IssueDetailPage: React.FC<IssueDetailPageProps> = ({
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
-        className="flex-1 flex items-center justify-center bg-white"
+        className="flex-1 flex flex-col relative h-full overflow-hidden"
       >
-        <div className="space-y-4 w-full max-w-2xl px-8">
-          <Skeleton className="h-8 w-3/4" />
-          <Skeleton className="h-32 w-full" />
-          <div className="grid grid-cols-2 gap-4">
-            <Skeleton className="h-20 w-full" />
-            <Skeleton className="h-20 w-full" />
+        <div className="flex-none sticky bg-neutral-50 z-10 top-0 p-4 border-b border-gray-100">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <button
+                onClick={onBack}
+                className="p-1.5 hover:bg-gray-100 rounded-lg text-gray-500 transition-colors"
+              >
+                <ArrowLeft className="w-5 h-5" />
+              </button>
+              <div className="space-y-2">
+                <Skeleton className="h-6 w-[300px]" />
+                <Skeleton className="h-3 w-[200px]" />
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <Skeleton className="w-8 h-8 rounded-lg" />
+              <Skeleton className="w-8 h-8 rounded-lg" />
+            </div>
+          </div>
+        </div>
+
+        <div className="flex-1 flex min-h-0">
+          <div className="flex-1 overflow-y-auto p-6 space-y-6">
+            <div className="space-y-2">
+              <h3 className="text-[10px] text-gray-500 font-medium uppercase tracking-wide">
+                Description
+              </h3>
+              <Skeleton className="h-40 w-full rounded-lg" />
+            </div>
+            <div className="space-y-4">
+              <Skeleton className="h-8 w-24" />
+              <Skeleton className="h-24 w-full" />
+            </div>
+          </div>
+          <div className="w-60 flex-shrink-0 border-l border-gray-100 bg-gray-50/50 p-4 space-y-4">
+            <Skeleton className="h-32 w-full rounded-xl" />
+            <Skeleton className="h-24 w-full rounded-xl" />
           </div>
         </div>
       </motion.div>
@@ -327,11 +351,8 @@ export const IssueDetailPage: React.FC<IssueDetailPageProps> = ({
     );
   }
 
-  const statusStyle = statusConfig[currentIssue.state] || statusConfig.opened;
-
   const handleUpdate = async () => {
     if (!editingField) return;
-
     setIsSaving(true);
     try {
       if (editingField === 'description') {
@@ -352,8 +373,6 @@ export const IssueDetailPage: React.FC<IssueDetailPageProps> = ({
         });
         toast.success('Labels updated');
       }
-
-      // Invalidate queries to refresh data
       queryClient.invalidateQueries({ queryKey: ['issues'] });
       queryClient.invalidateQueries({ queryKey: ['issue', issueId] });
       setEditingField(null);
@@ -366,7 +385,6 @@ export const IssueDetailPage: React.FC<IssueDetailPageProps> = ({
 
   const cancelEdit = () => {
     setEditingField(null);
-    // Reset states
     setDescription(currentIssue.description);
     setStatus(currentIssue.state === 'closed' ? 'closed' : 'opened');
     setSelectedAssignee(
@@ -409,8 +427,7 @@ export const IssueDetailPage: React.FC<IssueDetailPageProps> = ({
       transition={{ duration: 0.2 }}
       className="flex-1 flex flex-col relative h-full overflow-hidden"
     >
-      {/* Header */}
-      <div className="flex-none sticky bg-neutral-50 z-10 top-0 p-4 border-b border-gray-100 ">
+      <div className="flex-none sticky bg-neutral-50 z-10 top-0 p-4 border-b border-gray-100">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <button
@@ -425,33 +442,47 @@ export const IssueDetailPage: React.FC<IssueDetailPageProps> = ({
               </h1>
               <div className="flex items-center gap-2 text-[10px] text-gray-400 mt-1">
                 <span className="font-medium text-gray-500">
-                  {currentIssue.project_name}
+                  {currentIssue.project_name || (
+                    <Skeleton className="h-3 w-20 inline-block" />
+                  )}
                 </span>
                 <span>•</span>
-                <span>Created by {currentIssue.author.name}</span>
+                <span>
+                  Created by{' '}
+                  {currentIssue.author?.name || (
+                    <Skeleton className="h-3 w-24 inline-block" />
+                  )}
+                </span>
                 <span>•</span>
-                <span>{formatDate(currentIssue.created_at)}</span>
+                <span>
+                  {currentIssue.created_at ? (
+                    formatDate(currentIssue.created_at)
+                  ) : (
+                    <Skeleton className="h-3 w-16 inline-block" />
+                  )}
+                </span>
               </div>
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <button
-              onClick={() => {
-                if (currentIssue.web_url) {
-                  window.open(currentIssue.web_url, '_blank');
-                }
-              }}
-              className="p-1.5 hover:bg-gray-100 rounded-lg text-gray-400 hover:text-blue-600 transition-colors"
+            <Button
+              variant="ghost"
+              onClick={() =>
+                currentIssue.web_url &&
+                window.open(currentIssue.web_url, '_blank')
+              }
+              className="!p-2 h-auto hover:bg-gray-100 rounded-lg text-gray-400 hover:text-blue-600 transition-colors"
               title="Open in GitLab"
             >
               <ExternalLink className="w-4 h-4" />
-            </button>
-            <button
+            </Button>
+            <Button
+              variant="ghost"
               onClick={() => togglePin(currentIssue)}
               className={cn(
-                'p-1.5 rounded-lg transition-colors',
+                '!p-2 h-auto rounded-lg transition-colors',
                 isPinned(currentIssue.iid, currentIssue.project_id)
-                  ? 'bg-amber-100 text-amber-500 hover:bg-amber-200'
+                  ? 'bg-amber-100 text-amber-500 hover:bg-amber-200 hover:text-amber-600'
                   : 'text-gray-400 hover:bg-gray-100 hover:text-gray-900'
               )}
               title={
@@ -463,22 +494,17 @@ export const IssueDetailPage: React.FC<IssueDetailPageProps> = ({
               <Pin
                 className={cn(
                   'w-4 h-4',
-                  isPinned(currentIssue.iid, currentIssue.project_id) && 'fill-current'
+                  isPinned(currentIssue.iid, currentIssue.project_id) &&
+                    'fill-current'
                 )}
               />
-            </button>
-            <button className="p-1.5 hover:bg-gray-100 rounded-lg text-gray-400 hover:text-gray-900 transition-colors">
-              <MoreVertical className="w-4 h-4" />
-            </button>
+            </Button>
           </div>
         </div>
       </div>
 
-      {/* Main Content */}
       <div className="flex-1 flex min-h-0">
-        {/* Left Column - Main Content */}
         <div className="flex-1 overflow-y-auto p-6 space-y-6">
-          {/* Description - Editable */}
           <EditableSection
             title="Description"
             isEditing={editingField === 'description'}
@@ -498,7 +524,6 @@ export const IssueDetailPage: React.FC<IssueDetailPageProps> = ({
               />
             }
           >
-            {' '}
             <div className="group relative rounded-lg p-2 hover:bg-gray-50/50 transition-colors -m-2">
               {isFetching && !currentIssue.description ? (
                 <div className="space-y-2">
@@ -512,13 +537,11 @@ export const IssueDetailPage: React.FC<IssueDetailPageProps> = ({
             </div>
           </EditableSection>
 
-          {/* Child Tasks */}
           <ChildIssuesList
             parentIssue={currentIssue}
             portalContainer={portalContainer}
           />
 
-          {/* Comments Section */}
           <div className="space-y-6 pb-6">
             <h2 className="text-sm font-medium text-gray-900 flex items-center gap-2">
               Comments
@@ -526,7 +549,6 @@ export const IssueDetailPage: React.FC<IssueDetailPageProps> = ({
                 {comments.data?.data?.length || 0}
               </span>
             </h2>
-
             <div className="space-y-6">
               {comments.isLoading
                 ? Array.from({ length: 3 }).map((_, i) => (
@@ -632,7 +654,7 @@ export const IssueDetailPage: React.FC<IssueDetailPageProps> = ({
                             ) : (
                               <MarkdownRenderer
                                 content={comment.body}
-                                className="text-xs [&_p]:leading-relaxed [&_p]:!mt-1.5 [&_h1]:!text-base [&_h2]:!text-sm [&_h3]:!text-xs [&_code]:!text-xs [&_pre]:!p-2 [&_li]:!leading-relaxed [&_table]:!text-xs [&_td]:!text-xs [&_th]:!text-xs"
+                                className="text-xs"
                               />
                             )}
                           </div>
@@ -641,8 +663,6 @@ export const IssueDetailPage: React.FC<IssueDetailPageProps> = ({
                     </div>
                   ))}
             </div>
-
-            {/* New Comment Box */}
             <div className="pt-6 mt-2 border-t border-gray-100">
               <h3 className="text-sm font-medium mb-3 text-gray-700">
                 Add a comment
@@ -668,16 +688,15 @@ export const IssueDetailPage: React.FC<IssueDetailPageProps> = ({
           </div>
         </div>
 
-        {/* Right Column - Sidebar */}
         <div className="w-60 flex-shrink-0 border-l border-gray-100 bg-gray-50/50 p-4 space-y-4 overflow-y-auto">
-          {/* Status & Assignee */}
           <div className="bg-white rounded-xl p-4 border border-gray-100 space-y-4">
-            {/* Status - Editable */}
             <EditableSection
               title="Status"
               isEditing={editingField === 'status'}
               onEdit={() => {
-                setStatus(currentIssue.state === 'closed' ? 'closed' : 'opened');
+                setStatus(
+                  currentIssue.state === 'closed' ? 'closed' : 'opened'
+                );
                 setEditingField('status');
               }}
               onCancel={cancelEdit}
@@ -701,16 +720,19 @@ export const IssueDetailPage: React.FC<IssueDetailPageProps> = ({
                 <span
                   className={cn(
                     'text-xs px-2 py-1 rounded-full font-medium',
-                    (statusConfig[currentIssue.state] || statusConfig.opened).bg,
-                    (statusConfig[currentIssue.state] || statusConfig.opened).color
+                    (statusConfig[currentIssue.state] || statusConfig.opened)
+                      .bg,
+                    (statusConfig[currentIssue.state] || statusConfig.opened)
+                      .color
                   )}
                 >
-                  {(statusConfig[currentIssue.state] || statusConfig.opened).label}
+                  {
+                    (statusConfig[currentIssue.state] || statusConfig.opened)
+                      .label
+                  }
                 </span>
               </div>
             </EditableSection>
-
-            {/* Assignee - Editable */}
             <EditableSection
               title="Assignee"
               isEditing={editingField === 'assignee'}
@@ -763,8 +785,6 @@ export const IssueDetailPage: React.FC<IssueDetailPageProps> = ({
               </div>
             </EditableSection>
           </div>
-
-          {/* Labels - Editable */}
           <div className="bg-white rounded-xl p-4 border border-gray-100">
             <EditableSection
               title="Labels"
@@ -813,8 +833,33 @@ export const IssueDetailPage: React.FC<IssueDetailPageProps> = ({
               }
             >
               <div className="mt-2 grid grid-cols-2 gap-2">
-                {currentIssue.label_details && currentIssue.label_details.length > 0 ? (
-                  currentIssue.label_details.map(label => (
+                {isFetching &&
+                (!currentIssue.label_details ||
+                  currentIssue.label_details.length === 0) &&
+                (!currentIssue.labels || currentIssue.labels.length === 0) ? (
+                  <>
+                    <Skeleton className="h-4 w-full rounded" />
+                    <Skeleton className="h-4 w-3/4 rounded" />
+                  </>
+                ) : (currentIssue.label_details &&
+                    currentIssue.label_details.length > 0) ||
+                  (labels && labels.length > 0) ? (
+                  (currentIssue.label_details &&
+                  currentIssue.label_details.length > 0
+                    ? currentIssue.label_details
+                    : (currentIssue.labels || []).map(l => {
+                        const name = String(l);
+                        const detail = labels?.find(ld => ld.name === name);
+                        return (
+                          detail || {
+                            id: name,
+                            name,
+                            color: '#ccc',
+                            text_color: '#000',
+                          }
+                        );
+                      })
+                  ).map(label => (
                     <div
                       key={label.id}
                       className="col-span-1 text-[10px] px-2 py-0.5 rounded border font-medium truncate"
@@ -844,24 +889,16 @@ export const IssueDetailPage: React.FC<IssueDetailPageProps> = ({
               </div>
             </EditableSection>
           </div>
-
-          {/* Milestone & Due Date */}
           {currentIssue.due_date && (
             <div className="bg-white rounded-xl p-4 border border-gray-100 space-y-3">
-              {currentIssue.due_date && (
-                <div>
-                  <span className="text-[10px] text-gray-500 font-medium uppercase tracking-wide flex items-center gap-1">
-                    <Calendar className="w-3 h-3" /> Due Date
-                  </span>
-                  <div className="mt-1 text-xs font-medium text-gray-900">
-                    {formatDate(currentIssue.due_date)}
-                  </div>
-                </div>
-              )}
+              <span className="text-[10px] text-gray-500 font-medium uppercase tracking-wide flex items-center gap-1">
+                <Calendar className="w-3 h-3" /> Due Date
+              </span>
+              <div className="mt-1 text-xs font-medium text-gray-900">
+                {formatDate(currentIssue.due_date)}
+              </div>
             </div>
           )}
-
-          {/* MR Status */}
           {currentIssue.merge_requests_count > 0 && (
             <div className="bg-white rounded-xl p-4 border border-gray-100">
               <span className="text-[10px] text-gray-500 font-medium uppercase tracking-wide">

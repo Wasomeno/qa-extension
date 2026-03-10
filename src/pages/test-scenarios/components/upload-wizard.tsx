@@ -138,7 +138,7 @@ export const UploadWizard: React.FC<UploadWizardProps> = ({
                 </div>
               </div>
 
-              <div className="space-y-2">
+              <div className="space-y-2 w-full">
                 <Label>2. Target App Source Code Project</Label>
                 <div className="relative pl-1">
                   <SearchablePicker
@@ -153,6 +153,7 @@ export const UploadWizard: React.FC<UploadWizardProps> = ({
                     portalContainer={portalContainer}
                     onSearchChange={setProjectSearch}
                     shouldFilter={false}
+                    className="w-full"
                   />
                 </div>
               </div>

@@ -1,13 +1,14 @@
-export type ViewType = 
-  | 'dashboard' 
-  | 'issues' 
+export type ViewType =
+  | 'dashboard'
+  | 'issues'
   | 'issue-detail'
-  | 'boards' 
-  | 'pinned' 
-  | 'create-issue' 
-  | 'profile' 
+  | 'boards'
+  | 'pinned'
+  | 'create-issue'
+  | 'profile'
   | 'agent'
   | 'recordings'
+  | 'test-scenarios'
   | 'login'
   | 'loading'
   | 'recording-detail';

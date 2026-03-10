@@ -24,7 +24,7 @@ export const RecordingProjectPicker: React.FC<Props> = ({ currentProjectId, proj
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
+      <PopoverTrigger asChild onClick={e => e.stopPropagation()}>
         <Button variant="ghost" size="sm" className="h-6 text-[10px] font-bold uppercase px-1.5 py-0.5 rounded bg-zinc-100 text-zinc-600 hover:bg-zinc-200">
            {selectedProject ? selectedProject.name : 'Unassigned'}
            <ChevronDown className="w-3 h-3 ml-1" />
@@ -46,7 +46,7 @@ export const RecordingProjectPicker: React.FC<Props> = ({ currentProjectId, proj
            <div className="p-1">
              <div 
                 className={cn("px-2 py-1.5 text-xs text-gray-500 cursor-pointer hover:bg-gray-100 flex items-center justify-between", !currentProjectId && "bg-blue-50 text-blue-700")} 
-                onClick={() => { onSelect(null); setOpen(false); }}
+                onClick={(e) => { e.stopPropagation(); onSelect(null); setOpen(false); }}
              >
                Unassigned
                {!currentProjectId && <Check className="w-3 h-3" />}
@@ -55,7 +55,7 @@ export const RecordingProjectPicker: React.FC<Props> = ({ currentProjectId, proj
                <div 
                   key={project.id} 
                   className={cn("flex items-center justify-between px-2 py-1.5 text-xs cursor-pointer hover:bg-gray-100", currentProjectId?.toString() === project.id.toString() && "bg-blue-50 text-blue-700")} 
-                  onClick={() => { onSelect(project.id); setOpen(false); }}
+                  onClick={(e) => { e.stopPropagation(); onSelect(project.id); setOpen(false); }}
                 >
                  {project.name}
                  {currentProjectId?.toString() === project.id.toString() && <Check className="w-3 h-3" />}

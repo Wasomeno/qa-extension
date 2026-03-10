@@ -21,6 +21,7 @@ import {
   useNavigation,
 } from '@/contexts/navigation-context';
 import { ViewType } from '@/types/navigation';
+import { useSession } from '@/contexts/session-context';
 
 // Updated imports from new page structure
 import { DashboardPage } from '@/pages/dashboard';
@@ -31,6 +32,7 @@ import { CreateIssuePage } from '@/pages/issues/create';
 import { ProfilePage } from '@/pages/profile';
 import { AgentPage } from '@/pages/agent';
 import { RecordingsPage } from '@/pages/recordings';
+import { TestScenariosPage } from '@/pages/test-scenarios';
 
 import {
   SidebarProvider,
@@ -66,6 +68,7 @@ const MENU_ITEMS: MenuItem[] = [
   { id: 'boards', label: 'Issue Boards', icon: SquareKanban },
   { id: 'pinned', label: 'Pinned Issues', icon: Pin },
   { id: 'recordings', label: 'Recordings', icon: FileIcon },
+  { id: 'test-scenarios', label: 'Test Scenarios', icon: FileIcon },
   { id: 'create-issue', label: 'Create Issue', icon: PlusCircle },
   { id: 'agent', label: 'QA Agent', icon: Bot },
 ];
@@ -89,7 +92,9 @@ const MainMenuInner: React.FC<MainMenuModalProps> = ({
   const keyboardIsolation = useKeyboardIsolation();
   const [container, setContainer] = useState<HTMLDivElement | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const { user } = useSessionUser();
+  const session = useSession();
+  const hookUser = useSessionUser();
+  const { user } = session || hookUser;
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
@@ -109,7 +114,8 @@ const MainMenuInner: React.FC<MainMenuModalProps> = ({
       const handleMessage = (message: any) => {
         if (
           message.type === MessageType.AUTH_LOGOUT ||
-          (message.type === MessageType.AUTH_SESSION_UPDATED && !message.data) ||
+          (message.type === MessageType.AUTH_SESSION_UPDATED &&
+            !message.data) ||
           message.type === MessageType.CLOSE_MAIN_MENU
         ) {
           onClose();
@@ -164,6 +170,8 @@ const MainMenuInner: React.FC<MainMenuModalProps> = ({
         return <AgentPage portalContainer={container} />;
       case 'recordings':
         return <RecordingsPage portalContainer={container} />;
+      case 'test-scenarios':
+        return <TestScenariosPage portalContainer={container} />;
       default:
         return <DashboardPage />;
     }

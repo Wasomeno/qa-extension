@@ -39,6 +39,8 @@ interface SearchablePickerProps {
   portalContainer?: any;
   allOption?: { label: string; value: string | number };
   multiple?: boolean;
+  onSearchChange?: (search: string) => void;
+  shouldFilter?: boolean;
 }
 
 export const SearchablePicker: React.FC<SearchablePickerProps> = ({
@@ -52,6 +54,8 @@ export const SearchablePicker: React.FC<SearchablePickerProps> = ({
   portalContainer,
   allOption,
   multiple,
+  onSearchChange,
+  shouldFilter = true,
 }) => {
   const [open, setOpen] = useState(false);
   const isClosingRef = useRef(false);
@@ -190,8 +194,11 @@ export const SearchablePicker: React.FC<SearchablePickerProps> = ({
         container={portalContainer}
         onCloseAutoFocus={e => e.preventDefault()}
       >
-        <Command>
-          <CommandInput placeholder={searchPlaceholder} />
+        <Command shouldFilter={shouldFilter}>
+          <CommandInput
+            placeholder={searchPlaceholder}
+            onValueChange={onSearchChange}
+          />
           <CommandList className="max-h-[300px]">
             <CommandEmpty>{emptyMessage}</CommandEmpty>
             <CommandGroup>

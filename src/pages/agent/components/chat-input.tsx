@@ -1,7 +1,14 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { SendHorizontal, Loader2, Paperclip, X, FileText, Image as ImageIcon } from 'lucide-react';
+import {
+  SendHorizontal,
+  Loader2,
+  Paperclip,
+  X,
+  FileText,
+  Image as ImageIcon,
+} from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface ChatInputProps {
@@ -68,9 +75,12 @@ export const ChatInput: React.FC<ChatInputProps> = ({
           onClick={() => handleSubmit()}
           disabled={!input.trim() || isLoading || disabled}
           size="icon"
+          variant="ghost"
           className={cn(
             'h-9 w-9 shrink-0 rounded-xl transition-all',
-            input.trim() ? 'bg-primary shadow-md shadow-primary/20 scale-100' : 'bg-muted opacity-50 scale-95'
+            input.trim()
+              ? 'shadow-md shadow-primary/20 scale-100'
+              : 'bg-muted opacity-80 scale-95'
           )}
         >
           {isLoading ? (

@@ -1,13 +1,10 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useQuery } from '@tanstack/react-query';
 import { getDashboardStats } from '@/api/dashboard';
 import { ActivityItem } from './components/activity-item';
 import { ActivityItemSkeleton } from './components/activity-item-skeleton';
-import { StatCard } from './components/stat-card';
-import { IssueDetailPage } from '../issues/detail';
-import { AnimatePresence } from 'framer-motion';
-import { Issue } from '@/api/issue';
+import { useNavigation } from '@/contexts/navigation-context';
 import { MessageSquareOff } from 'lucide-react';
 
 interface DashboardPageProps {
@@ -17,10 +14,7 @@ interface DashboardPageProps {
 export const DashboardPage: React.FC<DashboardPageProps> = ({
   portalContainer,
 }) => {
-  const [selectedIssue, setSelectedIssue] = useState<{
-    issueId: number;
-    projectId: number;
-  } | null>(null);
+  const { push } = useNavigation();
 
   const { data: stats, isLoading } = useQuery({
     queryKey: ['dashboard-stats'],
@@ -29,20 +23,6 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
       return res.data;
     },
   });
-
-  if (selectedIssue) {
-    return (
-      <AnimatePresence mode="wait">
-        <IssueDetailPage
-          key={selectedIssue.issueId}
-          issueId={selectedIssue.issueId}
-          projectId={selectedIssue.projectId}
-          onBack={() => setSelectedIssue(null)}
-          portalContainer={portalContainer}
-        />
-      </AnimatePresence>
-    );
-  }
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
@@ -54,24 +34,6 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
           <p className="text-sm text-gray-500 mt-1">
             Overview of your QA activities and recent team updates.
           </p>
-        </div>
-
-        <div className="grid grid-cols-3 gap-6">
-          <StatCard
-            title="Active Issues"
-            value={stats?.recent_activities?.length?.toString() || '0'}
-            color="text-theme-text"
-          />
-          <StatCard
-            title="Projects"
-            value="--"
-            color="text-secondary-500"
-          />
-          <StatCard
-            title="Recent Activity"
-            value={stats?.recent_activities?.length?.toString() || '0'}
-            color="text-secondary-700"
-          />
         </div>
 
         <div className="flex items-center justify-between border-b border-gray-100 pb-4">
@@ -95,9 +57,16 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
                     key={`${activity.issue_id}-${activity.created_at}-${index}`}
                     activity={activity}
                     onIssueClick={() =>
-                      setSelectedIssue({
-                        issueId: activity.issue_iid,
-                        projectId: activity.project_id,
+                      push('issue-detail', {
+                        iid: activity.issue_iid,
+                        project_id: activity.project_id,
+                        title: activity.title,
+                        project_name: 'Project',
+                        author: { name: activity.actor_name, avatar_url: activity.actor_avatar },
+                        created_at: activity.created_at,
+                        description: activity.description,
+                        state: 'opened',
+                        web_url: activity.web_url,
                       })
                     }
                   />
