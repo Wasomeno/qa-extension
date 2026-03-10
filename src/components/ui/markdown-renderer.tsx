@@ -1,5 +1,6 @@
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import rehypeRaw from 'rehype-raw';
 import { cn } from '@/lib/utils';
 import { VideoPlaceholder } from './video-placeholder';
 
@@ -18,6 +19,7 @@ export function MarkdownRenderer({
     <div className={cn('text-foreground', className)}>
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
+        rehypePlugins={[rehypeRaw]}
         components={{
           h1: ({ className, ...props }) => (
             <h1
