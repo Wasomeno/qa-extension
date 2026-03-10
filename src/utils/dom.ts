@@ -1,5 +1,5 @@
 /**
- * DOM manipulation utilities for the Gitlab Companion extension
+ * DOM manipulation utilities for the Flowg extension
  */
 
 export interface ElementInfo {

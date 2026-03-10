@@ -1,7 +1,7 @@
 {
   "name": "qa-command-center-extension",
   "version": "1.0.0",
-  "description": "Browser extension for Gitlab Companion",
+  "description": "Browser extension for Flowg",
   "main": "dist/chrome/background.js",
   "scripts": {
     "dev": "rspack --mode development --watch --env browser=chrome",

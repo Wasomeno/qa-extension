@@ -184,7 +184,7 @@ const PopupApp: React.FC = () => {
           <div className="glass-card p-8 space-y-6">
             <div className="space-y-2 text-center mb-6">
               <h1 className="font-bold text-xl text-gray-900">
-                Gitlab Companion
+                Flowg
               </h1>
               <p className="text-sm text-gray-600">Sign in with GitLab</p>
             </div>
@@ -258,7 +258,7 @@ const PopupApp: React.FC = () => {
       <div className="absolute inset-0 glass-bg-grid opacity-20"></div>
       <div className="relative z-10 p-6 flex flex-col gap-6">
         <div className="space-y-2 text-center">
-          <h1 className="text-xl font-bold text-gray-900">Gitlab Companion</h1>
+          <h1 className="text-xl font-bold text-gray-900">Flowg</h1>
           <p className="text-xs text-gray-500 uppercase tracking-widest font-bold">Authenticated</p>
         </div>
 
@@ -366,7 +366,7 @@ const PopupApp: React.FC = () => {
 
         <div className="mt-auto pt-6 text-center">
           <span className="text-[10px] text-gray-400 font-bold uppercase tracking-tighter">
-            Gitlab Companion v1.0.0
+            Flowg v1.0.0
           </span>
         </div>
       </div>
