@@ -48,7 +48,13 @@ export interface TestStep {
   description: string;
   // Enhanced assertions and parameterization
   expectedValue?: string;
-  assertionType?: 'equals' | 'contains' | 'exists' | 'not_exists' | 'visible' | 'hidden';
+  assertionType?:
+    | 'equals'
+    | 'contains'
+    | 'exists'
+    | 'not_exists'
+    | 'visible'
+    | 'hidden';
   isAssertion?: boolean;
   // Failure Handling & AI Fallback
   fallbackPolicy?: 'agent_resolve' | 'fail';
@@ -77,11 +83,13 @@ export interface TestRecording {
   name: string;
   description?: string;
   status: string;
-  projectId?: string;
-  issueId?: string;
+  project_id?: string;
+  issue_id?: string;
   steps: RecordingStep[];
   parameters: any[];
-  createdAt?: string | number;
+  created_at?: string | number;
+  videoUrl?: string;
+  video_url?: string;
 }
 
 export interface ListRecordingsParams {
@@ -111,7 +119,9 @@ export interface TestBlueprint {
   name: string;
   description: string;
   baseUrl?: string;
-  projectId?: number;
+  project_id?: number;
+  issue_id?: string;
+  created_at?: string | number;
   auth?: {
     type: 'sessionState';
     storageStatePath?: string;
@@ -123,5 +133,5 @@ export interface TestBlueprint {
   parameters: string[];
   status?: 'processing' | 'ready' | 'failed';
   error?: string;
-  createdAt?: string | number;
+  video_url?: string;
 }

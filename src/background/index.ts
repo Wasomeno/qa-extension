@@ -134,6 +134,14 @@ class BackgroundService {
   private thumbnailCache: Map<string, string> = new Map();
   private pendingThumbnails: Map<string, Array<(response: any) => void>> =
     new Map();
+  private pendingVideoUrls: Map<string, string> = new Map();
+  private pendingVideoUpload: Map<
+    string,
+    {
+      promise: Promise<string | undefined>;
+      resolve: (url: string | undefined) => void;
+    }
+  > = new Map();
 
   constructor() {
     this.aiProcessor = new AIProcessor(__GOOGLE_API_KEY__);
@@ -452,6 +460,70 @@ class BackgroundService {
     sendResponse: (response?: any) => void
   ) {
     switch (message.type) {
+      case MessageType.VIDEO_CAPTURE_COMPLETE:
+        try {
+          const {
+            recordingId,
+            videoData,
+            videoUrl: existingUrl,
+          } = message.data || {};
+
+          if (!recordingId) {
+            console.error(
+              '[Background] Received VIDEO_CAPTURE_COMPLETE without recordingId'
+            );
+            return;
+          }
+
+          if (existingUrl && recordingId) {
+            console.log(
+              `[Background] Video capture already uploaded: ${existingUrl}`
+            );
+            this.pendingVideoUrls.set(
+              recordingId as string,
+              existingUrl as string
+            );
+            const pending = this.pendingVideoUpload.get(recordingId as string);
+            if (pending) pending.resolve(existingUrl as string);
+            return;
+          }
+
+          if (!videoData) {
+            console.error(
+              `[Background] Video capture failed for ${recordingId}`
+            );
+            const pending = this.pendingVideoUpload.get(recordingId as string);
+            if (pending) pending.resolve(undefined);
+            return;
+          }
+
+          console.log(
+            `[Background] Uploading video data for ${recordingId} (${videoData.length} bytes)...`
+          );
+          const fileName = `recordings/${recordingId}.webm`;
+          const videoUrl = await this.uploadToR2(
+            new Uint8Array(videoData),
+            fileName,
+            'video/webm'
+          );
+
+          console.log(`[Background] Video capture complete: ${videoUrl}`);
+          this.pendingVideoUrls.set(recordingId as string, videoUrl);
+
+          const pending = this.pendingVideoUpload.get(recordingId as string);
+          if (pending) {
+            pending.resolve(videoUrl);
+          }
+        } catch (e) {
+          console.error(`[Background] Failed to process video capture:`, e);
+          const rId = message.data?.recordingId;
+          if (rId) {
+            const pending = this.pendingVideoUpload.get(rId as string);
+            if (pending) pending.resolve(undefined);
+          }
+        }
+        break;
+
       case MessageType.GET_VIDEO_THUMBNAIL:
         try {
           const { url, timeInSeconds = 3 } = message.data || {};
@@ -484,7 +556,7 @@ class BackgroundService {
           if (!(await chrome.offscreen.hasDocument())) {
             await chrome.offscreen.createDocument({
               url: 'offscreen.html',
-              reasons: [chrome.offscreen.Reason.LOCAL_STORAGE],
+              reasons: [chrome.offscreen.Reason.DOM_SCRAPING],
               justification: 'Generate video thumbnails from R2 bucket',
             });
           }
@@ -671,9 +743,11 @@ class BackgroundService {
             name: blueprint.name || 'Untitled Recording',
             description: blueprint.description || '',
             status: blueprint.status || 'ready',
-            projectId: blueprint.projectId?.toString(),
-            issueId: blueprint.issueId,
-            createdAt: blueprint.createdAt || Date.now(),
+            project_id: blueprint.project_id || blueprint.projectId?.toString(),
+            issue_id: blueprint.issue_id || blueprint.issueId,
+            created_at: new Date(
+              blueprint.created_at || blueprint.createdAt || Date.now()
+            ).toISOString(),
             steps: (blueprint.steps || []).map((step: any) => ({
               action: step.action,
               description: step.description || '',
@@ -688,6 +762,7 @@ class BackgroundService {
               },
             })),
             parameters: blueprint.parameters || [],
+            video_url: blueprint.video_url || blueprint.videoUrl,
           };
 
           console.log('[Background] Saving recording payload:', recording);
@@ -1030,6 +1105,20 @@ class BackgroundService {
         break;
 
       case MessageType.IFRAME_CLOSED_OVERLAY:
+        // When the overlay is closed (cancel), ensure any active offscreen capture is stopped
+        chrome.runtime.sendMessage({ type: MessageType.STOP_VIDEO_CAPTURE });
+        // Relay to the tab where it came from
+        if (sender.tab?.id) {
+          this.notifyTab(sender.tab.id, message);
+        }
+        // Also relay to extension components (popup, options page)
+        try {
+          chrome.runtime.sendMessage(message, () => {
+            void chrome.runtime.lastError;
+          });
+        } catch (e) {}
+        break;
+
       case MessageType.IFRAME_STARTED_RECORDING:
       case MessageType.IFRAME_PREPARE_RECORDING:
       case MessageType.IFRAME_STOP_RECORDING:
@@ -1044,10 +1133,8 @@ class BackgroundService {
           chrome.runtime.sendMessage(message, () => {
             void chrome.runtime.lastError;
           });
-        } catch {}
-        sendResponse({ success: true });
+        } catch (e) {}
         break;
-
       default:
       // Forward to content script if needed or ignore
     }
@@ -1171,6 +1258,25 @@ class BackgroundService {
 
       chrome.action.setBadgeText({ text: 'REC' });
       chrome.action.setBadgeBackgroundColor({ color: '#ef4444' });
+
+      // 2. Start Video Capture in Offscreen Document
+      // Creating the offscreen document with reason DISPLAY_MEDIA.
+      // This is the "Loom" way to satisfy the user gesture requirement if triggered from UI.
+      if (!(await chrome.offscreen.hasDocument())) {
+        await chrome.offscreen.createDocument({
+          url: 'offscreen.html',
+          reasons: [chrome.offscreen.Reason.DISPLAY_MEDIA],
+          justification:
+            'Capture screen video natively via getDisplayMedia for recording',
+        });
+      }
+
+      // Send message to offscreen document to initiate native capture
+      // This is triggered by a user gesture from the Iframe Start button
+      chrome.runtime.sendMessage({
+        type: MessageType.START_VIDEO_CAPTURE,
+        data: { recordingId: currentRecordingId },
+      });
     } catch (e) {
       this.isStartingRecording = false;
       throw e;
@@ -1196,6 +1302,27 @@ class BackgroundService {
     console.log(
       `[Background] Stopping recording session: ${tempId} (Started at: ${startUrl})`
     );
+
+    // Create a promise that resolves when video upload completes
+    const videoPromise = new Promise<string | undefined>(resolve => {
+      const timeout = setTimeout(() => {
+        console.warn(`[Background] Video upload timed out for ${tempId}`);
+        this.pendingVideoUpload.delete(tempId);
+        resolve(undefined);
+      }, 30_000);
+
+      this.pendingVideoUpload.set(tempId, {
+        promise: Promise.resolve(undefined), // placeholder
+        resolve: (url: string | undefined) => {
+          clearTimeout(timeout);
+          this.pendingVideoUpload.delete(tempId);
+          resolve(url);
+        },
+      });
+    });
+
+    // Stop Video Capture
+    chrome.runtime.sendMessage({ type: MessageType.STOP_VIDEO_CAPTURE });
 
     // Set immediate processing state to update UI instantly
     const initialSteps = [];
@@ -1343,6 +1470,9 @@ class BackgroundService {
           '[Background] AI processing complete, generating enriched steps...'
         );
 
+        // Wait for video upload to complete (runs in parallel with AI)
+        const resolvedVideoUrl = await videoPromise;
+
         const enrichedSteps = (blueprint.steps || []).map((step, index) => {
           // Find the corresponding event. Note that AI might group events, so this is heuristic.
           // If the first step is navigate and we prepended it, we need to adjust indexing
@@ -1408,12 +1538,27 @@ class BackgroundService {
           };
         });
 
+        const { lastBlueprint: currentLast } = await chrome.storage.local.get([
+          'lastBlueprint',
+        ]);
+
         const finalBlueprint = {
           ...blueprint,
           steps: enrichedSteps,
           id: tempId,
-          status: 'ready',
+          status: 'ready' as const,
           baseUrl: startUrl,
+          created_at: new Date().toISOString(),
+          video_url:
+            resolvedVideoUrl ||
+            this.pendingVideoUrls.get(tempId) ||
+            currentLast?.video_url ||
+            currentLast?.videoUrl,
+          videoUrl:
+            resolvedVideoUrl ||
+            this.pendingVideoUrls.get(tempId) ||
+            currentLast?.video_url ||
+            currentLast?.videoUrl,
         };
         await chrome.storage.local.set({ lastBlueprint: finalBlueprint });
 

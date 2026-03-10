@@ -13,7 +13,9 @@
     "contextMenus",
     "notifications",
     "debugger",
-    "offscreen"
+    "offscreen",
+    "tabCapture",
+    "desktopCapture"
   ],
   "host_permissions": [
     "<all_urls>",
