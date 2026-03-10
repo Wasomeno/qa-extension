@@ -20,7 +20,7 @@ module.exports = (env, argv) => {
       options: './src/options/index.tsx',
       'recorder-iframe': './src/recorder-iframe/index.tsx',
       'recording-detail': './src/pages/recordings/standalone.tsx',
-      'offscreen': './src/background/offscreen.ts',
+      offscreen: './src/background/offscreen.ts',
       'shadow-dom-styles': './src/styles/shadow-dom.css',
     },
     output: {
@@ -115,11 +115,21 @@ module.exports = (env, argv) => {
         ),
         'process.env.TARGET_BROWSER': JSON.stringify(targetBrowser),
         __GOOGLE_API_KEY__: JSON.stringify(process.env.GOOGLE_API_KEY || ''),
-        'process.env.R2_ACCOUNT_ID': JSON.stringify(process.env.R2_ACCOUNT_ID || ''),
-        'process.env.R2_BUCKET_NAME': JSON.stringify(process.env.R2_BUCKET_NAME || ''),
-        'process.env.R2_ACCESS_KEY_ID': JSON.stringify(process.env.R2_ACCESS_KEY_ID || ''),
-        'process.env.R2_SECRET_ACCESS_KEY': JSON.stringify(process.env.R2_SECRET_ACCESS_KEY || ''),
-        'process.env.R2_PUBLIC_DOMAIN': JSON.stringify(process.env.R2_PUBLIC_DOMAIN || ''),
+        'process.env.R2_ACCOUNT_ID': JSON.stringify(
+          process.env.R2_ACCOUNT_ID || ''
+        ),
+        'process.env.R2_BUCKET_NAME': JSON.stringify(
+          process.env.R2_BUCKET_NAME || ''
+        ),
+        'process.env.R2_ACCESS_KEY_ID': JSON.stringify(
+          process.env.R2_ACCESS_KEY_ID || ''
+        ),
+        'process.env.R2_SECRET_ACCESS_KEY': JSON.stringify(
+          process.env.R2_SECRET_ACCESS_KEY || ''
+        ),
+        'process.env.R2_PUBLIC_DOMAIN': JSON.stringify(
+          process.env.R2_PUBLIC_DOMAIN || ''
+        ),
       }),
       new rspack.CssExtractRspackPlugin({
         filename: '[name].css',
@@ -158,7 +168,7 @@ module.exports = (env, argv) => {
               const manifest = JSON.parse(content.toString());
               if (isFirefox) {
                 // Firefox (and Zen) stable channels still rely on MV2.
-                manifest.manifest_version = 2;
+                manifest.manifest_version = 3;
                 if (manifest.background && manifest.background.service_worker) {
                   manifest.background = {
                     scripts: [manifest.background.service_worker],
