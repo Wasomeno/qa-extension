@@ -73,6 +73,11 @@ const MENU_ITEMS: MenuItem[] = [
   { id: 'agent', label: 'QA Agent', icon: Bot },
 ];
 
+const MODAL_WIDTH = '1080px';
+const MODAL_HEIGHT = '756px';
+const MODAL_MAX_WIDTH = '88vw';
+const MODAL_MAX_HEIGHT = '85vh';
+
 interface MainMenuModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -209,10 +214,10 @@ const MainMenuInner: React.FC<MainMenuModalProps> = ({
           transition={{ type: 'spring', stiffness: 300, damping: 30 }}
           className="relative bg-white rounded-2xl overflow-hidden shadow-2xl border border-gray-200 pointer-events-auto"
           style={{
-            width: '1000px',
-            maxWidth: '95vw',
-            height: '700px',
-            maxHeight: '90vh',
+            width: MODAL_WIDTH,
+            maxWidth: MODAL_MAX_WIDTH,
+            height: MODAL_HEIGHT,
+            maxHeight: MODAL_MAX_HEIGHT,
             transformOrigin: 'center center',
           }}
           {...keyboardIsolation}
@@ -309,7 +314,7 @@ const MainMenuInner: React.FC<MainMenuModalProps> = ({
                     </SidebarMenuItem>
                   </SidebarMenu>
                   <div className="px-4 py-2 group-data-[collapsible=icon]:hidden">
-                    <p className="text-[10px] text-gray-400">v1.0.0</p>
+                    <p className="text-xs text-gray-400">v1.0.0</p>
                   </div>
                 </SidebarFooter>
                 <SidebarRail />
