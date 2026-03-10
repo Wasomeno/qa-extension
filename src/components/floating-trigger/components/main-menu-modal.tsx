@@ -73,10 +73,10 @@ const MENU_ITEMS: MenuItem[] = [
   { id: 'agent', label: 'QA Agent', icon: Bot },
 ];
 
-const MODAL_WIDTH = '1080px';
-const MODAL_HEIGHT = '756px';
-const MODAL_MAX_WIDTH = '88vw';
-const MODAL_MAX_HEIGHT = '85vh';
+const MODAL_WIDTH = '900px';
+const MODAL_HEIGHT = '630px';
+const MODAL_MAX_WIDTH = '85.5vw';
+const MODAL_MAX_HEIGHT = '81vh';
 
 interface MainMenuModalProps {
   isOpen: boolean;
