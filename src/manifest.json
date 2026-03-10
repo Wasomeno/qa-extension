@@ -52,6 +52,8 @@
         "styles/*",
         "recording-detail.html",
         "recording-detail.js",
+        "generated-test-detail.html",
+        "generated-test-detail.js",
         "recorder-iframe.html",
         "*.js",
         "*.css"

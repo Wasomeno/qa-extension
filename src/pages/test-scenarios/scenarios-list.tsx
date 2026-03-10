@@ -238,7 +238,7 @@ export const TestScenariosPage: React.FC<{
                 onViewGeneratedId={id => {
                   // Navigate to recording details logic reusing recordings feature
                   const url = chrome.runtime.getURL(
-                    `recording-detail.html?id=${id}`
+                    `generated-test-detail.html?id=${id}`
                   );
                   chrome.runtime.sendMessage({
                     type: MessageType.OPEN_URL,

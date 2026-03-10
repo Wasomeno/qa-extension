@@ -20,6 +20,7 @@ module.exports = (env, argv) => {
       options: './src/options/index.tsx',
       'recorder-iframe': './src/recorder-iframe/index.tsx',
       'recording-detail': './src/pages/recordings/standalone.tsx',
+      'generated-test-detail': './src/pages/test-scenarios/generated-standalone.tsx',
       offscreen: './src/background/offscreen.ts',
       'shadow-dom-styles': './src/styles/shadow-dom.css',
     },
@@ -153,6 +154,11 @@ module.exports = (env, argv) => {
         template: './src/pages/recordings/standalone.html',
         filename: 'recording-detail.html',
         chunks: ['recording-detail', 'vendor'],
+      }),
+      new rspack.HtmlRspackPlugin({
+        template: './src/pages/test-scenarios/generated-standalone.html',
+        filename: 'generated-test-detail.html',
+        chunks: ['generated-test-detail', 'vendor'],
       }),
       new rspack.HtmlRspackPlugin({
         template: './src/background/offscreen.html',
