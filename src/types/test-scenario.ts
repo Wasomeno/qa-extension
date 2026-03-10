@@ -13,6 +13,8 @@ export interface ParsedStep {
 
 export interface ParsedTestCase {
   id: string;
+  userStory?: string;
+  testType?: string;
   name: string;
   preCondition: string;
   steps: ParsedStep[];

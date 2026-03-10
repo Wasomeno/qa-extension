@@ -599,6 +599,66 @@ class BackgroundService {
         sendResponse({ success: true });
         break;
 
+      case MessageType.TEST_SCENARIO_UPLOAD:
+        try {
+          const { projectId, base64, fileName, contentType, authConfig } =
+            message.data || {};
+          if (!projectId || !base64) {
+            sendResponse({
+              success: false,
+              error: 'Missing projectId or file data',
+            });
+            return;
+          }
+
+          // Convert base64 back to Blob manually to avoid MV3 fetch(dataURI) limits
+          const base64Data = base64.includes(',') ? base64.split(',')[1] : base64;
+          const binaryStr = atob(base64Data);
+          const bytes = new Uint8Array(binaryStr.length);
+          for (let i = 0; i < binaryStr.length; i++) {
+            bytes[i] = binaryStr.charCodeAt(i);
+          }
+          const blob = new Blob([bytes], {
+            type: contentType || 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+          });
+
+          const formData = new FormData();
+          formData.append('file', blob, fileName || 'scenario.xlsx');
+          formData.append('projectId', projectId);
+          if (authConfig) {
+            formData.append('authConfig', JSON.stringify(authConfig));
+          }
+
+          const authInit = await this.withAuthHeaders({
+            method: 'POST',
+            body: formData,
+          });
+
+          const uploadUrl = `https://playground-qa-extension.online/api/test-scenarios/upload`;
+          const uploadResp = await fetch(uploadUrl, authInit);
+
+          if (!uploadResp.ok) {
+            const errorData = await uploadResp.json().catch(() => ({}));
+            sendResponse({
+              success: false,
+              error:
+                errorData.error ||
+                errorData.message ||
+                `Upload failed: ${uploadResp.status} ${uploadResp.statusText}`,
+            });
+            return;
+          }
+
+          const data = await uploadResp.json();
+          sendResponse({ success: true, data });
+        } catch (e: any) {
+          sendResponse({
+            success: false,
+            error: e?.message || 'Scenario upload failed',
+          });
+        }
+        break;
+
       case MessageType.FILE_UPLOAD:
         try {
           const { projectId, base64, fileName, contentType } =
@@ -611,9 +671,16 @@ class BackgroundService {
             return;
           }
 
-          // Convert base64 back to Blob
-          const res = await fetch(base64);
-          const blob = await res.blob();
+          // Convert base64 back to Blob manually
+          const base64Data = base64.includes(',') ? base64.split(',')[1] : base64;
+          const binaryStr = atob(base64Data);
+          const bytes = new Uint8Array(binaryStr.length);
+          for (let i = 0; i < binaryStr.length; i++) {
+            bytes[i] = binaryStr.charCodeAt(i);
+          }
+          const blob = new Blob([bytes], {
+            type: contentType || 'application/octet-stream',
+          });
 
           const formData = new FormData();
           formData.append('file', blob, fileName || 'upload.mp4');
