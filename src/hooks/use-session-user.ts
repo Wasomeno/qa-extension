@@ -1,4 +1,10 @@
-import { useState, useEffect, useCallback } from 'react';
+import {
+  useState,
+  useEffect,
+  useCallback,
+  useContext,
+  createContext,
+} from 'react';
 import { User, getCurrentUser } from '../api/user';
 
 const STORAGE_KEY = 'session_user';
@@ -12,16 +18,19 @@ export const useSessionUser = () => {
   const [loading, setLoading] = useState(true);
 
   const setUser = useCallback(async (newUser: User) => {
+    // Update local state immediately for instant UI response
+    setUserState(newUser);
     if (chrome.storage && chrome.storage.session) {
       await chrome.storage.session.set({ [STORAGE_KEY]: newUser });
     }
   }, []);
 
   const clearUser = useCallback(async () => {
+    // Update local state immediately
+    setUserState(null);
     if (chrome.storage && chrome.storage.session) {
       await chrome.storage.session.remove(STORAGE_KEY);
     }
-    setUserState(null);
   }, []);
 
   const syncUser = useCallback(async () => {
@@ -69,7 +78,11 @@ export const useSessionUser = () => {
       areaName: string
     ) => {
       if (areaName === 'session' && changes[STORAGE_KEY]) {
-        setUserState(changes[STORAGE_KEY].newValue || null);
+        const newValue = changes[STORAGE_KEY].newValue || null;
+        // Only update if different to avoid cycles
+        setUserState(prev =>
+          JSON.stringify(prev) !== JSON.stringify(newValue) ? newValue : prev
+        );
       }
     };
 

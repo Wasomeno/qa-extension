@@ -5,6 +5,7 @@ import { gitlabLogin } from '@/api/auth';
 import { useSessionUser } from '@/hooks/use-session-user';
 import { MessageType } from '@/types/messages';
 import { LogIn, Loader2 } from 'lucide-react';
+import { useSession } from '@/contexts/session-context';
 
 interface LoginPopupProps {
   onClose: () => void;
@@ -13,7 +14,9 @@ interface LoginPopupProps {
 
 const LoginPopup: React.FC<LoginPopupProps> = ({ onClose, onLoginSuccess }) => {
   const [isPolling, setIsPolling] = useState(false);
-  const { user, syncUser } = useSessionUser();
+  const session = useSession();
+  const hookUser = useSessionUser();
+  const { user, syncUser } = session || hookUser;
 
   // Watch for user session to appear while polling
   useEffect(() => {
