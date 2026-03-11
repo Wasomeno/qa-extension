@@ -126,7 +126,7 @@ export const RecordingItem: React.FC<RecordingItemProps> = ({
         onClick={e => e.stopPropagation()}
       >
         <DropdownMenuItem className="gap-2" onClick={onRunInAgent}>
-          <Bot className="w-4 h-4 text-gray-900" /> Run in Agent
+          <Bot className="w-4 h-4 text-zinc-900" /> Run in Agent
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem className="gap-2" onClick={handleStartEdit}>
@@ -182,7 +182,7 @@ export const RecordingItem: React.FC<RecordingItemProps> = ({
       <Button
         variant="ghost"
         size="icon"
-        className="h-6 w-6 text-gray-500 hover:bg-gray-100"
+        className="h-6 w-6 text-zinc-500 hover:bg-zinc-100"
         onClick={e => {
           e.stopPropagation();
           setIsConfirmingDelete(false);
@@ -197,12 +197,12 @@ export const RecordingItem: React.FC<RecordingItemProps> = ({
     <div
       className={cn(
         'flex flex-col border rounded-xl overflow-hidden hover:shadow-lg hover:border-zinc-300 cursor-pointer transition-all bg-white group relative h-full',
-        'border-gray-200'
+        'border-zinc-200'
       )}
       onClick={onClick}
     >
       {recording.created_at && (
-        <span className="absolute top-2 right-5 text-[10px] text-gray-400 font-medium">
+        <span className="absolute top-2 right-5 text-[10px] text-zinc-400 font-medium">
           {new Date(recording.created_at).toLocaleDateString('en-US', {
             month: 'short',
             day: 'numeric',
@@ -216,10 +216,10 @@ export const RecordingItem: React.FC<RecordingItemProps> = ({
           onClick={e => e.stopPropagation()}
         >
           <Trash2 className="w-8 h-8 text-red-500 mb-2" />
-          <p className="text-sm font-bold text-gray-900 mb-1">
+          <p className="text-sm font-bold text-zinc-900 mb-1">
             Delete this test script?
           </p>
-          <p className="text-xs text-gray-500 mb-4">
+          <p className="text-xs text-zinc-500 mb-4">
             This action cannot be undone.
           </p>
           <div className="flex items-center gap-2 w-full">
@@ -259,11 +259,11 @@ export const RecordingItem: React.FC<RecordingItemProps> = ({
                 className="h-7 text-sm py-0 mb-1"
               />
             ) : (
-              <p className="font-semibold text-gray-900 truncate group-hover:text-zinc-900 transition-colors">
+              <p className="font-semibold text-zinc-900 truncate group-hover:text-zinc-900 transition-colors">
                 {recording.name}
               </p>
             )}
-            <p className="text-xs text-gray-500 line-clamp-2 mt-0.5 leading-relaxed">
+            <p className="text-xs text-zinc-500 line-clamp-2 mt-0.5 leading-relaxed">
               {recording.description || 'No description'}
             </p>
           </div>
@@ -271,14 +271,14 @@ export const RecordingItem: React.FC<RecordingItemProps> = ({
         </div>
 
         {/* Steps Snippet */}
-        <div className="flex-1 min-h-[80px] bg-zinc-50 rounded-lg p-3 border border-zinc-100 mb-4 group-hover:bg-zinc-100/50 transition-colors">
+        <div className="flex-1 min-h-[80px] bg-zinc-50/50 rounded-xl p-4 border border-zinc-100 mb-4 group-hover:bg-zinc-100/50 transition-colors">
           <div className="flex items-center gap-1.5 mb-2">
-            <Terminal className="w-3.5 h-3.5 text-zinc-500" />
-            <span className="text-xs font-bold text-zinc-500 uppercase tracking-wider">
+            <Terminal className="w-3.5 h-3.5 text-zinc-400" />
+            <span className="text-[10px] tracking-widest text-zinc-400 uppercase">
               Test Steps
             </span>
           </div>
-          <div className="space-y-1.5">
+          <div className="space-y-2">
             {recording.steps.slice(0, 4).map((step, idx) => (
               <div key={idx} className="flex gap-2 text-xs">
                 <span className="text-zinc-400 font-medium tabular-nums shrink-0">
@@ -305,7 +305,7 @@ export const RecordingItem: React.FC<RecordingItemProps> = ({
         {/* Footer */}
         <div className="flex items-center justify-between mt-auto pt-3 border-t border-zinc-100">
           <div className="flex items-center gap-3">
-            <span className="text-xs font-medium text-gray-500 flex items-center gap-1">
+            <span className="text-xs font-medium text-zinc-500 flex items-center gap-1">
               <Clock className="w-3 h-3" /> {recording.steps.length} steps
             </span>
             <RecordingProjectPicker
