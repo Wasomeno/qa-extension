@@ -271,7 +271,7 @@ export const RecordingsPage: React.FC<{
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
               <Input
                 placeholder="Search recordings..."
-                className="pl-9 w-64 h-10 bg-gray-100 border-none rounded-lg focus-visible:ring-2 focus-visible:ring-zinc-900"
+                className="pl-9 w-64 h-10 bg-white border-theme-border rounded-xl focus-visible:ring-2 focus-visible:ring-zinc-900"
                 value={searchQuery}
                 onChange={e => setSearchQuery(e.target.value)}
               />
@@ -290,7 +290,6 @@ export const RecordingsPage: React.FC<{
               searchPlaceholder="Search projects..."
               allOption={{ label: 'All Projects', value: 'all' }}
               portalContainer={portalContainer}
-              className="h-10 w-[180px] bg-gray-100 border-none rounded-lg focus:ring-2 focus:ring-zinc-900 pointer-events-auto"
             />
           </div>
 
