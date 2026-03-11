@@ -53,10 +53,12 @@ export function ProjectFilter({
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <Button
-          variant="outline"
           role="combobox"
           aria-expanded={open}
-          className={cn('w-[250px] justify-between', className)}
+          className={cn(
+            'w-[250px] justify-between bg-white border-theme-border rounded-xl text-theme-text font-normal hover:bg-gray-50 h-10',
+            className
+          )}
         >
           <div className="flex items-center gap-2 truncate">
             <Filter className="h-4 w-4 shrink-0 opacity-50" />
