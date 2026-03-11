@@ -93,7 +93,7 @@ const uploadPlugin = new Plugin({
 
         const badge = document.createElement('div');
         badge.className =
-          'bg-white/90 px-2 py-1 rounded text-[10px] font-bold text-gray-900 shadow-sm animate-pulse flex items-center gap-1.5 border border-gray-100';
+          'bg-white/90 px-2 py-1 rounded text-xs font-bold text-gray-900 shadow-sm animate-pulse flex items-center gap-1.5 border border-gray-100';
         badge.innerHTML =
           '<svg class="w-3 h-3 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M21 12a9 9 0 11-6.219-8.56"></path></svg> UPLOADING...';
         overlay.appendChild(badge);
@@ -283,9 +283,9 @@ export const DescriptionEditor = ({
   const publicDomain = process.env.R2_PUBLIC_DOMAIN || 'https://pub-03dd816d26684f7fba942512f600ddf5.r2.dev';
 
   return (
-    <div className="border border-gray-200 rounded-xl bg-gray-50 focus-within:bg-white focus-within:ring-2 focus-within:ring-blue-100 transition-all overflow-hidden flex flex-col shadow-sm ">
+    <div className="border border-theme-border rounded-xl bg-white focus-within:ring-2 focus-within:ring-blue-500/20 focus-within:border-blue-500 transition-all overflow-hidden flex flex-col shadow-sm">
       {/* Toolbar */}
-      <div className="flex flex-wrap items-center gap-1 p-1.5 bg-gray-50/80 border-b border-gray-200 sticky top-0 z-10 backdrop-blur-sm">
+      <div className="flex flex-wrap items-center gap-1 p-1.5 bg-white/80 border-b border-theme-border sticky top-0 z-10 backdrop-blur-sm">
         {/* History */}
         <div className="flex items-center gap-0.5">
           <ToolbarButton
@@ -705,7 +705,7 @@ export const DescriptionEditor = ({
           box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
         }
         .tiptap-upload-widget .text-\\[10px\\] {
-          font-size: 10px;
+          font-size: 0.75rem;
         }
         .tiptap-upload-widget .font-bold {
           font-weight: 700;
