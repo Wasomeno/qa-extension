@@ -154,7 +154,7 @@ export const IssueFormFields: React.FC<IssueFormFieldsProps> = ({
           placeholder="Issue title"
           value={title}
           onChange={e => onChange({ title: e.target.value })}
-          className="bg-gray-50 border-gray-200"
+          className="bg-white border-theme-border rounded-xl focus:ring-blue-500/20 focus:border-blue-500"
         />
       </div>
 

@@ -91,14 +91,14 @@ export const ChildIssueFormFields: React.FC<ChildIssueFormFieldsProps> = ({
     <div className="space-y-4 px-1">
       {/* Title */}
       <div className="space-y-1.5">
-        <label className="text-[10px] font-bold uppercase tracking-wider text-gray-500">
+        <label className="text-xs font-bold uppercase tracking-wider text-gray-500">
           Title
         </label>
         <Input
           placeholder="Issue title"
           value={title}
           onChange={e => onChange({ title: e.target.value })}
-          className="h-9 text-sm bg-gray-50 border-gray-200 focus:bg-white transition-colors"
+          className="h-9 text-sm bg-white border-theme-border rounded-xl focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
           autoFocus
         />
       </div>
@@ -106,7 +106,7 @@ export const ChildIssueFormFields: React.FC<ChildIssueFormFieldsProps> = ({
       {/* Labels & Assignee Row */}
       <div className="grid grid-cols-2 gap-3">
         <div className="space-y-1.5">
-          <label className="text-[10px] font-bold uppercase tracking-wider text-gray-500">
+          <label className="text-xs font-bold uppercase tracking-wider text-gray-500">
             Labels
           </label>
           <LabelPicker
@@ -119,7 +119,7 @@ export const ChildIssueFormFields: React.FC<ChildIssueFormFieldsProps> = ({
           />
         </div>
         <div className="space-y-1.5">
-          <label className="text-[10px] font-bold uppercase tracking-wider text-gray-500">
+          <label className="text-xs font-bold uppercase tracking-wider text-gray-500">
             Assignee
           </label>
           <AssigneePicker
@@ -135,7 +135,7 @@ export const ChildIssueFormFields: React.FC<ChildIssueFormFieldsProps> = ({
 
       {/* Description */}
       <div className="space-y-1.5">
-        <label className="text-[10px] font-bold uppercase tracking-wider text-gray-500">
+        <label className="text-xs font-bold uppercase tracking-wider text-gray-500">
           Description
         </label>
         <DescriptionEditor
