@@ -39,7 +39,7 @@ export const ProjectPicker: React.FC<ProjectPickerProps> = ({
           variant="outline"
           role="combobox"
           aria-expanded={open}
-          className="w-full justify-between text-left font-normal bg-gray-50 border-gray-200 hover:bg-gray-100 hover:text-gray-900"
+          className="w-full justify-between text-left font-normal bg-white border-theme-border rounded-xl focus:ring-blue-500/20 focus:border-blue-500 hover:bg-gray-50 hover:text-gray-900 transition-all"
         >
           <span
             className={cn(
