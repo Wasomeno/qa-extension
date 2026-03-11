@@ -244,7 +244,21 @@ export const RecordingsPage: React.FC<{
       <div className="flex-none space-y-4 px-8 pt-8 pb-4 bg-white z-20">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">Test Recordings</h1>
+            <div className="flex items-center gap-2">
+              <h1 className="text-2xl font-bold text-gray-900">Test Recordings</h1>
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button variant="ghost" size="icon" className="h-6 w-6 rounded-full p-0 text-gray-400 hover:text-gray-600">
+                      <Info className="h-4 w-4" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="right" className="max-w-xs" container={portalContainer}>
+                    <p>Capture and manage browser interactions. AI generates test steps from your recordings for automated playback.</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            </div>
             <p className="text-sm text-gray-500 mt-1">
               Manage and run your captured test flows
             </p>
