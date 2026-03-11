@@ -116,7 +116,7 @@ export const RecordingItem: React.FC<RecordingItemProps> = ({
   const Actions = () => (
     <DropdownMenu>
       <DropdownMenuTrigger asChild onClick={e => e.stopPropagation()}>
-        <Button variant="ghost" size="icon" className="h-8 w-8">
+        <Button variant="ghost" size="icon" className="h-8 w-8" aria-label="More actions">
           <MoreVertical className="w-4 h-4" />
         </Button>
       </DropdownMenuTrigger>
@@ -195,6 +195,7 @@ export const RecordingItem: React.FC<RecordingItemProps> = ({
 
   return (
     <div
+      role="button"
       className={cn(
         'flex flex-col border rounded-xl overflow-hidden hover:shadow-lg hover:border-zinc-300 cursor-pointer transition-all bg-white group relative h-full',
         'border-zinc-200'
@@ -271,7 +272,7 @@ export const RecordingItem: React.FC<RecordingItemProps> = ({
         </div>
 
         {/* Steps Snippet */}
-        <div className="flex-1 min-h-[80px] bg-zinc-50/50 rounded-xl p-4 border border-zinc-100 mb-4 group-hover:bg-zinc-100/50 transition-colors">
+        <div className="flex-1 min-h-[80px] bg-zinc-50/50 rounded-xl p-4 border border-zinc-50 mb-4 group-hover:bg-zinc-100/50 transition-colors">
           <div className="flex items-center gap-1.5 mb-2">
             <Terminal className="w-3.5 h-3.5 text-zinc-400" />
             <span className="text-[10px] tracking-widest text-zinc-400 uppercase">
@@ -303,10 +304,10 @@ export const RecordingItem: React.FC<RecordingItemProps> = ({
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-between mt-auto pt-3 border-t border-zinc-100">
-          <div className="flex items-center gap-3">
-            <span className="text-xs font-medium text-zinc-500 flex items-center gap-1">
-              <Clock className="w-3 h-3" /> {recording.steps.length} steps
+        <div className="flex items-center justify-between mt-auto pt-3 border-t border-zinc-50">
+          <div className="flex items-center gap-4">
+            <span className="bg-zinc-100/80 px-2 py-0.5 rounded-full text-[10px] font-medium text-zinc-500 flex items-center gap-1">
+              <Clock className="w-3 h-3 text-zinc-400" /> {recording.steps.length} steps
             </span>
             <RecordingProjectPicker
               currentProjectId={recording.project_id}
