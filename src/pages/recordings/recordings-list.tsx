@@ -38,21 +38,7 @@ import { DetailsPanel } from './components/details-panel';
 import { SearchablePicker } from '../issues/components/searchable-picker';
 import { cn } from '@/lib/utils';
 
-const RecordingSkeleton = ({ viewMode }: { viewMode: 'grid' | 'list' }) => {
-  if (viewMode === 'list') {
-    return (
-      <div className="flex items-center gap-3 px-4 py-2.5 border-b">
-        <Skeleton className="w-5 h-5 rounded" />
-        <Skeleton className="h-4 flex-1" />
-        <Skeleton className="h-4 w-24" />
-        <div className="flex items-center gap-1">
-          <Skeleton className="h-8 w-8 rounded-full" />
-          <Skeleton className="h-8 w-8 rounded-full" />
-        </div>
-      </div>
-    );
-  }
-
+const RecordingSkeleton = () => {
   return (
     <div className="flex flex-col border rounded-xl overflow-hidden bg-white shadow-sm h-full">
       <div className="p-4 space-y-4">
@@ -77,10 +63,7 @@ export const RecordingsPage: React.FC<{
   portalContainer?: HTMLElement | null;
 }> = ({ portalContainer }) => {
   const [searchQuery, setSearchQuery] = useState('');
-  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [selectedProjectId, setSelectedProjectId] = useState<string>('all');
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [showDetails, setShowDetails] = useState(false);
   const { push } = useNavigation();
 
   const {
@@ -166,7 +149,6 @@ export const RecordingsPage: React.FC<{
       },
       () => {
         refetchBlueprints();
-        if (selectedId === id) setSelectedId(null);
       }
     );
   };
@@ -219,9 +201,30 @@ export const RecordingsPage: React.FC<{
     );
   };
 
-  const selectedRecording = useMemo(() => {
-    return blueprints.find(b => b.id === selectedId) || null;
-  }, [selectedId, blueprints]);
+  const handleViewDetails = (id: string) => {
+    const url = chrome.runtime.getURL(`recording-detail.html?id=${id}`);
+    chrome.runtime.sendMessage({
+      type: MessageType.OPEN_URL,
+      data: { url },
+    });
+  };
+
+  const handleStartRecording = () => {
+    chrome.runtime.sendMessage({
+      type: MessageType.CLOSE_MAIN_MENU,
+    });
+    setTimeout(() => {
+      chrome.runtime.sendMessage({
+        type: MessageType.START_RECORDING,
+        data: {
+          projectId:
+            selectedProjectId === 'all' || selectedProjectId === 'unassigned'
+              ? undefined
+              : parseInt(selectedProjectId),
+        },
+      });
+    }, 300);
+  };
 
   const filteredItems = useMemo(() => {
     const searchLower = searchQuery.toLowerCase();
@@ -237,10 +240,18 @@ export const RecordingsPage: React.FC<{
 
   return (
     <div className="flex flex-col h-full bg-white overflow-hidden relative">
-      {/* Top Header */}
-      <header className="px-6 py-4 border-b flex items-center justify-between shrink-0">
-        <div className="flex items-center gap-4">
-          <h1 className="text-xl font-bold text-gray-900">Test Recordings</h1>
+      {/* Header & Filters */}
+      <div className="flex-none space-y-4 px-8 pt-8 pb-4 bg-white z-20">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">Test Recordings</h1>
+            <p className="text-sm text-gray-500 mt-1">
+              Manage and run your captured test flows
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -268,103 +279,23 @@ export const RecordingsPage: React.FC<{
               className="h-10 w-[180px] bg-gray-100 border-none rounded-lg focus:ring-2 focus:ring-zinc-900 pointer-events-auto"
             />
           </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className={cn(
-                    'h-10 w-10',
-                    viewMode === 'list' && 'text-zinc-900 bg-zinc-100'
-                  )}
-                  onClick={() => setViewMode('list')}
-                >
-                  <ListIcon className="w-5 h-5" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>List view</TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className={cn(
-                    'h-10 w-10',
-                    viewMode === 'grid' && 'text-zinc-900 bg-zinc-100'
-                  )}
-                  onClick={() => setViewMode('grid')}
-                >
-                  <LayoutGrid className="w-5 h-5" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>Grid view</TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
-          <Separator orientation="vertical" className="h-6 mx-1" />
+
           <Button
             variant="ghost"
-            size="icon"
-            className={cn(
-              'h-10 w-10',
-              showDetails && 'text-zinc-900 bg-zinc-100'
-            )}
-            onClick={() => setShowDetails(!showDetails)}
+            className="hover:bg-zinc-50 border text-zinc-900 rounded-full gap-2 px-4 h-10"
+            onClick={handleStartRecording}
           >
-            <Info className="w-5 h-5" />
+            <Plus className="w-5 h-5" /> Test Recording
           </Button>
         </div>
-      </header>
+      </div>
 
       {/* Main Container */}
       <div className="flex flex-1 min-h-0 relative">
         {/* Content Area */}
-        <div
-          className="flex-1 flex flex-col min-w-0"
-          onClick={() => setSelectedId(null)}
-        >
-          {/* Breadcrumbs & Actions */}
-          <div className="px-6 py-3 flex items-center justify-end shrink-0">
-            <Button
-              variant="ghost"
-              className="hover:bg-zinc-50 border text-zinc-900 rounded-full gap-2 px-4"
-              onClick={() => {
-                chrome.runtime.sendMessage({
-                  type: MessageType.CLOSE_MAIN_MENU,
-                });
-                setTimeout(() => {
-                  chrome.runtime.sendMessage({
-                    type: MessageType.START_RECORDING,
-                    data: {
-                      projectId:
-                        selectedProjectId === 'all' ||
-                        selectedProjectId === 'unassigned'
-                          ? undefined
-                          : parseInt(selectedProjectId),
-                    },
-                  });
-                }, 300);
-              }}
-            >
-              <Plus className="w-5 h-5" /> Test Recording
-            </Button>
-          </div>
-
+        <div className="flex-1 flex flex-col min-w-0">
           <ScrollArea className="flex-1">
-            <div
-              className="p-6"
-              onClick={e => {
-                // Only deselect if clicking exactly on the background, not on items
-                if (e.target === e.currentTarget) {
-                  setSelectedId(null);
-                }
-              }}
-            >
+            <div className="p-6">
               {/* Processing Section */}
               {lastBlueprint && (
                 <section className="mb-8 p-4 bg-zinc-50 border border-zinc-200 rounded-xl flex items-center justify-between">
@@ -415,37 +346,18 @@ export const RecordingsPage: React.FC<{
 
               {/* Recordings Section */}
               <section>
-                <div
-                  className={cn(
-                    viewMode === 'grid'
-                      ? 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6'
-                      : 'flex flex-col border rounded-lg overflow-hidden bg-white'
-                  )}
-                >
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
                   {isLoading ? (
                     Array.from({ length: 8 }).map((_, i) => (
-                      <RecordingSkeleton key={i} viewMode={viewMode} />
+                      <RecordingSkeleton key={i} />
                     ))
                   ) : filteredItems.length > 0 ? (
                     filteredItems.map(item => (
                       <div key={item.id} onClick={e => e.stopPropagation()}>
                         <RecordingItem
                           recording={item}
-                          viewMode={viewMode}
-                          isSelected={selectedId === item.id}
-                          onClick={() => {
-                            setSelectedId(item.id);
-                            setShowDetails(true);
-                          }}
-                          onDoubleClick={() => {
-                            const url = chrome.runtime.getURL(
-                              `recording-detail.html?id=${item.id}`
-                            );
-                            chrome.runtime.sendMessage({
-                              type: MessageType.OPEN_URL,
-                              data: { url },
-                            });
-                          }}
+                          viewMode="grid"
+                          onClick={() => handleViewDetails(item.id)}
                           onRun={e => {
                             e.stopPropagation();
                             handleRunTest(item);
@@ -486,48 +398,8 @@ export const RecordingsPage: React.FC<{
             </div>
           </ScrollArea>
         </div>
-
-        {/* Floating Right Details Panel */}
-        <AnimatePresence>
-          {showDetails && selectedRecording && (
-            <motion.div
-              initial={{ x: 320, opacity: 0 }}
-              animate={{ x: 0, opacity: 1 }}
-              exit={{ x: 320, opacity: 0 }}
-              transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-              className="absolute right-0 top-0 bottom-0 w-[320px] z-50 shadow-[-10px_0_30px_rgba(0,0,0,0.1)] bg-white border-l"
-              onClick={e => e.stopPropagation()}
-            >
-              <DetailsPanel
-                recording={selectedRecording}
-                onClose={() => {
-                  setShowDetails(false);
-                  setSelectedId(null);
-                }}
-                onRun={() =>
-                  selectedRecording && handleRunTest(selectedRecording)
-                }
-                onRunInAgent={() =>
-                  selectedRecording && handleRunInAgent(selectedRecording)
-                }
-                onDelete={() =>
-                  selectedRecording && handleDelete(selectedRecording.id)
-                }
-                onViewDetails={() => {
-                  if (!selectedRecording) return;
-                  const url = chrome.runtime.getURL(
-                    `recording-detail.html?id=${selectedRecording.id}`
-                  );
-                  chrome.runtime.sendMessage({
-                    type: MessageType.OPEN_URL,
-                    data: { url },
-                  });
-                }}
-              />
-            </motion.div>
-          )}
-        </AnimatePresence>
       </div>
     </div>
   );
 };
+

@@ -35,9 +35,7 @@ import { MessageType } from '@/types/messages';
 
 interface RecordingItemProps {
   recording: TestBlueprint;
-  isSelected?: boolean;
   onClick?: () => void;
-  onDoubleClick?: () => void;
   viewMode?: 'grid' | 'list';
   onRun: (e: React.MouseEvent) => void;
   onDelete: (e: React.MouseEvent) => void;
@@ -51,9 +49,7 @@ interface RecordingItemProps {
 
 export const RecordingItem: React.FC<RecordingItemProps> = ({
   recording,
-  isSelected,
   onClick,
-  onDoubleClick,
   viewMode = 'grid',
   onRun,
   onDelete,
@@ -172,7 +168,7 @@ export const RecordingItem: React.FC<RecordingItemProps> = ({
       className="flex items-center gap-1 bg-red-50 px-2 py-1 rounded-md border border-red-100"
       onClick={e => e.stopPropagation()}
     >
-      <span className="text-[10px] font-bold text-red-600 uppercase tracking-tighter mr-1">
+      <span className="text-xs font-bold text-red-600 uppercase tracking-tighter mr-1">
         Delete?
       </span>
       <Button
@@ -197,87 +193,13 @@ export const RecordingItem: React.FC<RecordingItemProps> = ({
     </div>
   );
 
-  if (viewMode === 'list') {
-    return (
-      <div
-        className={cn(
-          'flex items-center gap-3 px-4 py-2.5 hover:bg-zinc-50 cursor-pointer border-b transition-colors group',
-          isSelected && 'bg-zinc-100 hover:bg-zinc-200/50'
-        )}
-        onClick={onClick}
-        onDoubleClick={onDoubleClick}
-      >
-        <Terminal className="w-5 h-5 text-zinc-600" />
-        <div className="flex-1 min-w-0">
-          {isEditing ? (
-            <Input
-              ref={inputRef}
-              value={editName}
-              onChange={e => setEditName(e.target.value)}
-              onBlur={handleSave}
-              onKeyDown={handleKeyDown}
-              onClick={e => e.stopPropagation()}
-              className="h-7 text-sm py-0"
-            />
-          ) : (
-            <span className="font-medium text-gray-700 truncate block">
-              {recording.name}
-            </span>
-          )}
-        </div>
-        <div className="flex items-center gap-4 text-xs text-gray-500 w-auto justify-end">
-          {recording.created_at && (
-            <span className="text-gray-400 tabular-nums">
-              {new Date(recording.created_at).toLocaleDateString('en-US', {
-                month: 'short',
-                day: 'numeric',
-                year: 'numeric',
-              })}
-            </span>
-          )}
-          <div onClick={e => e.stopPropagation()}>
-            <RecordingProjectPicker
-              currentProjectId={recording.project_id}
-              projects={projects}
-              onSelect={handleUpdateProject}
-              portalContainer={portalContainer}
-            />
-          </div>
-          <span className="flex items-center gap-1 min-w-[60px] justify-end">
-            <Clock className="w-3 h-3" /> {recording.steps.length} steps
-          </span>
-        </div>
-        <div className="flex items-center gap-1">
-          {isConfirmingDelete ? (
-            <DeleteConfirmation />
-          ) : (
-            <>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-8 px-2 text-xs gap-1.5 text-zinc-600 hover:text-zinc-900 opacity-0 group-hover:opacity-100 bg-zinc-50 hover:bg-zinc-100 border transition-all"
-                onClick={onRun}
-              >
-                <Zap className="w-3.5 h-3.5 fill-current" /> Run Test
-              </Button>
-              <Actions />
-            </>
-          )}
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div
       className={cn(
         'flex flex-col border rounded-xl overflow-hidden hover:shadow-md hover:border-zinc-300 cursor-pointer transition-all bg-white group relative h-full',
-        isSelected
-          ? 'border-zinc-900 bg-zinc-50 ring-1 ring-zinc-900'
-          : 'border-gray-200'
+        'border-gray-200'
       )}
       onClick={onClick}
-      onDoubleClick={onDoubleClick}
     >
       {isConfirmingDelete && (
         <div
@@ -343,13 +265,13 @@ export const RecordingItem: React.FC<RecordingItemProps> = ({
         <div className="flex-1 min-h-[80px] bg-zinc-50 rounded-lg p-3 border border-zinc-100 mb-4 group-hover:bg-zinc-100/50 transition-colors">
           <div className="flex items-center gap-1.5 mb-2">
             <Terminal className="w-3.5 h-3.5 text-zinc-500" />
-            <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">
+            <span className="text-xs font-bold text-zinc-500 uppercase tracking-wider">
               Test Steps
             </span>
           </div>
           <div className="space-y-1.5">
             {recording.steps.slice(0, 4).map((step, idx) => (
-              <div key={idx} className="flex gap-2 text-[11px]">
+              <div key={idx} className="flex gap-2 text-xs">
                 <span className="text-zinc-400 font-medium tabular-nums shrink-0">
                   {idx + 1}.
                 </span>
@@ -359,12 +281,12 @@ export const RecordingItem: React.FC<RecordingItemProps> = ({
               </div>
             ))}
             {recording.steps.length > 4 && (
-              <div className="flex gap-2 text-[11px] text-zinc-400 italic pl-5 mt-1">
+              <div className="flex gap-2 text-xs text-zinc-400 italic pl-5 mt-1">
                 + {recording.steps.length - 4} more steps
               </div>
             )}
             {recording.steps.length === 0 && (
-              <div className="text-[11px] text-zinc-400 italic py-2 text-center">
+              <div className="text-xs text-zinc-400 italic py-2 text-center">
                 No steps recorded
               </div>
             )}
@@ -374,7 +296,7 @@ export const RecordingItem: React.FC<RecordingItemProps> = ({
         {/* Footer */}
         <div className="flex items-center justify-between mt-auto pt-3 border-t border-zinc-100">
           <div className="flex items-center gap-3">
-            <span className="text-[10px] font-medium text-gray-500 flex items-center gap-1">
+            <span className="text-xs font-medium text-gray-500 flex items-center gap-1">
               <Clock className="w-3 h-3" /> {recording.steps.length} steps
             </span>
             <RecordingProjectPicker
@@ -385,7 +307,7 @@ export const RecordingItem: React.FC<RecordingItemProps> = ({
             />
           </div>
           {recording.created_at && (
-            <span className="text-[10px] text-gray-400 font-medium">
+            <span className="text-xs text-gray-400 font-medium">
               {new Date(recording.created_at).toLocaleDateString('en-US', {
                 month: 'short',
                 day: 'numeric',
