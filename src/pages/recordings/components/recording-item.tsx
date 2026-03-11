@@ -196,14 +196,23 @@ export const RecordingItem: React.FC<RecordingItemProps> = ({
   return (
     <div
       className={cn(
-        'flex flex-col border rounded-xl overflow-hidden hover:shadow-md hover:border-zinc-300 cursor-pointer transition-all bg-white group relative h-full',
+        'flex flex-col border rounded-xl overflow-hidden hover:shadow-lg hover:border-zinc-300 cursor-pointer transition-all bg-white group relative h-full',
         'border-gray-200'
       )}
       onClick={onClick}
     >
+      {recording.created_at && (
+        <span className="absolute top-2 right-5 text-[10px] text-gray-400 font-medium">
+          {new Date(recording.created_at).toLocaleDateString('en-US', {
+            month: 'short',
+            day: 'numeric',
+            year: 'numeric',
+          })}
+        </span>
+      )}
       {isConfirmingDelete && (
         <div
-          className="absolute inset-0 z-10 bg-white/95 backdrop-blur-sm flex flex-col items-center justify-center p-4 text-center animate-in fade-in duration-200"
+          className="absolute inset-0 z-10 bg-white/95 backdrop-blur-sm flex flex-col items-center justify-center p-5 text-center animate-in fade-in duration-200"
           onClick={e => e.stopPropagation()}
         >
           <Trash2 className="w-8 h-8 text-red-500 mb-2" />
@@ -235,7 +244,7 @@ export const RecordingItem: React.FC<RecordingItemProps> = ({
         </div>
       )}
 
-      <div className="p-4 flex flex-col h-full">
+      <div className="p-5 flex flex-col h-full">
         {/* Header */}
         <div className="flex items-start justify-between gap-2 mb-3">
           <div className="flex-1 min-w-0">
@@ -250,7 +259,7 @@ export const RecordingItem: React.FC<RecordingItemProps> = ({
                 className="h-7 text-sm py-0 mb-1"
               />
             ) : (
-              <p className="font-bold text-gray-900 truncate group-hover:text-zinc-900 transition-colors">
+              <p className="font-semibold text-gray-900 truncate group-hover:text-zinc-900 transition-colors">
                 {recording.name}
               </p>
             )}
@@ -306,15 +315,6 @@ export const RecordingItem: React.FC<RecordingItemProps> = ({
               portalContainer={portalContainer}
             />
           </div>
-          {recording.created_at && (
-            <span className="text-xs text-gray-400 font-medium">
-              {new Date(recording.created_at).toLocaleDateString('en-US', {
-                month: 'short',
-                day: 'numeric',
-                year: 'numeric',
-              })}
-            </span>
-          )}
         </div>
       </div>
     </div>
