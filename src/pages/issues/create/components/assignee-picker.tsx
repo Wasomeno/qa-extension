@@ -41,7 +41,7 @@ export const AssigneePicker: React.FC<AssigneePickerProps> = ({
       <PopoverTrigger asChild>
         <Button
           variant="outline"
-          className="w-full justify-between text-left font-normal bg-gray-50 border-gray-200 hover:bg-gray-100"
+          className="w-full justify-between text-left font-normal bg-white border-theme-border rounded-xl focus:ring-blue-500/20 focus:border-blue-500 hover:bg-gray-50 transition-all"
           disabled={disabled}
         >
           <div className="flex items-center truncate">
