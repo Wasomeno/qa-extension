@@ -38,7 +38,7 @@ export const LabelPicker: React.FC<LabelPickerProps> = ({
       <PopoverTrigger asChild>
         <Button
           variant="outline"
-          className="h-auto py-2 px-3 w-full justify-start text-left font-normal bg-gray-50 border-gray-200 hover:bg-gray-100 relative min-h-[42px]"
+          className="h-auto py-2 px-3 w-full justify-start text-left font-normal bg-white border-theme-border rounded-xl focus:ring-blue-500/20 focus:border-blue-500 hover:bg-gray-50 relative min-h-[42px] transition-all"
           disabled={disabled}
         >
           <div className="flex flex-wrap gap-2 items-center pr-6">
@@ -48,7 +48,7 @@ export const LabelPicker: React.FC<LabelPickerProps> = ({
             {selectedLabels.map(label => (
               <div
                 key={label.id}
-                className="text-[10px] pl-2 pr-1 py-0.5 rounded border font-medium inline-flex items-center"
+                className="text-xs pl-2 pr-1 py-0.5 rounded border font-medium inline-flex items-center"
                 style={{
                   backgroundColor: `${label.color}15`,
                   color: label.color,
