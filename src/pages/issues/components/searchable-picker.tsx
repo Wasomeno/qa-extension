@@ -127,21 +127,6 @@ export const SearchablePicker: React.FC<SearchablePickerProps> = ({
   const isTruncated = label.length > 20;
   const truncatedLabel = isTruncated ? `${label.slice(0, 20)}...` : label;
 
-  const TriggerButton = (
-    <Button
-      variant="outline"
-      role="combobox"
-      aria-expanded={open}
-      className={cn(
-        'w-[200px] justify-between bg-white border-gray-200 rounded-xl text-gray-700 font-normal hover:bg-gray-50',
-        className
-      )}
-    >
-      <span className="truncate">{truncatedLabel}</span>
-      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-    </Button>
-  );
-
   return (
     <Popover open={open} onOpenChange={handleOpenChange}>
       <PopoverTrigger asChild>
@@ -150,7 +135,7 @@ export const SearchablePicker: React.FC<SearchablePickerProps> = ({
           role="combobox"
           aria-expanded={open}
           className={cn(
-            'w-[200px] justify-between bg-white border-gray-200 rounded-xl text-gray-700 font-normal hover:bg-gray-50',
+            'w-[200px] justify-between bg-white border-theme-border rounded-xl text-theme-text font-normal hover:bg-gray-50',
             className
           )}
           onClick={e => {
