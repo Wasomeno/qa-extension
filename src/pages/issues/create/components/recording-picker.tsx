@@ -52,7 +52,7 @@ export const RecordingPicker: React.FC<RecordingPickerProps> = ({
           role="combobox"
           aria-expanded={open}
           disabled={disabled || isLoading}
-          className="w-full justify-between bg-gray-50 border-gray-200 hover:bg-white transition-all font-normal"
+          className="w-full justify-between bg-white border-theme-border rounded-xl focus:ring-blue-500/20 focus:border-blue-500 hover:bg-gray-50 transition-all font-normal"
         >
           {isLoading ? (
             <div className="flex items-center gap-2 text-gray-400">
