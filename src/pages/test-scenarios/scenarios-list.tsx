@@ -1,37 +1,53 @@
 import React, { useState, useMemo } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
 import { useQuery } from '@tanstack/react-query';
-import { Search, Plus, Terminal } from 'lucide-react';
+import { Search, Plus, Terminal, Info } from 'lucide-react';
 
 import { testScenarioApi } from '@/api/test-scenario';
 import { getProjects } from '@/api/project';
-import { MessageType } from '@/types/messages';
+import { useNavigation } from '@/contexts/navigation-context';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Skeleton } from '@/components/ui/skeleton';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 
 import { SearchablePicker } from '../issues/components/searchable-picker';
 import { UploadWizard } from './components/upload-wizard';
 import { ScenarioItem } from './components/scenario-item';
-import { ScenarioDetail } from './components/scenario-detail';
 
 const ScenarioSkeleton = () => (
   <div className="flex flex-col border rounded-xl overflow-hidden bg-white shadow-sm h-full">
-    <div className="p-4 space-y-4">
-      <div className="flex items-start justify-between gap-4">
-        <div className="flex-1 space-y-2">
+    <div className="p-4 flex flex-col h-full">
+      <div className="flex items-start justify-between mb-4">
+        <div className="flex-1 space-y-2 pr-16">
           <Skeleton className="h-5 w-3/4" />
           <Skeleton className="h-3 w-1/2" />
         </div>
+        <Skeleton className="h-5 w-12 rounded-full shrink-0" />
       </div>
-      <div className="flex justify-between">
-        <Skeleton className="h-6 w-16" />
-        <Skeleton className="h-6 w-16" />
+      <div className="grid grid-cols-3 gap-1 py-3 border-y border-zinc-50 mb-4">
+        <div className="flex flex-col items-center gap-1">
+          <Skeleton className="h-3 w-3 rounded-full" />
+          <Skeleton className="h-3 w-8" />
+        </div>
+        <div className="flex flex-col items-center gap-1 border-x border-zinc-50">
+          <Skeleton className="h-3 w-3 rounded-full" />
+          <Skeleton className="h-3 w-8" />
+        </div>
+        <div className="flex flex-col items-center gap-1">
+          <Skeleton className="h-3 w-3 rounded-full" />
+          <Skeleton className="h-3 w-8" />
+        </div>
       </div>
-      <div className="flex items-center pt-2 border-t">
-        <Skeleton className="h-5 w-16 rounded-full" />
+      <div className="mt-auto pt-2 flex items-center gap-2">
+        <Skeleton className="h-3 w-3 rounded-full" />
+        <Skeleton className="h-3 w-24" />
       </div>
     </div>
   </div>
@@ -40,12 +56,10 @@ const ScenarioSkeleton = () => (
 export const TestScenariosPage: React.FC<{
   portalContainer?: HTMLElement | null;
 }> = ({ portalContainer }) => {
+  const { push } = useNavigation();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedProjectId, setSelectedProjectId] = useState<string>('all');
   const [projectSearch, setProjectSearch] = useState('');
-
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [showDetails, setShowDetails] = useState(false);
 
   const [isWizardOpen, setIsWizardOpen] = useState(false);
 
@@ -72,7 +86,6 @@ export const TestScenariosPage: React.FC<{
   const handleDelete = async (id: string) => {
     try {
       await testScenarioApi.deleteScenario(id);
-      if (selectedId === id) setSelectedId(null);
       refetch();
     } catch (e) {
       console.error(e);
@@ -80,13 +93,9 @@ export const TestScenariosPage: React.FC<{
   };
 
   const handleGenerate = (id: string, sheetNames: string[]) => {
-    // Triggers generation for selected sheets from the detail view
+    // Triggers generation for selected sheets from the outer view
     testScenarioApi.generateTests(id, sheetNames).then(() => refetch());
   };
-
-  const selectedScenario = useMemo(() => {
-    return scenarios.find(s => s.id === selectedId) || null;
-  }, [selectedId, scenarios]);
 
   const filteredItems = useMemo(() => {
     const searchLower = searchQuery.toLowerCase();
@@ -102,16 +111,43 @@ export const TestScenariosPage: React.FC<{
 
   return (
     <div className="flex flex-col h-full bg-white overflow-hidden relative">
-      {/* Top Header */}
-      <header className="px-6 py-4 border-b flex items-center justify-between shrink-0">
-        <div className="flex items-center gap-4">
-          <h1 className="text-xl font-bold text-gray-900">Test Scenarios</h1>
+      {/* Header & Filters */}
+      <div className="flex-none space-y-4 px-8 pt-8 pb-4 bg-white z-20">
+        <div>
+          <div className="flex items-center gap-2">
+            <h1 className="text-2xl font-bold text-gray-900">Test Scenarios</h1>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-6 w-6 rounded-full p-0 text-gray-400 hover:text-gray-600"
+                  >
+                    <Info className="h-4 w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="right" className="max-w-xs" container={portalContainer}>
+                  <p>
+                    Review and oversee AI-generated test scenarios imported from
+                    XLSX files. Facilitates the transition from manual test requirements
+                    to automated AI-driven scripts.
+                  </p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          </div>
+          <p className="text-sm text-gray-500 mt-1">
+            Review and manage AI-generated test scenarios
+          </p>
+        </div>
+        <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
               <Input
                 placeholder="Search scenarios..."
-                className="pl-9 w-64 h-10 bg-gray-100 border-none rounded-lg focus-visible:ring-2 focus-visible:ring-zinc-900"
+                className="pl-9 w-64 h-10 bg-white border-theme-border rounded-xl focus-visible:ring-2 focus-visible:ring-zinc-900"
                 value={searchQuery}
                 onChange={e => setSearchQuery(e.target.value)}
               />
@@ -130,43 +166,29 @@ export const TestScenariosPage: React.FC<{
               searchPlaceholder="Search projects by name..."
               allOption={{ label: 'All Projects', value: 'all' }}
               portalContainer={portalContainer}
-              className="h-10 w-[180px] bg-gray-100 border-none rounded-lg focus:ring-2 focus:ring-zinc-900 pointer-events-auto"
               onSearchChange={setProjectSearch}
               shouldFilter={false}
             />
           </div>
+
+          <Button
+            variant="ghost"
+            className="hover:bg-zinc-50 border text-zinc-900 rounded-full gap-2 px-4 h-10"
+            onClick={e => {
+              e.stopPropagation();
+              setIsWizardOpen(true);
+            }}
+          >
+            <Plus className="w-5 h-5" /> Import Scenarios (.xlsx)
+          </Button>
         </div>
-      </header>
+      </div>
 
       {/* Main Container */}
       <div className="flex flex-1 min-h-0 relative">
-        <div
-          className="flex-1 flex flex-col min-w-0"
-          onClick={() => setSelectedId(null)}
-        >
-          {/* Breadcrumbs & Actions */}
-          <div className="px-6 py-3 flex items-center justify-end shrink-0">
-            <Button
-              variant="ghost"
-              className="hover:bg-zinc-50 border text-zinc-900 rounded-full gap-2 px-4"
-              onClick={e => {
-                e.stopPropagation();
-                setIsWizardOpen(true);
-              }}
-            >
-              <Plus className="w-5 h-5" /> Import Scenarios (.xlsx)
-            </Button>
-          </div>
-
+        <div className="flex-1 flex flex-col min-w-0">
           <ScrollArea className="flex-1">
-            <div
-              className="p-6"
-              onClick={e => {
-                if (e.target === e.currentTarget) {
-                  setSelectedId(null);
-                }
-              }}
-            >
+            <div className="p-6">
               <section>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
                   {isLoading ? (
@@ -178,10 +200,9 @@ export const TestScenariosPage: React.FC<{
                       <div key={item.id} onClick={e => e.stopPropagation()}>
                         <ScenarioItem
                           scenario={item}
-                          isSelected={selectedId === item.id}
+                          isSelected={false}
                           onClick={() => {
-                            setSelectedId(item.id);
-                            setShowDetails(true);
+                            push('test-scenario-detail', item);
                           }}
                           onGenerate={e => {
                             e.stopPropagation();
@@ -211,44 +232,6 @@ export const TestScenariosPage: React.FC<{
             </div>
           </ScrollArea>
         </div>
-
-        {/* Floating Right Details Panel */}
-        <AnimatePresence>
-          {showDetails && selectedScenario && (
-            <motion.div
-              initial={{ x: 480, opacity: 0 }}
-              animate={{ x: 0, opacity: 1 }}
-              exit={{ x: 480, opacity: 0 }}
-              transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-              className="absolute right-0 top-0 bottom-0 w-[480px] z-50 shadow-[-10px_0_30px_rgba(0,0,0,0.1)] bg-white border-l"
-              onClick={e => e.stopPropagation()}
-            >
-              <ScenarioDetail
-                scenario={selectedScenario}
-                onClose={() => {
-                  setShowDetails(false);
-                  setSelectedId(null);
-                }}
-                onGenerate={sheetNames => {
-                  if (sheetNames.length > 0) {
-                    handleGenerate(selectedScenario.id, sheetNames);
-                  }
-                }}
-                onDelete={() => handleDelete(selectedScenario.id)}
-                onViewGeneratedId={id => {
-                  // Navigate to recording details logic reusing recordings feature
-                  const url = chrome.runtime.getURL(
-                    `generated-test-detail.html?id=${id}`
-                  );
-                  chrome.runtime.sendMessage({
-                    type: MessageType.OPEN_URL,
-                    data: { url },
-                  });
-                }}
-              />
-            </motion.div>
-          )}
-        </AnimatePresence>
       </div>
 
       <UploadWizard
