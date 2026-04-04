@@ -8,6 +8,7 @@ import { PinColorPicker } from './components/pin-color-picker';
 import { PinNoteModal } from './components/pin-note-modal';
 import { usePinnedIssues, PinnedIssue } from '@/hooks/use-pinned-issues';
 import { useNavigation } from '@/contexts/navigation-context';
+import { EmptyState } from '@/components/ui/empty-state';
 
 interface PinnedPageProps {
   portalContainer?: HTMLElement | null;
@@ -108,18 +109,11 @@ export const PinnedPage: React.FC<PinnedPageProps> = ({ portalContainer }) => {
             ))}
           </div>
         ) : (
-          <div className="flex-1 min-h-[200px] flex flex-col items-center justify-center bg-gray-50/50 rounded-2xl border-2 border-dashed border-gray-200">
-            <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
-              <Pin className="w-8 h-8 text-gray-300" />
-            </div>
-            <h3 className="text-base font-semibold text-gray-700">
-              No pinned issues
-            </h3>
-            <p className="text-sm text-gray-400 mt-1 max-w-xs px-4">
-              Pin important issues from the Issues tab to keep them here for
-              quick access.
-            </p>
-          </div>
+          <EmptyState
+            icon={Pin}
+            title="No pinned issues"
+            description="Pin important issues from the Issues tab to keep them here for quick access."
+          />
         )}
       </div>
 

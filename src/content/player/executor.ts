@@ -6,6 +6,8 @@ import {
   isElementActionable,
   findAllByXPath,
   queryAllShadows,
+  findElementByContext,
+  ElementResolutionContext,
 } from '@/utils/dom';
 
 export class Executor {
@@ -410,7 +412,8 @@ export class Executor {
     });
     const xpathSelectors = this.getXPathSelectors(step);
 
-    if (selectors.length === 0 && xpathSelectors.length === 0) {
+    if (selectors.length === 0 && xpathSelectors.length === 0 && !step.elementHints) {
+      console.warn('[Executor] No selectors or element hints provided');
       return null;
     }
 
@@ -449,6 +452,7 @@ export class Executor {
             console.warn(
               `[Executor] Forcing interaction with element after 15s timeout.`
             );
+          console.log('[Executor] Element resolved and actionable!');
           return bestMatch;
         }
 
@@ -466,6 +470,52 @@ export class Executor {
       }
     }
 
+    // AGENT RESOLVE FALLBACK
+    // When primary selectors fail and fallbackPolicy is 'agent_resolve',
+    // use comprehensive element hints to find the element
+    if (step.fallbackPolicy === 'agent_resolve' && step.elementHints) {
+      console.log('[Executor] Primary selectors failed, attempting agent_resolve fallback...');
+      console.log('[Executor] Element hints context:', {
+        tagName: step.elementHints.tagName,
+        textContent: step.elementHints.textContent?.substring(0, 50),
+        attributes: step.elementHints.attributes,
+        parentInfo: step.elementHints.parentInfo,
+        structuralInfo: step.elementHints.structuralInfo
+      });
+
+      const context: ElementResolutionContext = {
+        tagName: step.elementHints.tagName,
+        textContent: step.elementHints.textContent,
+        attributes: step.elementHints.attributes,
+        parentInfo: step.elementHints.parentInfo,
+        structuralInfo: step.elementHints.structuralInfo,
+      };
+
+      const contextElement = findElementByContext(context);
+
+      if (contextElement) {
+        console.log('[Executor] Found element via context hints, checking actionability...');
+        if (!requireActionable || await isElementActionable(contextElement)) {
+          console.log('[Executor] Agent resolve fallback successful!');
+          // Give it a highlight to show it was resolved via fallback
+          highlightElement(contextElement, { color: '#ffd43b', duration: 2000 }); // Yellow for fallback
+          return contextElement;
+        } else {
+          console.log('[Executor] Context element found but not actionable, scrolling into view...');
+          contextElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          await new Promise(resolve => setTimeout(resolve, 500));
+          if (await isElementActionable(contextElement)) {
+            console.log('[Executor] Element now actionable after scroll!');
+            highlightElement(contextElement, { color: '#ffd43b', duration: 2000 });
+            return contextElement;
+          }
+        }
+      } else {
+        console.log('[Executor] Agent resolve fallback: No element found via context');
+      }
+    }
+
+    console.log(`[Executor] Element resolution failed after ${timeout}ms`);
     return requireActionable ? null : lastBest;
   }
 
@@ -547,24 +597,24 @@ export class Executor {
     const text = (element.textContent || '').trim();
     let score = 30 - selectorPriority * 5 - matchIndex;
 
+    // Tag name match
     if (hints?.tagName) {
       score +=
         element.tagName.toLowerCase() === hints.tagName.toLowerCase() ? 10 : -5;
     }
 
+    // Text content match
     if (hints?.textContent) {
       const normalizedHint = hints.textContent.trim().toLowerCase();
       const normalizedText = text.toLowerCase();
       if (normalizedHint && normalizedText === normalizedHint) {
         score += 20;
-      } else if (
-        normalizedHint &&
-        normalizedText.includes(normalizedHint.slice(0, 40))
-      ) {
+      } else if (normalizedHint && normalizedText.includes(normalizedHint.slice(0, 40))) {
         score += 8;
       }
     }
 
+    // High priority attributes match
     if (hints?.attributes) {
       const highPriorityAttrs = [
         'data-testid',
@@ -572,6 +622,7 @@ export class Executor {
         'data-qa',
         'data-cy',
         'aria-label',
+        'aria-labelledby',
         'role',
       ];
       highPriorityAttrs.forEach(attr => {
@@ -580,22 +631,91 @@ export class Executor {
           score += 15;
         }
       });
+
+      // Other attributes
+      const otherAttrs = ['name', 'type', 'id', 'placeholder', 'title'];
+      otherAttrs.forEach(attr => {
+        const expected = hints.attributes?.[attr];
+        if (expected && element.getAttribute(attr) === expected) {
+          score += 5;
+        }
+      });
     }
 
+    // Parent info match (ENHANCED)
     if (hints?.parentInfo) {
       const parent = element.parentElement;
+      
       if (parent) {
         if (hints.parentInfo.id && parent.id === hints.parentInfo.id) {
           score += 8;
         }
-        if (
-          hints.parentInfo.tagName &&
-          parent.tagName.toLowerCase() ===
-            hints.parentInfo.tagName.toLowerCase()
-        ) {
+        
+        if (hints.parentInfo.tagName && 
+            parent.tagName.toLowerCase() === hints.parentInfo.tagName.toLowerCase()) {
           score += 4;
         }
+        
+        // Parent selector validation
+        if (hints.parentInfo.selector) {
+          try {
+            if (parent.matches(hints.parentInfo.selector)) {
+              score += 6;
+            }
+          } catch {}
+        }
+        
+        // Parent attributes match
+        if (hints.parentInfo.attributes) {
+          for (const [attr, expected] of Object.entries(hints.parentInfo.attributes)) {
+            if (parent.getAttribute(attr) === expected) {
+              score += 3;
+            }
+          }
+        }
       }
+    }
+
+    // Structural info match
+    if (hints?.structuralInfo) {
+      const siblings = element.parentElement
+        ? Array.from(element.parentElement.children).filter(
+            c => c.tagName === element.tagName
+          )
+        : [];
+      
+      if (siblings.length > 0) {
+        const index = siblings.indexOf(element) + 1;
+        
+        if (index === hints.structuralInfo.siblingIndex) {
+          score += 5;
+        }
+        
+        // Position proximity
+        const posDiff = Math.abs(index - hints.structuralInfo.siblingIndex);
+        if (posDiff === 1) score += 1;
+      }
+    }
+
+    // XPath pattern bonus (NEW)
+    // Prefer more robust XPath patterns
+    const xpath = step.xpath || step.xpathCandidates?.[0] || '';
+    
+    if (xpath.includes('normalize-space')) {
+      score += 5; // normalize-space handles whitespace - most robust
+    }
+    
+    if (xpath.includes('contains(')) {
+      score += 2; // contains is fallback for partial matches
+    }
+    
+    // Prefer attribute-based over positional XPath
+    if (xpath.includes('@data-testid') || xpath.includes('@data-test-id')) {
+      score += 3; // Data test attributes are most reliable
+    }
+    
+    if (xpath.includes('@role=') && xpath.includes('@aria-label=')) {
+      score += 2; // Combined role + aria-label is good
     }
 
     return score;
@@ -611,24 +731,24 @@ export class Executor {
     const text = (element.textContent || '').trim();
     let score = 30 - selectorPriority * 5 - matchIndex;
 
+    // Tag name match bonus
     if (hints?.tagName) {
       score +=
         element.tagName.toLowerCase() === hints.tagName.toLowerCase() ? 10 : -5;
     }
 
+    // Text content match bonus
     if (hints?.textContent) {
       const normalizedHint = hints.textContent.trim().toLowerCase();
       const normalizedText = text.toLowerCase();
       if (normalizedHint && normalizedText === normalizedHint) {
-        score += 20;
-      } else if (
-        normalizedHint &&
-        normalizedText.includes(normalizedHint.slice(0, 40))
-      ) {
-        score += 8;
+        score += 20; // Exact text match - highest bonus
+      } else if (normalizedHint && normalizedText.includes(normalizedHint.slice(0, 40))) {
+        score += 8; // Partial text match
       }
     }
 
+    // High priority attributes match bonus (data-testid, aria-*, role)
     if (hints?.attributes) {
       const highPriorityAttrs = [
         'data-testid',
@@ -636,6 +756,7 @@ export class Executor {
         'data-qa',
         'data-cy',
         'aria-label',
+        'aria-labelledby',
         'role',
       ];
       highPriorityAttrs.forEach(attr => {
@@ -645,7 +766,8 @@ export class Executor {
         }
       });
 
-      const otherAttrs = ['name', 'type', 'id'];
+      // Other stable attributes
+      const otherAttrs = ['name', 'type', 'id', 'placeholder', 'title'];
       otherAttrs.forEach(attr => {
         const expected = hints.attributes?.[attr];
         if (expected && element.getAttribute(attr) === expected) {
@@ -654,40 +776,103 @@ export class Executor {
       });
     }
 
+    // Parent info match bonus (ENHANCED)
     if (hints?.parentInfo) {
       const parent = element.parentElement;
+      const grandparent = parent?.parentElement;
+      
       if (parent) {
+        // ID match - highest parent bonus
         if (hints.parentInfo.id && parent.id === hints.parentInfo.id) {
           score += 8;
         }
-        if (
-          hints.parentInfo.tagName &&
-          parent.tagName.toLowerCase() ===
-            hints.parentInfo.tagName.toLowerCase()
-        ) {
+        
+        // Tag name match
+        if (hints.parentInfo.tagName && 
+            parent.tagName.toLowerCase() === hints.parentInfo.tagName.toLowerCase()) {
           score += 4;
+        }
+        
+        // Parent selector validation (NEW)
+        if (hints.parentInfo.selector) {
+          try {
+            if (parent.matches(hints.parentInfo.selector)) {
+              score += 6;
+            }
+          } catch {
+            // Invalid selector, skip
+          }
+        }
+        
+        // Parent attributes match (NEW)
+        if (hints.parentInfo.attributes) {
+          for (const [attr, expected] of Object.entries(hints.parentInfo.attributes)) {
+            if (parent.getAttribute(attr) === expected) {
+              score += 3;
+            }
+          }
+        }
+      }
+      
+      // Grandparent context bonus (NEW)
+      if (grandparent) {
+        const gpId = grandparent.id;
+        const gpTagName = grandparent.tagName.toLowerCase();
+        
+        // If parent's recorded ID matches grandparent's ID, we have context
+        if (hints.parentInfo.id && hints.parentInfo.id === gpId) {
+          score += 2; // Slight bonus for matching grandparent context
+        }
+        
+        // Check if grandparent has stable attributes that match hints
+        if (hints.parentInfo.attributes) {
+          for (const [attr, expected] of Object.entries(hints.parentInfo.attributes)) {
+            if (grandparent.getAttribute(attr) === expected) {
+              score += 1; // Minor bonus for grandparent attribute match
+            }
+          }
         }
       }
     }
 
+    // Structural info match bonus (ENHANCED)
     if (hints?.structuralInfo) {
       const siblings = element.parentElement
         ? Array.from(element.parentElement.children).filter(
             c => c.tagName === element.tagName
           )
         : [];
+      
       if (siblings.length > 0) {
         const index = siblings.indexOf(element) + 1;
+        const totalSiblings = siblings.length;
+        
+        // Exact sibling position match - increased bonus
         if (index === hints.structuralInfo.siblingIndex) {
-          score += 3;
+          score += 5;
         }
-        const relativePos = Math.abs(
-          index / siblings.length -
-            hints.structuralInfo.siblingIndex /
-              Math.max(hints.structuralInfo.totalSiblings, 1)
-        );
-        if (relativePos < 0.2) {
-          score += 2;
+        
+        // Relative position scoring (NEW)
+        if (hints.structuralInfo.totalSiblings > 0) {
+          const isFirst = index === 1;
+          const isLast = index === totalSiblings;
+          const expectedIsFirst = hints.structuralInfo.siblingIndex === 1;
+          const expectedIsLast = hints.structuralInfo.siblingIndex === hints.structuralInfo.totalSiblings;
+          
+          if ((isFirst && expectedIsFirst) || (isLast && expectedIsLast)) {
+            score += 2; // Position at edge matches
+          }
+          
+          // Position proximity bonus
+          const posDiff = Math.abs(index - hints.structuralInfo.siblingIndex);
+          if (posDiff === 1) {
+            score += 1; // Adjacent position
+          }
+          
+          // Total siblings match
+          if (totalSiblings === hints.structuralInfo.totalSiblings) {
+            score += 1;
+          }
         }
       }
     }

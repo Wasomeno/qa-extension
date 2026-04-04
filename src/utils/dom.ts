@@ -60,26 +60,112 @@ export interface XPathCandidate {
 
 function isLikelyStableClassName(className: string): boolean {
   if (!className) return false;
+
+  // Length check - too long usually means generated
   if (className.length > 40) return false;
+
+  // Numeric-heavy check (more than 3 consecutive digits)
   if (/\d{3,}/.test(className)) return false;
-  if (/[A-Za-z]+_[A-Za-z0-9]{5,}/.test(className)) return false; // CSS Modules / Styled Components
-  if (className.startsWith('ant-')) return false; // Ignore Ant Design classes
-  if (className.startsWith('rc-')) return false; // Ignore RC (React Component) classes often used in Ant
-  if (className.startsWith('css-')) return false; // Emotion/MUI styled components
-  if (className.startsWith('sc-')) return false; // Styled Components
+
+  // CSS Modules pattern: Block_element_hash (e.g., LoginForm_input_7x9y2)
+  if (/_[a-zA-Z0-9]+_[0-9a-z]{5,}/.test(className)) return false;
+
+  // Framework patterns - Ant Design
+  if (className.startsWith('ant-')) return false;
+  if (className.startsWith('ant\\9')) return false; // Hash suffix variant
+
+  // RC Component patterns (React Component library patterns)
+  if (className.startsWith('rc-')) return false;
+
+  // Emotion/MUI styled components
+  if (className.startsWith('css-')) return false;
+
+  // Styled Components
+  if (className.startsWith('sc-')) return false;
+
+  // Tailwind CSS with hash suffix (tailwind-7a8b9c or similar)
+  if (/^tailwind-[a-f0-9]{6,}$/.test(className)) return false;
+  if (/^tw-/i.test(className)) return false; // Some Tailwind prefixes
+
+  // Material-UI (Mui-prefixed classes)
+  if (className.startsWith('Mui')) return false;
+  if (/Mui[A-Z][a-zA-Z]+-[a-z0-9]+/i.test(className)) return false;
+
+  // Hash-based class patterns (e.g., #a1b2c3)
+  if (/#[a-f0-9]{6,}/.test(className)) return false;
+
+  // BEM with long hashes (Block__Element--modifier_hash)
+  if (/--[a-z0-9]{6,}$/.test(className)) return false;
+
+  // Numeric prefix (e.g., 123abc, 1Button)
+  if (/^[0-9]+[a-z]/i.test(className)) return false;
+
+  // Long numeric suffix with short prefix (e.g., row-12345678)
+  if (/^[a-z]+-[0-9]{5,}$/i.test(className)) return false;
+
+  // CSS Modules with double underscore and hash (e.g., _Button_sc__hash)
+  if (/^_[A-Z][a-zA-Z]+_sc__[a-z0-9]+$/i.test(className)) return false;
+
+  // Chakra UI patterns
+  if (/^chakra-/i.test(className)) return false;
+
+  // Bootstrap 5 hash patterns
+  if (/^bs-/i.test(className) && /-[a-f0-9]{6,}$/.test(className)) return false;
+
+  // Valid pattern: starts with letter, alphanumeric + underscore + dash
   return /^[a-zA-Z][a-zA-Z0-9_-]*$/.test(className);
 }
 
 function isStableId(id: string | undefined): boolean {
   if (!id) return false;
+
+  // Pure numeric IDs (e.g., "123", "456789")
   if (/^\d+$/.test(id)) return false;
+
+  // Framework auto-generated IDs (Ant Design, RC components)
   if (
     id.includes('rc-tabs-') ||
     id.includes('rc-menu-') ||
-    id.includes('rc-select-')
+    id.includes('rc-select-') ||
+    id.includes('rc-drawer-') ||
+    id.includes('rc-modal-') ||
+    id.includes('rc-dropdown-') ||
+    id.includes('ant-')
   )
     return false;
-  if (/^id-[a-zA-Z0-9]{6,}$/.test(id)) return false; // e.g. id-b3x9z2
+
+  // Generic hash pattern (id-xxxxxx or id-{6+ chars})
+  if (/^id-[a-zA-Z0-9]{6,}$/.test(id)) return false;
+
+  // UUID patterns
+  if (
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)
+  )
+    return false;
+
+  // Short prefix with long numeric suffix (e.g., tab-0, item-12345)
+  if (/^[a-z]+-[0-9]{4,}$/i.test(id)) return false;
+
+  // Numeric prefix with text (e.g., 1-submit, 2-button)
+  if (/^[0-9]+-[a-z]/i.test(id)) return false;
+
+  // React/Vue generated IDs (e.g., :r1:, :r2:, $uuid)
+  if (/^:r[0-9]+:$/.test(id)) return false;
+  if (/^\$[a-f0-9]+$/i.test(id)) return false;
+
+  // Element UID patterns (e.g., __u1234, uid-123456)
+  if (/^__u[0-9]+$/i.test(id)) return false;
+  if (/^uid-[0-9]+$/i.test(id)) return false;
+
+  // jQuery UI patterns
+  if (/^ui-id-[0-9]+$/i.test(id)) return false;
+
+  // Angular generated patterns
+  if (/^[a-z]+-[a-z]+-[a-z0-9]+$/.test(id) && /[0-9]{4,}$/.test(id)) return false;
+
+  // DataGrid/FancyGrid generated IDs
+  if (/^grid-[0-9]+$/.test(id)) return false;
+
   return true;
 }
 
@@ -93,6 +179,7 @@ function isUniqueSelector(selector: string): boolean {
 
 /**
  * Generate XPath candidates for an element
+ * Priority: normalize-space (most robust) > exact text > partial > attributes > ID
  */
 export function generateXPathCandidates(element: Element): XPathCandidate[] {
   if (!element) return [];
@@ -100,27 +187,39 @@ export function generateXPathCandidates(element: Element): XPathCandidate[] {
   const candidates: XPathCandidate[] = [];
   const tagName = element.tagName.toLowerCase();
 
-  // 1. Text-based XPath (extremely robust for semantic elements)
+  // 1. Text-based XPath - NORMALIZE-SPACE FIRST (MOST ROBUST)
+  // normalize-space() handles whitespace variations (tabs, newlines, multiple spaces)
   const textContent = element.textContent?.trim();
   if (textContent && textContent.length > 0 && textContent.length < 60) {
     const escaped = escapeXPathValue(textContent);
-    // Exact match using dot (includes nested text)
-    candidates.push({ xpath: `//${tagName}[.='${escaped}']`, type: 'text' });
-    // Normalize space match (best for multi-line or spaced text)
+
+    // FIRST: normalize-space match (handles whitespace variations - MOST ROBUST)
     candidates.push({
       xpath: `//${tagName}[normalize-space(.)='${escaped}']`,
       type: 'text',
     });
-    // Partial match (very robust)
+
+    // SECOND: Exact match using dot (includes nested text)
+    candidates.push({ xpath: `//${tagName}[.='${escaped}']`, type: 'text' });
+
+    // THIRD: Partial match using contains with normalize-space
     if (textContent.length > 5) {
       candidates.push({
-        xpath: `//${tagName}[contains(., '${escaped.substring(0, 30)}')]`,
+        xpath: `//${tagName}[contains(normalize-space(.), '${escapeXPathValue(textContent.substring(0, 30))}')]`,
+        type: 'text',
+      });
+    }
+
+    // FOURTH: Plain contains (fallback)
+    if (textContent.length > 5) {
+      candidates.push({
+        xpath: `//${tagName}[contains(., '${escapeXPathValue(textContent.substring(0, 30))}')]`,
         type: 'text',
       });
     }
   }
 
-  // 2. Data-testid (The "Golden" attribute)
+  // 2. Data-testid (The "Golden" attribute) - HIGHEST PRIORITY ATTRIBUTE
   for (const attr of ['data-testid', 'data-test-id', 'data-qa', 'data-cy']) {
     const val = element.getAttribute(attr);
     if (val) {
@@ -131,21 +230,29 @@ export function generateXPathCandidates(element: Element): XPathCandidate[] {
     }
   }
 
-  // 3. ARIA Roles and Labels
+  // 3. ARIA Roles and Labels - COMBINED WITH TEXT FOR MAXIMUM RELIABILITY
   const role = element.getAttribute('role') || getImplicitRole(element);
   const ariaLabel =
     element.getAttribute('aria-label') ||
     element.getAttribute('aria-labelledby');
   if (role) {
     if (ariaLabel) {
+      // Role + aria-label combination (most reliable for ARIA elements)
       candidates.push({
-        xpath: `//${tagName}[@role='${role}' and (@aria-label='${ariaLabel}' or @aria-labelledby='${ariaLabel}')]`,
+        xpath: `//${tagName}[@role='${role}' and @aria-label='${ariaLabel}']`,
         type: 'attribute',
       });
       candidates.push({
         xpath: `//*[@role='${role}' and @aria-label='${ariaLabel}']`,
         type: 'attribute',
       });
+      // Role + normalize-space text
+      if (textContent) {
+        candidates.push({
+          xpath: `//${tagName}[@role='${role}' and normalize-space(.)='${escapeXPathValue(textContent.substring(0, 30))}']`,
+          type: 'attribute',
+        });
+      }
     } else {
       candidates.push({
         xpath: `//${tagName}[@role='${role}']`,
@@ -154,7 +261,7 @@ export function generateXPathCandidates(element: Element): XPathCandidate[] {
     }
   }
 
-  // 4. Name, placeholder, alt
+  // 4. Stable attributes (name, placeholder, alt, title)
   for (const attr of ['name', 'placeholder', 'alt', 'title']) {
     const val = element.getAttribute(attr);
     if (val) {
@@ -165,7 +272,7 @@ export function generateXPathCandidates(element: Element): XPathCandidate[] {
     }
   }
 
-  // 5. Stable ID
+  // 5. Stable ID (only if not framework-generated)
   if (isStableId(element.id)) {
     candidates.push({ xpath: `//*[@id='${element.id}']`, type: 'id' });
   }
@@ -298,16 +405,17 @@ export function generateSelectorCandidates(element: Element): string[] {
   const candidates: string[] = [];
   const tagName = element.tagName.toLowerCase();
 
-  // 1. Data-test-id attributes (Highest priority)
-  const testIdAttrs = ['data-testid', 'data-test-id', 'data-qa', 'data-cy'];
+  // 1. Data-test-id attributes (HIGHEST PRIORITY - Most reliable)
+  const testIdAttrs = ['data-testid', 'data-test-id', 'data-qa', 'data-cy', 'data-test', 'data-e2e'];
   for (const attr of testIdAttrs) {
     const value = element.getAttribute(attr);
     if (value) {
       candidates.push(`[${attr}='${CSS.escape(value)}']`);
+      candidates.push(`${tagName}[${attr}='${CSS.escape(value)}']`);
     }
   }
 
-  // 2. Role + Accessible Name (Semantic Priority)
+  // 2. Role + Accessible Name (Playwright-style with :has-text)
   const role = element.getAttribute('role') || getImplicitRole(element);
   const ariaLabel =
     element.getAttribute('aria-label') ||
@@ -315,6 +423,7 @@ export function generateSelectorCandidates(element: Element): string[] {
   const textContent = element.textContent?.trim().substring(0, 50);
 
   if (role) {
+    // Role + aria-label (most reliable for ARIA)
     if (ariaLabel) {
       candidates.push(
         `${tagName}[role='${CSS.escape(role)}'][aria-label='${CSS.escape(ariaLabel)}']`
@@ -323,51 +432,80 @@ export function generateSelectorCandidates(element: Element): string[] {
         `[role='${CSS.escape(role)}'][aria-label='${CSS.escape(ariaLabel)}']`
       );
     }
+
+    // Playwright-style :has-text() with role - MOST ROBUST
     if (textContent && textContent.length > 0) {
-      // Playwright-style :has-text() for better targeting in both extension and backend
+      const escapedText = escapeSelectorValue(textContent);
       candidates.push(
-        `${tagName}[role='${CSS.escape(role)}']:has-text('${escapeSelectorValue(textContent)}')`
+        `${tagName}[role='${CSS.escape(role)}']:has-text('${escapedText}')`
       );
       candidates.push(
-        `[role='${CSS.escape(role)}']:has-text('${escapeSelectorValue(textContent)}')`
+        `[role='${CSS.escape(role)}']:has-text('${escapedText}')`
+      );
+      // Just role + text without tag
+      candidates.push(
+        `[role='${CSS.escape(role)}']:has-text('${escapedText}')`
       );
     }
+
+    // Just role as fallback
+    candidates.push(`${tagName}[role='${CSS.escape(role)}']`);
   }
 
-  // 3. Labels (for inputs)
+  // 3. Labels (for inputs) - Playwright label targeting
   if (
     element instanceof HTMLInputElement ||
     element instanceof HTMLTextAreaElement ||
     element instanceof HTMLSelectElement
   ) {
+    // Direct label association
     const label = findAssociatedLabel(element);
     if (label && label.textContent) {
       const labelText = label.textContent.trim().substring(0, 50);
+      const escapedLabel = escapeSelectorValue(labelText);
       // Playwright-style for labels
       candidates.push(
-        `label:has-text('${escapeSelectorValue(labelText)}') + ${tagName}`
+        `label:has-text('${escapedLabel}') + ${tagName}`
       );
+      // Get label's for attribute
+      const labelFor = label.getAttribute('for');
+      if (labelFor) {
+        candidates.push(`${tagName}#${CSS.escape(labelFor)}`);
+      }
+    }
+
+    // Name attribute (form field)
+    const name = element.getAttribute('name');
+    if (name) {
+      candidates.push(`${tagName}[name='${CSS.escape(name)}']`);
+      candidates.push(`[name='${CSS.escape(name)}']`);
+    }
+
+    // Type attribute (for inputs)
+    const type = element.getAttribute('type');
+    if (type && !['hidden', 'file', 'image'].includes(type)) {
+      candidates.push(`input[type='${CSS.escape(type)}']`);
     }
   }
 
-  // 4. Name attribute
-  const name = element.getAttribute('name');
-  if (name) {
-    candidates.push(`${tagName}[name='${CSS.escape(name)}']`);
-  }
-
-  // 5. Placeholder
+  // 4. Placeholder
   const placeholder = element.getAttribute('placeholder');
   if (placeholder) {
     candidates.push(`${tagName}[placeholder='${CSS.escape(placeholder)}']`);
   }
 
-  // 6. Stable ID
+  // 5. Title attribute
+  const title = element.getAttribute('title');
+  if (title) {
+    candidates.push(`${tagName}[title='${CSS.escape(title)}']`);
+  }
+
+  // 6. Stable ID (only if not framework-generated)
   if (isStableId(element.id)) {
     candidates.push(`#${CSS.escape(element.id)}`);
   }
 
-  // 7. Stable Classes
+  // 7. Stable Classes (filtered by stability rules)
   if (element.className && typeof element.className === 'string') {
     const stableClasses = element.className
       .trim()
@@ -383,31 +521,103 @@ export function generateSelectorCandidates(element: Element): string[] {
     }
   }
 
-  // 8. Limited Path (Last resort)
+  // 8. Text content based (for buttons, links, menu items)
+  if (textContent && textContent.length > 0 && textContent.length < 60) {
+    const escapedText = escapeSelectorValue(textContent);
+    // Playwright :has-text for generic elements
+    candidates.push(`${tagName}:has-text('${escapedText}')`);
+  }
+
+  // 9. Limited Path (Last resort - build from parent)
   const pathSelector = generateSelector(element);
   if (pathSelector) {
     candidates.push(pathSelector);
   }
 
+  // Deduplicate while preserving order
   return Array.from(new Set(candidates));
 }
 
 /**
- * Helper to find implicit roles
+ * Helper to find implicit ARIA roles based on element type and attributes
+ * Comprehensive mapping based on WAI-ARIA spec
  */
 function getImplicitRole(element: Element): string | null {
   const tag = element.tagName.toLowerCase();
-  const type = element.getAttribute('type');
+  const type = (element.getAttribute('type') || '').toLowerCase();
 
+  // Button-like
   if (tag === 'button') return 'button';
+  if (tag === 'input' && ['button', 'submit', 'reset', 'image'].includes(type))
+    return 'button';
+
+  // Links
   if (tag === 'a' && element.hasAttribute('href')) return 'link';
+
+  // Form inputs
   if (tag === 'input') {
-    if (['button', 'submit', 'reset', 'image'].includes(type || ''))
-      return 'button';
     if (type === 'checkbox') return 'checkbox';
     if (type === 'radio') return 'radio';
+    if (type === 'range') return 'slider';
+    if (type === 'number') return 'spinbutton';
+    if (type === 'search') return 'searchbox';
     return 'textbox';
   }
+
+  // Text inputs
+  if (tag === 'textarea') return 'textbox';
+
+  // Select/dropdown
+  if (tag === 'select') return 'listbox';
+
+  // Navigation
+  if (tag === 'nav') return 'navigation';
+  if (tag === 'menu') return 'menu';
+  if (tag === 'menubar') return 'menubar';
+
+  // Lists
+  if (tag === 'ul' || tag === 'ol') return 'list';
+  if (tag === 'li') {
+    // Check if inside a menu
+    const parent = element.closest('nav, [role="navigation"]');
+    if (!parent) return 'listitem';
+    return 'menuitem';
+  }
+
+  // Tables
+  if (tag === 'table') return 'table';
+  if (tag === 'thead') return 'rowgroup';
+  if (tag === 'tbody') return 'rowgroup';
+  if (tag === 'tr') return 'row';
+  if (tag === 'th') return 'columnheader';
+  if (tag === 'td') return 'cell';
+
+  // Dialogs
+  if (tag === 'dialog') return 'dialog';
+  if (tag === 'article') return 'article';
+  if (tag === 'main') return 'main';
+  if (tag === 'aside') return 'complementary';
+  if (tag === 'section') return 'region';
+  if (tag === 'header') return 'banner';
+  if (tag === 'footer') return 'contentinfo';
+
+  // Heading
+  if (/^h[1-6]$/.test(tag)) {
+    const level = tag.charAt(1);
+    return `heading`;
+  }
+
+  // Images
+  if (tag === 'img') {
+    const alt = element.getAttribute('alt');
+    return alt === '' ? 'presentation' : 'img';
+  }
+
+  // Others
+  if (tag === 'form') return 'form';
+  if (tag === 'figure') return 'figure';
+  if (tag === 'time') return 'time';
+
   return null;
 }
 
@@ -505,45 +715,83 @@ export function generateSelector(element: Element): string {
 
 /**
  * Get detailed information about an element
+ * Enhanced to capture comprehensive data for AI processing
  */
 export function getElementInfo(element: Element): ElementInfo {
   const rect = element.getBoundingClientRect();
   const attributes: Record<string, string> = {};
 
-  // Collect relevant attributes
+  // Collect ALL relevant attributes for AI context
   for (const attr of element.attributes) {
+    const name = attr.name;
+    const value = attr.value;
+    
+    // Include data-*, aria-*, and common stable attributes
     if (
-      ['id', 'class', 'data-*', 'name', 'type', 'role', 'aria-*'].some(
-        pattern =>
-          attr.name === pattern ||
-          attr.name.startsWith(pattern.replace('*', ''))
-      )
+      name === 'id' ||
+      name === 'class' ||
+      name === 'name' ||
+      name === 'type' ||
+      name === 'role' ||
+      name === 'for' ||
+      name === 'value' ||
+      name === 'tabindex' ||
+      name === 'disabled' ||
+      name === 'checked' ||
+      name === 'selected' ||
+      name.startsWith('data-') ||
+      name.startsWith('aria-')
     ) {
-      attributes[attr.name] = attr.value;
+      attributes[name] = value;
     }
   }
 
-  // Collect parent info for deep tracking
+  // Collect comprehensive parent info for deep tracking
   const parent = element.parentElement;
+  const grandparent = parent?.parentElement;
   let parentInfo: ElementInfo['parentInfo'];
   let structuralInfo: ElementInfo['structuralInfo'];
 
   if (parent) {
     const parentAttributes: Record<string, string> = {};
     for (const attr of parent.attributes) {
+      // Include all identifying attributes
       if (
         [
           'id',
+          'class',
           'data-testid',
           'data-test-id',
           'data-qa',
           'data-cy',
           'name',
           'role',
+          'aria-label',
+          'aria-labelledby',
+          'type',
         ].includes(attr.name)
       ) {
         parentAttributes[attr.name] = attr.value;
       }
+    }
+
+    // Get parent's parent for deeper context
+    let grandparentInfo: ElementInfo['parentInfo'];
+    if (grandparent) {
+      const gpAttributes: Record<string, string> = {};
+      for (const attr of grandparent.attributes) {
+        if (
+          ['id', 'class', 'data-testid', 'data-test-id', 'name', 'role'].includes(attr.name)
+        ) {
+          gpAttributes[attr.name] = attr.value;
+        }
+      }
+      grandparentInfo = {
+        tagName: grandparent.tagName.toLowerCase(),
+        id: grandparent.id || undefined,
+        selector: grandparent.id ? `#${CSS.escape(grandparent.id)}` : undefined,
+        attributes: Object.keys(gpAttributes).length > 0 ? gpAttributes : undefined,
+      };
     }
 
     const siblings = Array.from(parent.children).filter(
@@ -565,12 +813,23 @@ export function getElementInfo(element: Element): ElementInfo {
     };
   }
 
-  // Generate XPath candidates
+  // Generate comprehensive XPath candidates
   const xpathCandidates = generateXPathCandidates(element);
   const role = element.getAttribute('role') || getImplicitRole(element);
   const ariaLabel =
     element.getAttribute('aria-label') ||
     element.getAttribute('aria-labelledby');
+
+  // Build stable attributes map with role and aria-label
+  const stableAttributes: Record<string, string> = {
+    ...attributes,
+  };
+  if (role && !stableAttributes['role']) {
+    stableAttributes['role'] = role;
+  }
+  if (ariaLabel && !stableAttributes['aria-label']) {
+    stableAttributes['aria-label'] = ariaLabel;
+  }
 
   return {
     tagName: element.tagName.toLowerCase(),
@@ -581,11 +840,7 @@ export function getElementInfo(element: Element): ElementInfo {
     xpath: xpathCandidates[0]?.xpath || generateXPath(element),
     xpathCandidates: xpathCandidates.map(c => c.xpath),
     textContent: element.textContent?.trim().substring(0, 100) || undefined,
-    attributes: {
-      ...attributes,
-      ...(role ? { role } : {}),
-      ...(ariaLabel ? { 'aria-label': ariaLabel } : {}),
-    },
+    attributes: stableAttributes,
     position: {
       x: rect.left + window.scrollX,
       y: rect.top + window.scrollY,
@@ -1075,4 +1330,179 @@ export function checkAccessibility(element: Element): {
       element.hasAttribute('tabindex') ||
       ['a', 'button', 'input', 'select', 'textarea'].includes(tagName),
   };
+}
+
+// ============================================================================
+// ADVANCED ELEMENT RESOLUTION (For AI Execution Fallback)
+// ============================================================================
+
+export interface ElementResolutionContext {
+  tagName?: string;
+  textContent?: string;
+  attributes?: Record<string, string>;
+  parentInfo?: {
+    tagName?: string;
+    id?: string;
+    selector?: string;
+    attributes?: Record<string, string>;
+  };
+  structuralInfo?: {
+    depth?: number;
+    siblingIndex?: number;
+    totalSiblings?: number;
+  };
+}
+
+/**
+ * Find element using comprehensive context hints
+ * This is the "agent_resolve" fallback strategy
+ */
+export function findElementByContext(
+  context: ElementResolutionContext,
+  root: Document = document
+): Element | null {
+  const { tagName, textContent, attributes, parentInfo, structuralInfo } = context;
+
+  // Strategy 1: Try data-testid if provided
+  if (attributes) {
+    for (const attr of ['data-testid', 'data-test-id', 'data-qa', 'data-cy']) {
+      if (attributes[attr]) {
+        const found = root.querySelector(`[${attr}="${CSS.escape(attributes[attr])}"]`);
+        if (found) return found;
+      }
+    }
+  }
+
+  // Strategy 2: Try ID if provided (Document only)
+  if (attributes?.id && root instanceof Document) {
+    const found = root.getElementById(attributes.id);
+    if (found) return found;
+  }
+
+  // Strategy 3: Try role + text combination (Playwright-style)
+  if (attributes?.role && textContent) {
+    const selector = `[role='${CSS.escape(attributes.role)}']:has-text('${CSS.escape(textContent.substring(0, 30))}')`;
+    const results = root.querySelectorAll(selector);
+    if (results.length === 1) return results[0];
+    if (results.length > 1) {
+      // Use structural info to narrow down
+      if (structuralInfo?.siblingIndex) {
+        const allWithRole = root.querySelectorAll(`[role='${CSS.escape(attributes.role)}']`);
+        if (allWithRole[structuralInfo.siblingIndex - 1]) {
+          return allWithRole[structuralInfo.siblingIndex - 1];
+        }
+      }
+      return results[0]; // Return first as fallback
+    }
+  }
+
+  // Strategy 4: Try XPath with normalize-space text
+  if (textContent && tagName) {
+    const escaped = textContent.replace(/'/g, '&apos;');
+    const xpath = `//${tagName}[normalize-space(.)='${escaped}']`;
+    const found = findByXPath(xpath);
+    if (found) return found;
+  }
+
+  // Strategy 5: Try just text content
+  if (textContent) {
+    const escaped = textContent.replace(/'/g, '&apos;');
+    const xpath = `//*[normalize-space(.)='${escaped}']`;
+    const found = findByXPath(xpath);
+    if (found) return found;
+  }
+
+  // Strategy 6: Try role alone
+  if (attributes?.role) {
+    const found = root.querySelector(`[role='${CSS.escape(attributes.role)}']`);
+    if (found) return found;
+  }
+
+  // Strategy 7: Try parent-based resolution
+  if (parentInfo?.id && root instanceof Document) {
+    const parent = root.getElementById(parentInfo.id);
+    if (parent) {
+      if (tagName) {
+        const child = parent.querySelector(tagName);
+        if (child) return child;
+      }
+      return parent.children[0] || null;
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Find all elements matching a role
+ */
+export function findElementsByRole(role: string): Element[] {
+  return Array.from(document.querySelectorAll(`[role='${CSS.escape(role)}']`));
+}
+
+/**
+ * Find element by text content within a container
+ */
+export function findByText(
+  text: string,
+  container: Element | Document = document,
+  exactMatch: boolean = true
+): Element | null {
+  const escaped = text.replace(/'/g, '&apos;');
+  const xpath = exactMatch
+    ? `.//*[normalize-space(.)='${escaped}']`
+    : `.//*[contains(normalize-space(.), '${escaped}')]`;
+
+  return document.evaluate(xpath, container, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null)
+    .singleNodeValue as Element | null;
+}
+
+/**
+ * Get element path for debugging/logging
+ */
+export function getElementPath(element: Element): string {
+  const parts: string[] = [];
+  let current: Element | null = element;
+
+  while (current && current !== document.body && current !== document.documentElement) {
+    let part = current.tagName.toLowerCase();
+    
+    if (current.id) {
+      part += `#${current.id}`;
+      parts.unshift(part);
+      break; // ID is unique, stop here
+    }
+    
+    const siblings = Array.from(current.parentElement?.children || [])
+      .filter(c => c.tagName === current!.tagName);
+    if (siblings.length > 1) {
+      const index = siblings.indexOf(current) + 1;
+      part += `:nth-child(${index})`;
+    }
+    
+    parts.unshift(part);
+    current = current.parentElement;
+  }
+
+  return parts.join(' > ');
+}
+
+/**
+ * Extract all meaningful text from element (including nested)
+ */
+export function getFullTextContent(element: Element): string {
+  return Array.from(element.childNodes)
+    .filter(node => node.nodeType === Node.TEXT_NODE)
+    .map(node => node.textContent?.trim() || '')
+    .filter(Boolean)
+    .join(' ')
+    .trim();
+}
+
+/**
+ * Check if element has visible text content
+ */
+export function hasVisibleText(element: Element): boolean {
+  const text = getFullTextContent(element);
+  return text.length > 0 && text.trim().length > 0;
 }

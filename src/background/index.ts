@@ -1373,10 +1373,10 @@ class BackgroundService {
     // Create a promise that resolves when video upload completes
     const videoPromise = new Promise<string | undefined>(resolve => {
       const timeout = setTimeout(() => {
-        console.warn(`[Background] Video upload timed out for ${tempId}`);
+        console.warn(`[Background] Video upload timed out for ${tempId} - continuing without video`);
         this.pendingVideoUpload.delete(tempId);
         resolve(undefined);
-      }, 30_000);
+      }, 60_000); // 60 seconds for video upload
 
       this.pendingVideoUpload.set(tempId, {
         promise: Promise.resolve(undefined), // placeholder
@@ -1493,26 +1493,45 @@ class BackgroundService {
     // Sort by timestamp
     allEvents.sort((a, b) => a.timestamp - b.timestamp);
 
+    // ALWAYS add the navigate step as the first step
+    const navigateStep = {
+      id: '0-nav',
+      action: 'navigate' as const,
+      value: startUrl,
+      description: `Navigate to ${startUrl || 'page'}`,
+      selector: 'body',
+      selectorCandidates: ['body'],
+      elementHints: {
+        tagName: 'body',
+      },
+    };
+
     // 3. Generate blueprint if we have events
     if (allEvents.length > 0) {
       try {
         // Save raw events as a temporary blueprint so it shows up immediately
+        // ALWAYS include the navigate step first
         const tempBlueprint = {
           id: tempId,
           name: `Recording ${new Date().toLocaleTimeString()}`,
-          steps: allEvents.map((e, i) => ({
-            id: i.toString(),
-            action: e.type,
-            selector: e.element.selector,
-            selectorCandidates: e.element.selectorCandidates || [
-              e.element.selector,
-            ],
-            elementHints: {
-              tagName: e.element.tagName,
-              textContent: e.element.textContent,
-              attributes: e.element.attributes,
-            },
-          })),
+          steps: [
+            navigateStep,
+            ...allEvents.map((e, i) => ({
+              id: (i + 1).toString(),
+              action: e.type,
+              selector: e.element.selector,
+              selectorCandidates: e.element.selectorCandidates || [
+                e.element.selector,
+              ],
+              elementHints: {
+                tagName: e.element.tagName,
+                textContent: e.element.textContent,
+                attributes: e.element.attributes,
+                parentInfo: e.element.parentInfo,
+                structuralInfo: e.element.structuralInfo,
+              },
+            })),
+          ],
           status: 'processing',
         } as any;
 
@@ -1645,10 +1664,23 @@ class BackgroundService {
         const failedBlueprint = {
           id: currentId,
           name: `Recording ${new Date().toLocaleTimeString()}`,
-          steps: [],
-          status: 'failed',
+          steps: [
+            navigateStep,
+            ...allEvents.map((e, i) => ({
+              id: (i + 1).toString(),
+              action: e.type,
+              selector: e.element.selector,
+              selectorCandidates: e.element.selectorCandidates || [e.element.selector],
+              elementHints: {
+                tagName: e.element.tagName,
+                textContent: e.element.textContent,
+                attributes: e.element.attributes,
+              },
+            })),
+          ],
+          status: 'failed' as const,
           error: e.message,
-        } as any;
+        };
         await chrome.storage.local.set({ lastBlueprint: failedBlueprint });
         this.broadcast({
           type: MessageType.BLUEPRINT_GENERATED,
@@ -1660,22 +1692,25 @@ class BackgroundService {
         });
       }
     } else {
-      console.warn('[Background] No events captured, clearing lastBlueprint');
-      await chrome.storage.local.remove('lastBlueprint');
+      console.warn('[Background] No events captured, but showing navigate step');
+      // Even with no events, show a blueprint with just the navigate step
+      const emptyBlueprint = {
+        id: tempId,
+        name: `Recording ${new Date().toLocaleTimeString()}`,
+        steps: [navigateStep],
+        status: 'ready' as const,
+        baseUrl: startUrl,
+        description: 'Recording with no interactions captured',
+      };
+      
+      await chrome.storage.local.set({ lastBlueprint: emptyBlueprint });
       this.broadcast({
         type: MessageType.BLUEPRINT_GENERATED,
-        data: { blueprint: null },
+        data: { blueprint: emptyBlueprint },
       });
       await this.notifyTab(tab?.id, {
         type: MessageType.BLUEPRINT_GENERATED,
-        data: { blueprint: null },
-      });
-
-      chrome.notifications.create({
-        type: 'basic',
-        iconUrl: 'icons/icon-48.png',
-        title: 'Recording Empty',
-        message: 'No interactions were captured. Please try again.',
+        data: { blueprint: emptyBlueprint },
       });
     }
 

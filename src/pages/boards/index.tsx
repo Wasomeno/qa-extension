@@ -162,12 +162,10 @@ export const BoardsPage: React.FC<BoardsPageProps> = ({
       <div className="flex-1 flex flex-col w-full overflow-y-auto">
         <div className="flex flex-1 flex-col w-full">
           {isLoading ? (
-            <div className="p-6">
-              <div className="flex gap-4 overflow-hidden">
-                <Skeleton className="h-[400px] w-[280px] rounded-lg" />
-                <Skeleton className="h-[400px] w-[280px] rounded-lg" />
-                <Skeleton className="h-[400px] w-[280px] rounded-lg" />
-              </div>
+            <div className="flex flex-1 gap-4 px-6 py-4 min-w-min overflow-hidden">
+              <Skeleton className="w-[280px] rounded-lg" />
+              <Skeleton className="w-[280px] rounded-lg" />
+              <Skeleton className="w-[280px] rounded-lg" />
             </div>
           ) : mappedBoard ? (
             <div className="flex flex-1 flex-col w-full border-b border-gray-100 last:border-0">

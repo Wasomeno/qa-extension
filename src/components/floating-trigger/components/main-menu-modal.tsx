@@ -4,9 +4,8 @@ import {
   List,
   Pin,
   PlusCircle,
-  X,
   SquareKanban,
-  Bot,
+  Home,
   FileText as FileIcon,
   RefreshCw,
 } from 'lucide-react';
@@ -61,7 +60,7 @@ interface MenuItem {
 }
 
 const MENU_ITEMS: MenuItem[] = [
-  { id: 'agent', label: 'Homepage', icon: Bot },
+  { id: 'agent', label: 'Homepage', icon: Home },
   { id: 'issues', label: 'Issues', icon: List },
   { id: 'boards', label: 'Issue Boards', icon: SquareKanban },
   { id: 'pinned', label: 'Pinned Issues', icon: Pin },

@@ -52,6 +52,8 @@ export class AIProcessor {
       text: e.element.textContent,
       value: e.value,
       url: e.url,
+      parentInfo: e.element.parentInfo,
+      structuralInfo: e.element.structuralInfo,
     }));
 
     return `You are a test automation expert specialized in Playwright. Your goal is to convert browser recording events into a ROCK-SOLID test blueprint that avoids flakiness.
@@ -62,61 +64,98 @@ Analyze the events and follow these STRICT guidelines for selector selection:
    - The first step in 'steps' MUST ALWAYS be a 'navigate' action to the starting URL: ${startUrl || events[0]?.url || 'the current page'}.
 
 2. SELECTOR PRIORITY (Highest to Lowest):
-   - Unique IDs: #submit-button
-   - Data Test Attributes: [data-testid="login-btn"]
-   - Semantic Roles + Text (Playwright-First): If you combine role and text, use the Playwright-style :has-text() pseudo-class.
+   - Priority 1 - Unique IDs: #submit-button
+   - Priority 2 - Data Test Attributes: [data-testid="login-btn"]
+   - Priority 3 - Semantic Roles + Text: Use Playwright-style :has-text() pseudo-class.
      Example: "li[role='menuitem']:has-text('Master Data')" or "a[role='link']:has-text('District')"
-   - Unique XPath: Use a stable XPath from 'xpathCandidates' if CSS is too generic.
+   - Priority 4 - Unique XPath: Use stable XPath from 'xpathCandidates' (prefer normalize-space() patterns)
 
-3. FORBIDDEN SELECTORS:
-   - NEVER use double quotes (") inside the 'selector' string. ALWAYS use single quotes ('). This is CRITICAL to avoid backslash escaping in JSON.
-     Correct: "//li[@role='menuitem']"
-     Incorrect: "//li[@role=\"menuitem\"]"
-   - NEVER use naked generic tags like "div", "span", "a", "li", "input" without identifying attributes or text.
-   - NEVER use naked roles like "[role='menuitem']" or "[role='link']" if they appear multiple times on a page.
-   - Avoid brittle nth-child selectors (e.g., "li:nth-child(9) > div") unless absolutely no other option exists.
+3. FORBIDDEN SELECTORS (CRITICAL):
+   - NEVER use double quotes (") inside the 'selector' string. ALWAYS use single quotes (').
+   - NEVER use naked generic tags like "div", "span", "a", "li", "input" without attributes or text.
+   - NEVER use naked roles like "[role='menuitem']" or "[role='link']" if they appear multiple times.
+   - Avoid brittle nth-child selectors (e.g., "li:nth-child(9) > div") unless last resort.
 
-4. STICKINESS & DISAMBIGUATION:
-   - Every selector you choose must be "strict". It should ideally point to exactly one element.
-   - Use 'elementHints' to provide extra context (tagName, textContent, attributes) to the execution engine.
-   - For 'has-text' filters, use the most unique part of the text.
+4. ELEMENT HINTS (CRITICAL FOR RELIABILITY):
+   ALWAYS populate 'elementHints' with ALL available information from the input event:
+   
+   - tagName: Element tag (e.g., 'button', 'a', 'li', 'div')
+   - textContent: Visible text (e.g., 'Submit Form', 'Settings')
+   - attributes: Key attributes ({ role: 'button', 'aria-label': 'Submit' })
+   - parentInfo: Parent element context { tagName: 'div', id: 'menu', selector: '#menu' }
+   - structuralInfo: DOM position context { depth: 3, siblingIndex: 2, totalSiblings: 5 }
+   
+   These hints are used as FALLBACK when selectors fail - make them comprehensive!
+
+5. BLUEPRINT STRUCTURE:
+   Return a JSON object with:
+   - name: Descriptive test name
+   - description: What this test does
+   - setup: Pre-test actions (login, navigate to base) - use empty array if not needed
+   - steps: Main test actions (your recorded interactions)
+   - teardown: Cleanup actions (logout, clear data) - use empty array if not needed
+   - parameters: Must be empty array []
+   - fallbackPolicy: 'agent_resolve' or 'fail' - how to handle selector failures
+
+6. FALLBACK POLICY:
+   - Set 'fallbackPolicy': 'agent_resolve' when selector might be fragile
+   - The engine will use elementHints for resolution when primary selector fails
+
+7. STICKINESS & DISAMBIGUATION:
+   - Every selector must be "strict" - ideally point to exactly ONE element
+   - For 'has-text' filters, use the most unique part of the text
+   - Prefer XPath with normalize-space() for text matching (handles whitespace variations)
 
 Input Events:
 ${JSON.stringify(eventsSummary, null, 2)}
 
-Return ONLY a JSON object matching this TypeScript interface:
-interface TestStep {
+Return ONLY a JSON object with these interfaces:
+
+TestStep {
   action: 'click' | 'type' | 'navigate' | 'select' | 'assert';
-  selector: string; // MANDATORY: Use Playwright-compatible selector with single quotes
-  selectorCandidates?: string[];
+  selector: string (MANDATORY - Playwright-compatible with single quotes);
+  selectorCandidates?: string[] (alternative selectors if primary fails);
+  xpath?: string (XPath alternative - prefer normalize-space patterns);
+  xpathCandidates?: string[];
   elementHints?: {
     tagName?: string;
     textContent?: string;
     attributes?: Record<string, string>;
+    parentInfo?: { tagName: string; id?: string; selector?: string };
+    structuralInfo?: { depth: number; siblingIndex: number; totalSiblings: number };
   };
-  value?: string; // For 'navigate', this MUST be the URL. For 'type' and 'select', this is the input value.
+  value?: string;
   description: string;
-  expectedValue?: string; // For 'assert', this is what the value/text should be.
-  assertionType?: 'equals' | 'contains' | 'exists' | 'not_exists'; // Default is 'exists' if not specified.
+  expectedValue?: string;
+  assertionType?: 'equals' | 'contains' | 'exists' | 'not_exists' | 'visible' | 'hidden';
+  isAssertion?: boolean;
+  fallbackPolicy?: 'agent_resolve' | 'fail';
+  timeoutMs?: number;
+  retryCount?: number;
 }
 
-interface TestBlueprint {
+TestBlueprint {
   name: string;
   description: string;
+  baseUrl?: string;
+  setup?: TestStep[];
   steps: TestStep[];
-  parameters: string[]; // Must always be an empty array
+  teardown?: TestStep[];
+  parameters: string[];
+  fallbackPolicy?: 'agent_resolve' | 'fail';
 }
 
-Guidelines:
-1. For 'navigate' actions, use the 'url' from the input event as the 'value' property.
-2. For 'type' actions, use the 'value' from the input event.
-3. Prefer Playwright selectors (using :has-text) from 'selectorCandidates' or stable XPaths.
-4. ENSURE ALL SELECTORS USE SINGLE QUOTES (') TO PREVENT BACKSLASH ESCAPING IN JSON.
-5. Add 'elementHints' from input event data for click/type/select/assert steps (tagName, textContent, attributes).
-6. Group repetitive clicks or inputs into logical high-level steps.
-7. If a step is a verification (e.g., checking if a login was successful by looking for a username or success message), use the 'assert' action with 'assertionType': 'contains' or 'equals' and set 'expectedValue' to the text recorded in that event.
-8. Do NOT parameterize values. Never output placeholders like \${baseUrl} or \${inputValue}. Preserve literal recorded values in 'value' and 'expectedValue'.
-9. Always return "parameters": [].
+FINAL RULES:
+1. 'navigate' actions: value = URL from the input event
+2. 'type' actions: value = typed text from input event
+3. 'click' actions: No value needed, use selector for target
+4. ENSURE ALL SELECTORS USE SINGLE QUOTES (') TO PREVENT BACKSLASH ESCAPING IN JSON
+5. Add comprehensive 'elementHints' for ALL non-navigate steps (they are critical fallbacks!)
+6. Group repetitive clicks/inputs into logical high-level steps
+7. For 'assert' actions: set assertionType and expectedValue
+8. Do NOT parameterize - preserve literal recorded values
+9. Always return "parameters": []
+10. Prefer XPath with normalize-space() for text-based matching (most robust)
 `;
   }
 }

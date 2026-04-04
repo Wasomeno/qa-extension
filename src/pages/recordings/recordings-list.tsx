@@ -31,6 +31,7 @@ import {
 } from '@/components/ui/tooltip';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Skeleton } from '@/components/ui/skeleton';
+import { EmptyState } from '@/components/ui/empty-state';
 import { TestBlueprint } from '@/types/recording';
 import { MessageType } from '@/types/messages';
 import { RecordingItem } from './components/recording-item';
@@ -308,64 +309,119 @@ export const RecordingsPage: React.FC<{
         {/* Content Area */}
         <div className="flex-1 flex flex-col min-w-0">
           <ScrollArea className="flex-1">
-            <div className="p-6">
-              {/* Processing Section */}
-              {lastBlueprint && (
-                <section className="mb-8 p-4 bg-zinc-50 border border-zinc-200 rounded-xl flex items-center justify-between">
-                  <div className="flex items-center gap-4">
-                    <div className="w-10 h-10 rounded-full bg-zinc-200 flex items-center justify-center shrink-0">
-                      {lastBlueprint.status === 'processing' ? (
-                        <Loader2 className="w-5 h-5 text-zinc-600 animate-spin" />
-                      ) : (
-                        <Terminal className="w-5 h-5 text-zinc-600" />
+            {isLoading ? (
+              <div className="p-6">
+                {/* Processing Section */}
+                {lastBlueprint && (
+                  <section className="mb-8 p-4 bg-zinc-50 border border-zinc-200 rounded-xl flex items-center justify-between">
+                    <div className="flex items-center gap-4">
+                      <div className="w-10 h-10 rounded-full bg-zinc-200 flex items-center justify-center shrink-0">
+                        {lastBlueprint.status === 'processing' ? (
+                          <Loader2 className="w-5 h-5 text-zinc-600 animate-spin" />
+                        ) : (
+                          <Terminal className="w-5 h-5 text-zinc-600" />
+                        )}
+                      </div>
+                      <div>
+                        <h3 className="font-semibold text-zinc-900">
+                          {lastBlueprint.status === 'processing'
+                            ? 'Processing Test Script...'
+                            : 'New Test Script Ready'}
+                        </h3>
+                        <p className="text-sm text-zinc-600">
+                          {lastBlueprint.status === 'processing'
+                            ? 'We are generating your test steps using AI...'
+                            : 'You have a recently captured flow. Save it to your library.'}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {lastBlueprint.status === 'ready' && (
+                        <>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="bg-white"
+                            onClick={() => handleRunTest(lastBlueprint)}
+                          >
+                            Preview
+                          </Button>
+                          <Button
+                            size="sm"
+                            className="bg-zinc-900 hover:bg-black text-white border-none"
+                            onClick={handleSaveLastBlueprint}
+                          >
+                            Save
+                          </Button>
+                        </>
                       )}
                     </div>
-                    <div>
-                      <h3 className="font-semibold text-zinc-900">
-                        {lastBlueprint.status === 'processing'
-                          ? 'Processing Test Script...'
-                          : 'New Test Script Ready'}
-                      </h3>
-                      <p className="text-sm text-zinc-600">
-                        {lastBlueprint.status === 'processing'
-                          ? 'We are generating your test steps using AI...'
-                          : 'You have a recently captured flow. Save it to your library.'}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    {lastBlueprint.status === 'ready' && (
-                      <>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="bg-white"
-                          onClick={() => handleRunTest(lastBlueprint)}
-                        >
-                          Preview
-                        </Button>
-                        <Button
-                          size="sm"
-                          className="bg-zinc-900 hover:bg-black text-white border-none"
-                          onClick={handleSaveLastBlueprint}
-                        >
-                          Save
-                        </Button>
-                      </>
-                    )}
+                  </section>
+                )}
+
+                {/* Recordings Section */}
+                <section>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {Array.from({ length: 8 }).map((_, i) => (
+                      <RecordingSkeleton key={i} />
+                    ))}
                   </div>
                 </section>
-              )}
+              </div>
+            ) : filteredItems.length > 0 ? (
+              <div className="p-6">
+                {/* Processing Section */}
+                {lastBlueprint && (
+                  <section className="mb-8 p-4 bg-zinc-50 border border-zinc-200 rounded-xl flex items-center justify-between">
+                    <div className="flex items-center gap-4">
+                      <div className="w-10 h-10 rounded-full bg-zinc-200 flex items-center justify-center shrink-0">
+                        {lastBlueprint.status === 'processing' ? (
+                          <Loader2 className="w-5 h-5 text-zinc-600 animate-spin" />
+                        ) : (
+                          <Terminal className="w-5 h-5 text-zinc-600" />
+                        )}
+                      </div>
+                      <div>
+                        <h3 className="font-semibold text-zinc-900">
+                          {lastBlueprint.status === 'processing'
+                            ? 'Processing Test Script...'
+                            : 'New Test Script Ready'}
+                        </h3>
+                        <p className="text-sm text-zinc-600">
+                          {lastBlueprint.status === 'processing'
+                            ? 'We are generating your test steps using AI...'
+                            : 'You have a recently captured flow. Save it to your library.'}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {lastBlueprint.status === 'ready' && (
+                        <>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="bg-white"
+                            onClick={() => handleRunTest(lastBlueprint)}
+                          >
+                            Preview
+                          </Button>
+                          <Button
+                            size="sm"
+                            className="bg-zinc-900 hover:bg-black text-white border-none"
+                            onClick={handleSaveLastBlueprint}
+                          >
+                            Save
+                          </Button>
+                        </>
+                      )}
+                    </div>
+                  </section>
+                )}
 
-              {/* Recordings Section */}
-              <section>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {isLoading ? (
-                    Array.from({ length: 8 }).map((_, i) => (
-                      <RecordingSkeleton key={i} />
-                    ))
-                  ) : filteredItems.length > 0 ? (
-                    filteredItems.map(item => (
+                {/* Recordings Section */}
+                <section>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {filteredItems.map(item => (
                       <div key={item.id} onClick={e => e.stopPropagation()}>
                         <RecordingItem
                           recording={item}
@@ -399,16 +455,18 @@ export const RecordingsPage: React.FC<{
                           portalContainer={portalContainer}
                         />
                       </div>
-                    ))
-                  ) : (
-                    <div className="col-span-full py-12 flex flex-col items-center justify-center text-gray-400 bg-gray-50/50 rounded-xl border-2 border-dashed border-gray-200">
-                      <Terminal className="w-12 h-12 mb-2 opacity-20" />
-                      <p>No test recordings found for this project</p>
-                    </div>
-                  )}
-                </div>
-              </section>
-            </div>
+                    ))}
+                  </div>
+                </section>
+              </div>
+            ) : (
+              <EmptyState
+                icon={Terminal}
+                title="No test recordings found"
+                description="Start a new recording to capture your browser interactions."
+                className="h-full min-h-[400px]"
+              />
+            )}
           </ScrollArea>
         </div>
       </div>

@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Skeleton } from '@/components/ui/skeleton';
+import { EmptyState } from '@/components/ui/empty-state';
 import {
   Tooltip,
   TooltipContent,
@@ -188,15 +189,19 @@ export const TestScenariosPage: React.FC<{
       <div className="flex flex-1 min-h-0 relative">
         <div className="flex-1 flex flex-col min-w-0">
           <ScrollArea className="flex-1">
-            <div className="p-6">
-              <section>
+            {isLoading ? (
+              <div className="p-6">
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {isLoading ? (
-                    Array.from({ length: 6 }).map((_, i) => (
-                      <ScenarioSkeleton key={i} />
-                    ))
-                  ) : filteredItems.length > 0 ? (
-                    filteredItems.map(item => (
+                  {Array.from({ length: 6 }).map((_, i) => (
+                    <ScenarioSkeleton key={i} />
+                  ))}
+                </div>
+              </div>
+            ) : filteredItems.length > 0 ? (
+              <div className="p-6">
+                <section>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {filteredItems.map(item => (
                       <div key={item.id} onClick={e => e.stopPropagation()}>
                         <ScenarioItem
                           scenario={item}
@@ -217,19 +222,18 @@ export const TestScenariosPage: React.FC<{
                           }}
                         />
                       </div>
-                    ))
-                  ) : (
-                    <div className="col-span-full py-12 flex flex-col items-center justify-center text-gray-400 bg-gray-50/50 rounded-xl border-2 border-dashed border-gray-200">
-                      <Terminal className="w-12 h-12 mb-2 opacity-20" />
-                      <p>
-                        No test scenarios found. Import an XLSX file to get
-                        started.
-                      </p>
-                    </div>
-                  )}
-                </div>
-              </section>
-            </div>
+                    ))}
+                  </div>
+                </section>
+              </div>
+            ) : (
+              <EmptyState
+                icon={Terminal}
+                title="No test scenarios found"
+                description="Import an XLSX file to get started."
+                className="h-full min-h-[400px]"
+              />
+            )}
           </ScrollArea>
         </div>
       </div>
