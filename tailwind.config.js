@@ -212,68 +212,90 @@ module.exports = {
         inner: 'inset 0 2px 4px 0 rgb(0 0 0 / 0.05)',
       },
       animation: {
-        'fade-in': 'fadeIn 0.2s ease-in-out',
-        'slide-up': 'slideUp 0.3s ease-out',
-        'slide-down': 'slideDown 0.3s ease-out',
-        'scale-in': 'scaleIn 0.2s ease-out',
+        // Component animations with modern easing
+        'fade-in': 'fadeIn 200ms cubic-bezier(0.16, 1, 0.3, 1)',
+        'fade-out': 'fadeOut 150ms cubic-bezier(0.4, 0, 1, 1)',
+        'scale-in': 'scaleIn 200ms cubic-bezier(0.16, 1, 0.3, 1)',
+        'scale-out': 'scaleOut 150ms cubic-bezier(0.4, 0, 1, 1)',
+        'slide-in-from-top': 'slideInFromTop 200ms cubic-bezier(0.16, 1, 0.3, 1)',
+        'slide-out-to-top': 'slideOutToTop 150ms cubic-bezier(0.4, 0, 1, 1)',
+        'slide-in-from-bottom': 'slideInFromBottom 200ms cubic-bezier(0.16, 1, 0.3, 1)',
+        'slide-out-to-bottom': 'slideOutToBottom 150ms cubic-bezier(0.4, 0, 1, 1)',
+        'slide-in-from-left': 'slideInFromLeft 200ms cubic-bezier(0.16, 1, 0.3, 1)',
+        'slide-out-to-left': 'slideOutToLeft 150ms cubic-bezier(0.4, 0, 1, 1)',
+        'slide-in-from-right': 'slideInFromRight 200ms cubic-bezier(0.16, 1, 0.3, 1)',
+        'slide-out-to-right': 'slideOutToRight 150ms cubic-bezier(0.4, 0, 1, 1)',
+        // Variant durations
+        'fade-in-fast': 'fadeIn 150ms cubic-bezier(0.16, 1, 0.3, 1)',
+        'fade-out-fast': 'fadeOut 100ms cubic-bezier(0.4, 0, 1, 1)',
+        'scale-in-fast': 'scaleIn 150ms cubic-bezier(0.16, 1, 0.3, 1)',
+        'scale-out-fast': 'scaleOut 100ms cubic-bezier(0.4, 0, 1, 1)',
+        'slide-in-slow': 'slideInFromRight 300ms cubic-bezier(0.16, 1, 0.3, 1)',
+        'slide-out-slow': 'slideOutToRight 250ms cubic-bezier(0.4, 0, 1, 1)',
+        'scale-in-slow': 'scaleIn 250ms cubic-bezier(0.16, 1, 0.3, 1)',
+        'scale-out-slow': 'scaleOut 200ms cubic-bezier(0.4, 0, 1, 1)',
+        // Accordion
+        'accordion-down': 'accordionDown 250ms cubic-bezier(0.16, 1, 0.3, 1)',
+        'accordion-up': 'accordionUp 200ms cubic-bezier(0.4, 0, 1, 1)',
+        // Pulse
         'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
-        'accordion-down': 'accordion-down 0.2s ease-out',
-        'accordion-up': 'accordion-up 0.2s ease-out',
       },
       keyframes: {
         fadeIn: {
-          '0%': {
-            opacity: '0',
-          },
-          '100%': {
-            opacity: '1',
-          },
+          '0%': { opacity: '0' },
+          '100%': { opacity: '1' },
         },
-        slideUp: {
-          '0%': {
-            transform: 'translateY(10px)',
-            opacity: '0',
-          },
-          '100%': {
-            transform: 'translateY(0)',
-            opacity: '1',
-          },
-        },
-        slideDown: {
-          '0%': {
-            transform: 'translateY(-10px)',
-            opacity: '0',
-          },
-          '100%': {
-            transform: 'translateY(0)',
-            opacity: '1',
-          },
+        fadeOut: {
+          '0%': { opacity: '1' },
+          '100%': { opacity: '0' },
         },
         scaleIn: {
-          '0%': {
-            transform: 'scale(0.95)',
-            opacity: '0',
-          },
-          '100%': {
-            transform: 'scale(1)',
-            opacity: '1',
-          },
+          '0%': { opacity: '0', transform: 'scale(0.95)' },
+          '100%': { opacity: '1', transform: 'scale(1)' },
         },
-        'accordion-down': {
-          from: {
-            height: '0',
-          },
-          to: {
-            height: 'var(--radix-accordion-content-height)',
-          },
+        scaleOut: {
+          '0%': { opacity: '1', transform: 'scale(1)' },
+          '100%': { opacity: '0', transform: 'scale(0.95)' },
         },
-        'accordion-up': {
-          from: {
-            height: 'var(--radix-accordion-content-height)',
-          },
-          to: {
-            height: '0',
-          },
+        slideInFromTop: {
+          '0%': { transform: 'translateY(-8px)', opacity: '0' },
+          '100%': { transform: 'translateY(0)', opacity: '1' },
+        },
+        slideOutToTop: {
+          '0%': { transform: 'translateY(0)', opacity: '1' },
+          '100%': { transform: 'translateY(-8px)', opacity: '0' },
+        },
+        slideInFromBottom: {
+          '0%': { transform: 'translateY(8px)', opacity: '0' },
+          '100%': { transform: 'translateY(0)', opacity: '1' },
+        },
+        slideOutToBottom: {
+          '0%': { transform: 'translateY(0)', opacity: '1' },
+          '100%': { transform: 'translateY(8px)', opacity: '0' },
+        },
+        slideInFromLeft: {
+          '0%': { transform: 'translateX(-8px)', opacity: '0' },
+          '100%': { transform: 'translateX(0)', opacity: '1' },
+        },
+        slideOutToLeft: {
+          '0%': { transform: 'translateX(0)', opacity: '1' },
+          '100%': { transform: 'translateX(-8px)', opacity: '0' },
+        },
+        slideInFromRight: {
+          '0%': { transform: 'translateX(8px)', opacity: '0' },
+          '100%': { transform: 'translateX(0)', opacity: '1' },
+        },
+        slideOutToRight: {
+          '0%': { transform: 'translateX(0)', opacity: '1' },
+          '100%': { transform: 'translateX(8px)', opacity: '0' },
+        },
+        accordionDown: {
+          from: { height: '0', opacity: '0' },
+          to: { height: 'var(--radix-accordion-content-height)', opacity: '1' },
+        },
+        accordionUp: {
+          from: { height: 'var(--radix-accordion-content-height)', opacity: '1' },
+          to: { height: '0', opacity: '0' },
         },
       },
     },

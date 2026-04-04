@@ -292,6 +292,15 @@
   }
 }
 
+/* Component Animations */
+/* Keyframes are now defined in tailwind.config.js */
+/* This file keeps any non-Tailwind animation utilities */
+
+/* Overlay backdrop blur utility */
+.backdrop-blur-sm {
+  backdrop-filter: blur(4px);
+}
+
 /* Custom utilities */
 @layer utilities {
   .text-balance {
