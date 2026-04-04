@@ -16,7 +16,6 @@ const DEFAULT_FORM_STATE: IssueFormState = {
   selectedProject: null,
   selectedLabels: [],
   selectedAssignee: null,
-  selectedRecording: null,
 };
 
 export const SingleIssueTab: React.FC<SingleIssueTabProps> = ({
@@ -43,24 +42,12 @@ export const SingleIssueTab: React.FC<SingleIssueTabProps> = ({
       selectedProject,
       selectedAssignee,
       selectedLabels,
-      selectedRecording,
     } = formState;
     if (!selectedProject || !title) return;
 
-    let finalDescription = description;
-
-    // Optional: Add recording steps as text if needed
-    if (selectedRecording) {
-      const stepsText = selectedRecording.steps
-        .map((s, i) => `${i + 1}. **${s.action}** ${s.value || ''} \`${s.selector}\``)
-        .join('\n');
-      
-      finalDescription = `${finalDescription}\n\n### Recorded Interaction Steps\n\n${stepsText}`;
-    }
-
     const request: CreateIssueRequest = {
       title,
-      description: finalDescription,
+      description,
       assignee_ids: selectedAssignee ? [selectedAssignee.id] : [],
       labels: selectedLabels.map(l => l.name),
     };

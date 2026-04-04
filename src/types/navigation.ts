@@ -1,5 +1,4 @@
 export type ViewType =
-  | 'dashboard'
   | 'issues'
   | 'issue-detail'
   | 'boards'

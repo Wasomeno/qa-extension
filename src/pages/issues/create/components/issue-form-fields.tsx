@@ -4,14 +4,10 @@ import { Input } from '@/components/ui/input';
 import { ProjectPicker } from './project-picker';
 import { LabelPicker } from './label-picker';
 import { AssigneePicker } from './assignee-picker';
-import { RecordingPicker } from './recording-picker';
 import { DescriptionEditor } from './description-editor';
 import { useGetProjects } from '../hooks/use-get-projects';
 import { useGetProjectLabels } from '../hooks/use-get-project-labels';
 import { useGetProjectMembers } from '../hooks/use-get-project-members';
-import { useQuery } from '@tanstack/react-query';
-import { listRecordings } from '@/api/recording';
-import { TestBlueprint } from '@/types/recording';
 import { toast } from 'sonner';
 
 export interface IssueFormState {
@@ -20,7 +16,6 @@ export interface IssueFormState {
   selectedProject: any | null;
   selectedLabels: any[];
   selectedAssignee: any | null;
-  selectedRecording: TestBlueprint | null;
 }
 
 interface IssueFormFieldsProps {
@@ -44,7 +39,6 @@ export const IssueFormFields: React.FC<IssueFormFieldsProps> = ({
     selectedProject,
     selectedLabels,
     selectedAssignee,
-    selectedRecording,
   } = formState;
 
   // --- Data Fetching ---
@@ -56,24 +50,12 @@ export const IssueFormFields: React.FC<IssueFormFieldsProps> = ({
   const { data: members = [], isLoading: isLoadingMembers } =
     useGetProjectMembers(selectedProject?.id);
 
-  const { data: recordings = [], isLoading: isLoadingRecordings } = useQuery({
-    queryKey: ['recordings-blueprints'],
-    queryFn: async () => {
-      return await listRecordings() as unknown as TestBlueprint[];
-    },
-  });
-
   const handleToggleLabel = (label: any) => {
     const isSelected = selectedLabels.some(l => l.id === label.id);
     const newLabels = isSelected
       ? selectedLabels.filter(l => l.id !== label.id)
       : [...selectedLabels, label];
     onChange({ selectedLabels: newLabels });
-  };
-
-  const handleSelectRecording = (recording: TestBlueprint | null) => {
-    onChange({ selectedRecording: recording });
-
   };
 
   const handleAIRequest = () => {
@@ -182,20 +164,6 @@ export const IssueFormFields: React.FC<IssueFormFieldsProps> = ({
             portalContainer={portalContainer}
           />
         </div>
-      </div>
-
-      {/* Recording */}
-      <div className="space-y-2">
-        <label className="text-sm font-medium text-gray-700">
-          Include a Recording
-        </label>
-        <RecordingPicker
-          recordings={recordings}
-          isLoading={isLoadingRecordings}
-          selectedRecording={selectedRecording}
-          onSelect={handleSelectRecording}
-          portalContainer={portalContainer}
-        />
       </div>
 
       {/* Description */}

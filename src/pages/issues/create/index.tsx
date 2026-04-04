@@ -1,6 +1,6 @@
 import React from 'react';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Tabs, TabsContent, SlidingTabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Info } from 'lucide-react';
 import {
   Tooltip,
@@ -52,13 +52,13 @@ export const CreateIssuePage: React.FC<CreateIssuePageProps> = ({
         </div>
 
         <Tabs defaultValue="issue" className="w-full">
-          <TabsList className="mb-6" variant="line">
-            <TabsTrigger value="issue" variant="line">Issue</TabsTrigger>
-            <TabsTrigger value="child" variant="line">Issue with Child</TabsTrigger>
-            <TabsTrigger value="ac" variant="line" disabled>
+          <SlidingTabsList className="mb-6" variant="line-sliding">
+            <TabsTrigger value="issue" variant="line-sliding">Issue</TabsTrigger>
+            <TabsTrigger value="child" variant="line-sliding">Issue with Child</TabsTrigger>
+            <TabsTrigger value="ac" variant="line-sliding" disabled>
               From Acceptance Criteria
             </TabsTrigger>
-          </TabsList>
+          </SlidingTabsList>
 
           <TabsContent value="issue" className="mt-0">
             <SingleIssueTab portalContainer={portalContainer} />

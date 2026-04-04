@@ -23,7 +23,6 @@ const DEFAULT_FORM_STATE: IssueFormState = {
   selectedProject: null,
   selectedLabels: [],
   selectedAssignee: null,
-  selectedRecording: null,
 };
 
 export const IssueWithChildTab: React.FC<IssueWithChildTabProps> = ({
@@ -47,16 +46,6 @@ export const IssueWithChildTab: React.FC<IssueWithChildTabProps> = ({
     },
   });
 
-  const processIssueRecording = async (state: IssueFormState): Promise<string> => {
-    if (!state.selectedRecording) return state.description;
-
-    const stepsText = state.selectedRecording.steps
-      .map((s, i) => `${i + 1}. **${s.action}** ${s.value || ''} \`${s.selector}\``)
-      .join('\n');
-    
-    return `${state.description}\n\n### Recorded Interaction Steps\n\n${stepsText}`;
-  };
-
   const handleCreateParentAndChildren = async () => {
     const {
       title,
@@ -78,20 +67,16 @@ export const IssueWithChildTab: React.FC<IssueWithChildTabProps> = ({
 
     setIsUploading(true);
     try {
-      const finalParentDescription = await processIssueRecording(parentIssueState);
-      
-      const finalChildIssues = await Promise.all(
-        childIssues.map(async (child) => ({
-          title: child.title,
-          description: await processIssueRecording(child),
-          assignee_ids: child.selectedAssignee ? [child.selectedAssignee.id] : [],
-          labels: child.selectedLabels.map(l => l.name),
-        }))
-      );
+      const finalChildIssues = childIssues.map((child) => ({
+        title: child.title,
+        description: child.description,
+        assignee_ids: child.selectedAssignee ? [child.selectedAssignee.id] : [],
+        labels: child.selectedLabels.map(l => l.name),
+      }));
 
       const request: CreateIssueWithChildRequest = {
         title,
-        description: finalParentDescription,
+        description,
         assignee_ids: selectedAssignee ? [selectedAssignee.id] : [],
         labels: selectedLabels.map(l => l.name),
         child_issues: finalChildIssues,
