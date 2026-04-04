@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  LayoutDashboard,
   List,
   Pin,
   PlusCircle,
@@ -24,7 +23,6 @@ import { ViewType } from '@/types/navigation';
 import { useSession } from '@/contexts/session-context';
 
 // Updated imports from new page structure
-import { DashboardPage } from '@/pages/dashboard';
 import { IssuesPage } from '@/pages/issues';
 import { BoardsPage } from '@/pages/boards';
 import { PinnedPage } from '@/pages/pinned';
@@ -63,18 +61,17 @@ interface MenuItem {
 }
 
 const MENU_ITEMS: MenuItem[] = [
-  { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+  { id: 'agent', label: 'Homepage', icon: Bot },
   { id: 'issues', label: 'Issues', icon: List },
   { id: 'boards', label: 'Issue Boards', icon: SquareKanban },
   { id: 'pinned', label: 'Pinned Issues', icon: Pin },
   { id: 'recordings', label: 'Recordings', icon: FileIcon },
   { id: 'test-scenarios', label: 'Test Scenarios', icon: FileIcon },
   { id: 'create-issue', label: 'Create Issue', icon: PlusCircle },
-  { id: 'agent', label: 'QA Agent', icon: Bot },
 ];
 
-const MODAL_WIDTH = '900px';
-const MODAL_HEIGHT = '630px';
+const MODAL_WIDTH = '1100px';
+const MODAL_HEIGHT = '700px';
 const MODAL_MAX_WIDTH = '85.5vw';
 const MODAL_MAX_HEIGHT = '81vh';
 
@@ -136,7 +133,7 @@ const MainMenuInner: React.FC<MainMenuModalProps> = ({
     if (isOpen) {
       if (initialIssue) {
         reset('issues', initialIssue);
-      } else if (initialView && initialView !== 'dashboard') {
+      } else if (initialView) {
         reset(initialView);
       }
     }
@@ -148,8 +145,6 @@ const MainMenuInner: React.FC<MainMenuModalProps> = ({
 
   const renderContent = () => {
     switch (current.view) {
-      case 'dashboard':
-        return <DashboardPage portalContainer={container} />;
       case 'issues':
       case 'issue-detail':
         return (
@@ -178,7 +173,7 @@ const MainMenuInner: React.FC<MainMenuModalProps> = ({
       case 'test-scenarios':
         return <TestScenariosPage portalContainer={container} />;
       default:
-        return <DashboardPage />;
+        return <AgentPage portalContainer={container} />;
     }
   };
 
@@ -364,7 +359,7 @@ const MainMenuInner: React.FC<MainMenuModalProps> = ({
 
 const MainMenuModal: React.FC<MainMenuModalProps> = props => {
   return (
-    <NavigationProvider initialView={props.initialView || 'dashboard'}>
+    <NavigationProvider initialView={props.initialView || 'agent'}>
       <AnimatePresence>
         {props.isOpen && <MainMenuInner {...props} />}
       </AnimatePresence>

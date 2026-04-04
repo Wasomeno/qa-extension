@@ -49,7 +49,7 @@ const FloatingTriggerInner: React.FC<FloatingTriggerProps> = ({ onClose }) => {
     y: number;
   } | null>(null);
   const [selectedIssue, setSelectedIssue] = useState<any | null>(null);
-  const [initialView, setInitialView] = useState<ViewType>('dashboard');
+  const [initialView, setInitialView] = useState<ViewType>('agent');
   const [hiddenReason, setHiddenReason] = useState<'auto' | 'manual' | null>(
     null
   );
@@ -176,9 +176,8 @@ const FloatingTriggerInner: React.FC<FloatingTriggerProps> = ({ onClose }) => {
     setActiveFeature(action);
     if (action === 'menu') {
       // When opening the menu via the main menu icon,
-      // we don't want to force a dashboard reset anymore
-      // so that it preserves the last state.
-      setInitialView('dashboard');
+      // preserve the last state by not resetting.
+      // setInitialView('agent');
     }
   };
 
