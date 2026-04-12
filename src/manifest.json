@@ -20,7 +20,8 @@
   "host_permissions": [
     "<all_urls>",
     "https://gitlab.com/*",
-    "https://*.gitlab.io/*"
+    "https://*.gitlab.io/*",
+    "https://playground-qa-extension.online/*"
   ],
   "content_scripts": [
     {
@@ -62,7 +63,7 @@
     }
   ],
   "content_security_policy": {
-    "extension_pages": "script-src 'self'; object-src 'self'; connect-src 'self' https://generativelanguage.googleapis.com https://gitlab.com http://localhost:3000 https://playground-qa-extension.online https://*.r2.cloudflarestorage.com https://*.r2.dev; media-src 'self' https://*.r2.dev; img-src 'self' data: https://*.r2.dev;"
+    "extension_pages": "script-src 'self'; object-src 'self'; connect-src 'self' https://generativelanguage.googleapis.com https://gitlab.com http://localhost:3000 https://playground-qa-extension.online https://*.r2.cloudflarestorage.com https://*.r2.dev; media-src 'self' https://*.r2.dev; img-src 'self' data: https://*.r2.dev https://gitlab.com https://*.gitlab.com https://*.gitlab.io https://*.gitlabusercontent.com https://secure.gravatar.com https://www.gravatar.com;"
   },
   "icons": {
     "16": "icons/icon16.png",

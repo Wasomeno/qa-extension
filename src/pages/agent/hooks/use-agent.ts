@@ -1,41 +1,51 @@
-import { useState, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { Message } from '../components/chat-message';
-import { useSessionUser } from '@/hooks/use-session-user';
 import { MessageType } from '@/types/messages';
+import { useStreamEvents, StreamEvent } from './use-stream-events';
 
-export const useAgent = () => {
-  const { user } = useSessionUser();
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      id: 'init',
-      role: 'assistant',
-      content:
-        "Hello! I'm your QA Assistant. I can help you manage GitLab issues, browse projects, and run your recorded automation tests. What can I help you with?",
-      timestamp: Date.now(),
-    },
-  ]);
+interface UseAgentOptions {
+  sessionId?: string;
+  initialMessages?: Message[];
+  onMessagesChange?: (messages: Message[]) => void;
+}
 
+export const useAgent = (options?: UseAgentOptions) => {
+  const [messages, setMessages] = useState<Message[]>(options?.initialMessages || []);
   const [isAgentLoading, setIsAgentLoading] = useState(false);
   const [progressMessage, setProgressMessage] = useState<string | null>(null);
-  const [sessionId] = useState(() => crypto.randomUUID());
+  const [sessionId] = useState(
+    () => options?.sessionId || crypto.randomUUID()
+  );
 
-  // Update initial message with user name found
+  // Track which session is currently being processed for stream events
+  const activeSessionIdRef = useRef<string | null>(null);
+
+  // Subscribe to stream events to update progress message dynamically
+  // We don't filter by resourceId so we receive all events
+  useStreamEvents({
+    enabled: isAgentLoading,
+    onEvent: useCallback((event: StreamEvent) => {
+      // Only process thinking/stage events during agent processing
+      if (event.type === 'agent' && event.stage === 'thinking') {
+        // Update progress message with actual server-side status
+        if (event.message && event.message !== '[Agent completed]') {
+          setProgressMessage(event.message);
+        }
+      }
+      // Handle done/error stages
+      if (event.type === 'agent' && (event.stage === 'done' || event.stage === 'error')) {
+        // The final event will come through the SSE port connection
+        // This just helps keep UI in sync
+      }
+    }, []),
+  });
+
+  // Notify parent when messages change
   useEffect(() => {
-    if (user?.name) {
-      setMessages(prev =>
-        prev.map(msg =>
-          msg.id === 'init'
-            ? {
-                ...msg,
-                content: `Hello ${user.name}! I'm your QA Assistant. I can help you manage GitLab issues, browse projects, and run your recorded automation tests. What can I help you with?`,
-              }
-            : msg
-        )
-      );
-    }
-  }, [user?.name]);
+    options?.onMessagesChange?.(messages);
+  }, [messages, options]);
 
-  const sendMessage = async (content: string, _files: File[] = []) => {
+  const sendMessage = useCallback(async (content: string, _files: File[] = []) => {
     const userMsg: Message = {
       id: Date.now().toString(),
       role: 'user',
@@ -45,6 +55,7 @@ export const useAgent = () => {
     setMessages(prev => [...prev, userMsg]);
     setIsAgentLoading(true);
     setProgressMessage('Agent is thinking...');
+    activeSessionIdRef.current = sessionId;
 
     const responseId = (Date.now() + 1).toString();
 
@@ -55,7 +66,6 @@ export const useAgent = () => {
         const { event, data } = msg;
         console.log(`[useAgent] Received Port Event: "${event}"`, data);
 
-        console.log('EVENT MESSAGe', msg);
         switch (event) {
           case 'progress':
             if (data && data.message) {
@@ -68,6 +78,7 @@ export const useAgent = () => {
             console.log('[useAgent] Final response received. Data:', data);
             setIsAgentLoading(false);
             setProgressMessage(null);
+            activeSessionIdRef.current = null;
 
             const content =
               data?.content ||
@@ -109,6 +120,7 @@ export const useAgent = () => {
             console.error('[useAgent] Error event received:', data);
             setIsAgentLoading(false);
             setProgressMessage(null);
+            activeSessionIdRef.current = null;
             setMessages(prev => [
               ...prev,
               {
@@ -134,6 +146,7 @@ export const useAgent = () => {
               '[useAgent] Port disconnected while loading, clearing loading state'
             );
             setProgressMessage(null);
+            activeSessionIdRef.current = null;
             return false;
           }
           return current;
@@ -156,13 +169,21 @@ export const useAgent = () => {
       ]);
       setIsAgentLoading(false);
       setProgressMessage(null);
+      activeSessionIdRef.current = null;
     }
-  };
+  }, [sessionId]);
+
+  // Reset messages
+  const resetMessages = useCallback((newMessages?: Message[]) => {
+    setMessages(newMessages || []);
+  }, []);
 
   return {
     messages,
     isAgentLoading,
     progressMessage,
     sendMessage,
+    resetMessages,
+    sessionId,
   };
 };
