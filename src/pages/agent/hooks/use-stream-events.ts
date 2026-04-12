@@ -26,64 +26,23 @@ interface UseStreamEventsOptions {
 
 /**
  * Subscribes to the unified SSE stream endpoint and calls onEvent for each event.
- * Events are filtered server-side by resourceId and type if provided.
  */
 export const useStreamEvents = (options: UseStreamEventsOptions = {}) => {
   const { resourceId, type, onEvent, enabled = true } = options;
   const eventSourceRef = useRef<EventSource | null>(null);
   const onEventRef = useRef(onEvent);
   onEventRef.current = onEvent;
-  const [sessionId, setSessionId] = useState<string | null>(null);
-
-  // Get session ID from cookie
-  useEffect(() => {
-    try {
-      // Check if chrome.cookies API is available
-      if (!chrome.cookies) {
-        console.log('[useStreamEvents] chrome.cookies not available, skipping session ID retrieval');
-        return;
-      }
-
-      // Use chrome.cookies API to get session_id from the backend domain
-      chrome.cookies.get({
-        url: 'https://playground-qa-extension.online',
-        name: 'session_id',
-      }).then(cookie => {
-        if (cookie?.value) {
-          setSessionId(cookie.value);
-        } else {
-          console.log('[useStreamEvents] No session_id cookie found');
-        }
-      }).catch(err => {
-        console.log('[useStreamEvents] Failed to get cookie:', err);
-      });
-    } catch (err) {
-      console.log('[useStreamEvents] Error in cookie retrieval:', err);
-    }
-  }, []);
 
   const connect = useCallback(() => {
-    if (!sessionId) {
-      console.log('[useStreamEvents] No session ID available, skipping connection');
-      return;
-    }
-
-    // Build URL with optional filters and session_id for auth
+    // Build URL with optional filters - endpoint is public (no auth needed)
     const params = new URLSearchParams();
-    params.set('session_id', sessionId);
     if (resourceId) params.set('resourceId', resourceId);
     if (type) params.set('type', type);
 
-    const url = `https://playground-qa-extension.online/api/stream?${params.toString()}`;
+    const url = `https://playground-qa-extension.online/api/stream${params.toString() ? `?${params.toString()}` : ''}`;
     console.log('[useStreamEvents] Connecting to:', url);
 
-    let eventSource: EventSource;
-    try {
-      eventSource = new EventSource(url);
-    } catch (err) {
-      console.error('[useStreamEvents] Failed to create EventSource:', err);
-      return;
-    }
+    const eventSource = new EventSource(url);
     eventSourceRef.current = eventSource;
 
     eventSource.onopen = () => {
@@ -104,9 +63,8 @@ export const useStreamEvents = (options: UseStreamEventsOptions = {}) => {
 
     eventSource.onerror = (error) => {
       console.warn('[useStreamEvents] SSE error:', error);
-      // EventSource will automatically attempt to reconnect
     };
-  }, [sessionId, resourceId, type]);
+  }, [resourceId, type]);
 
   const disconnect = useCallback(() => {
     if (eventSourceRef.current) {
