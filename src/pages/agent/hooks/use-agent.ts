@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Message } from '../components/chat-message';
 import { MessageType } from '@/types/messages';
 import { useStreamEvents, StreamEvent } from './use-stream-events';
@@ -24,11 +24,11 @@ export const useAgent = (options?: UseAgentOptions) => {
   // We don't filter by resourceId so we receive all events
   useStreamEvents({
     enabled: isAgentLoading,
-    onEvent: useCallback((event: StreamEvent) => {
+    onEvent: (event: StreamEvent) => {
       // Only process thinking/stage events during agent processing
       if (event.type === 'agent' && event.stage === 'thinking') {
         // Update progress message with actual server-side status
-        if (event.message && event.message !== '[Agent completed]') {
+        if (event.message && event.message !== '[Agent completed]' && event.message !== 'Agent completed') {
           setProgressMessage(event.message);
         }
       }
@@ -37,7 +37,7 @@ export const useAgent = (options?: UseAgentOptions) => {
         // The final event will come through the SSE port connection
         // This just helps keep UI in sync
       }
-    }, []),
+    },
   });
 
   // Notify parent when messages change

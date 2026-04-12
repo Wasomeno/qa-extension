@@ -37,17 +37,29 @@ export const useStreamEvents = (options: UseStreamEventsOptions = {}) => {
 
   // Get session ID from cookie
   useEffect(() => {
-    // Use chrome.cookies API to get session_id from the backend domain
-    chrome.cookies.get({
-      url: 'https://playground-qa-extension.online',
-      name: 'session_id',
-    }).then(cookie => {
-      if (cookie?.value) {
-        setSessionId(cookie.value);
+    try {
+      // Check if chrome.cookies API is available
+      if (!chrome.cookies) {
+        console.log('[useStreamEvents] chrome.cookies not available, skipping session ID retrieval');
+        return;
       }
-    }).catch(err => {
-      console.log('[useStreamEvents] Failed to get cookie:', err);
-    });
+
+      // Use chrome.cookies API to get session_id from the backend domain
+      chrome.cookies.get({
+        url: 'https://playground-qa-extension.online',
+        name: 'session_id',
+      }).then(cookie => {
+        if (cookie?.value) {
+          setSessionId(cookie.value);
+        } else {
+          console.log('[useStreamEvents] No session_id cookie found');
+        }
+      }).catch(err => {
+        console.log('[useStreamEvents] Failed to get cookie:', err);
+      });
+    } catch (err) {
+      console.log('[useStreamEvents] Error in cookie retrieval:', err);
+    }
   }, []);
 
   const connect = useCallback(() => {
@@ -65,7 +77,13 @@ export const useStreamEvents = (options: UseStreamEventsOptions = {}) => {
     const url = `https://playground-qa-extension.online/api/stream?${params.toString()}`;
     console.log('[useStreamEvents] Connecting to:', url);
 
-    const eventSource = new EventSource(url);
+    let eventSource: EventSource;
+    try {
+      eventSource = new EventSource(url);
+    } catch (err) {
+      console.error('[useStreamEvents] Failed to create EventSource:', err);
+      return;
+    }
     eventSourceRef.current = eventSource;
 
     eventSource.onopen = () => {
@@ -76,14 +94,16 @@ export const useStreamEvents = (options: UseStreamEventsOptions = {}) => {
       try {
         const data: StreamEvent = JSON.parse(event.data);
         console.log('[useStreamEvents] Received event:', data);
-        onEventRef.current?.(data);
+        if (onEventRef.current) {
+          onEventRef.current(data);
+        }
       } catch (e) {
-        console.error('[useStreamEvents] Failed to parse event:', e);
+        console.warn('[useStreamEvents] Failed to parse event:', e);
       }
     };
 
     eventSource.onerror = (error) => {
-      console.error('[useStreamEvents] SSE error:', error);
+      console.warn('[useStreamEvents] SSE error:', error);
       // EventSource will automatically attempt to reconnect
     };
   }, [sessionId, resourceId, type]);
