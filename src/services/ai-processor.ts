@@ -16,7 +16,7 @@ export class AIProcessor {
     startUrl?: string
   ): Promise<TestBlueprint> {
     const model = this.genAI.getGenerativeModel({
-      model: 'gemini-3.1-flash-lite-preview',
+      model: 'gemini-3-flash-preview',
       generationConfig: {
         responseMimeType: 'application/json',
       },
@@ -66,28 +66,38 @@ Analyze the events and follow these STRICT guidelines for selector selection:
 2. SELECTOR PRIORITY (Highest to Lowest):
    - Priority 1 - Unique IDs: #submit-button
    - Priority 2 - Data Test Attributes: [data-testid="login-btn"]
-   - Priority 3 - Semantic Roles + Text: Use Playwright-style :has-text() pseudo-class.
+   - Priority 3 - Name/Type attributes: input[name='email'], input[type='text']
+   - Priority 4 - Semantic Roles + Text: Use Playwright-style :has-text() pseudo-class.
      Example: "li[role='menuitem']:has-text('Master Data')" or "a[role='link']:has-text('District')"
-   - Priority 4 - Unique XPath: Use stable XPath from 'xpathCandidates' (prefer normalize-space() patterns)
+   - Priority 5 - Unique XPath: Use stable XPath from 'xpathCandidates' (prefer normalize-space() patterns)
 
-3. FORBIDDEN SELECTORS (CRITICAL):
+3. SELECTOR CANDIDATES MUST BE UNIQUE PER STEP:
+   - CRITICAL: Each step MUST have unique, element-specific selectorCandidates
+   - Do NOT reuse the same generic selectors (like "input[role='textbox']") for multiple steps
+   - For an email input, include: ["input[name='email']", "input#email", "[name='email']"]
+   - For a password input, include: ["input[name='password']", "input#password", "[name='password']"]
+   - For a submit button, include: ["button[type='submit']", "button:has-text('Login')", "#login-btn"]
+   - Each element has different attributes (name, id, type, text) - use these differences!
+   - The selectorCandidates array should help the system find alternatives if the primary fails
+
+4. FORBIDDEN SELECTORS (CRITICAL):
    - NEVER use double quotes (") inside the 'selector' string. ALWAYS use single quotes (').
    - NEVER use naked generic tags like "div", "span", "a", "li", "input" without attributes or text.
    - NEVER use naked roles like "[role='menuitem']" or "[role='link']" if they appear multiple times.
    - Avoid brittle nth-child selectors (e.g., "li:nth-child(9) > div") unless last resort.
 
-4. ELEMENT HINTS (CRITICAL FOR RELIABILITY):
+5. ELEMENT HINTS (CRITICAL FOR RELIABILITY):
    ALWAYS populate 'elementHints' with ALL available information from the input event:
-   
+
    - tagName: Element tag (e.g., 'button', 'a', 'li', 'div')
    - textContent: Visible text (e.g., 'Submit Form', 'Settings')
    - attributes: Key attributes ({ role: 'button', 'aria-label': 'Submit' })
    - parentInfo: Parent element context { tagName: 'div', id: 'menu', selector: '#menu' }
    - structuralInfo: DOM position context { depth: 3, siblingIndex: 2, totalSiblings: 5 }
-   
+
    These hints are used as FALLBACK when selectors fail - make them comprehensive!
 
-5. BLUEPRINT STRUCTURE:
+6. BLUEPRINT STRUCTURE:
    Return a JSON object with:
    - name: Descriptive test name
    - description: What this test does
@@ -97,11 +107,11 @@ Analyze the events and follow these STRICT guidelines for selector selection:
    - parameters: Must be empty array []
    - fallbackPolicy: 'agent_resolve' or 'fail' - how to handle selector failures
 
-6. FALLBACK POLICY:
+7. FALLBACK POLICY:
    - Set 'fallbackPolicy': 'agent_resolve' when selector might be fragile
    - The engine will use elementHints for resolution when primary selector fails
 
-7. STICKINESS & DISAMBIGUATION:
+8. STICKINESS & DISAMBIGUATION:
    - Every selector must be "strict" - ideally point to exactly ONE element
    - For 'has-text' filters, use the most unique part of the text
    - Prefer XPath with normalize-space() for text matching (handles whitespace variations)

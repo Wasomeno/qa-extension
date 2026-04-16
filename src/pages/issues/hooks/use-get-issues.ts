@@ -11,7 +11,7 @@ const LABEL_NAMES = {
 };
 
 export function useGetIssues(filters?: Partial<IssueFilterState>) {
-  const { data: currentUser } = useGetLoggedInUser();
+  const { data: currentUser, isLoading: isUserLoading } = useGetLoggedInUser();
 
   const query = useQuery({
     queryKey: [
@@ -23,7 +23,8 @@ export function useGetIssues(filters?: Partial<IssueFilterState>) {
       filters?.issueIds,
       filters?.assigneeIds,
       filters?.quickFilters,
-      currentUser?.id,
+      // Use a stable user identifier or 'anonymous' as fallback
+      currentUser?.id ?? 'anonymous',
     ],
     queryFn: () => {
       // If issueIds is provided but empty, return empty result immediately to avoid fetching all issues
@@ -105,7 +106,11 @@ export function useGetIssues(filters?: Partial<IssueFilterState>) {
         });
       }
     },
-    enabled: true,
+    // Don't run the query while the user is still loading to prevent double requests
+    // The query will run once the user is loaded (or immediately if using cached user data)
+    enabled: !isUserLoading,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
   });
 
   return {

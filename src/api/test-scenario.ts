@@ -73,4 +73,17 @@ export const testScenarioApi = {
     if (!response.success) throw new Error(response.error);
     return response.data!;
   },
+
+  bulkDeleteScenarios: async (ids: string[]) => {
+    const response = await api.post<{
+      message: string;
+      deletedCount: number;
+      notFound: string[];
+      errors: string[];
+    }>('/test-scenarios/bulk-delete', {
+      body: { ids },
+    });
+    if (!response.success) throw new Error(response.error);
+    return response.data!;
+  },
 };

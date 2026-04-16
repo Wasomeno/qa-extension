@@ -6,6 +6,8 @@ export function useGetProjectLabels(projectId?: number) {
     queryKey: ['project-labels', projectId],
     queryFn: () => getProjectLabels(projectId!),
     enabled: !!projectId,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
   });
 
   const labels = query.data?.data || [];

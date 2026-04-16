@@ -48,6 +48,8 @@ export const usePinnedIssues = () => {
     queryFn: () => getIssues({ issue_ids: allIids }),
     enabled: isStorageLoaded && allIids.length > 0,
     staleTime: 1000 * 60 * 5, // 5 mins
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
   });
 
   const isLoading = !isStorageLoaded || (allIids.length > 0 && isFetching);

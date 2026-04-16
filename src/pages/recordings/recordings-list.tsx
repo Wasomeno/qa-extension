@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Terminal,
@@ -8,10 +8,12 @@ import {
   LayoutGrid,
   List as ListIcon,
   Info,
+  Trash2,
+  X,
 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
-import { getProjects } from '@/api/project';
-import { listRecordings } from '@/api/recording';
+import { toast } from 'sonner';
+import { listRecordings, bulkDeleteRecordings } from '@/api/recording';
 import { storageService } from '@/services/storage';
 import {
   generatePlaywrightTest,
@@ -23,6 +25,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Separator } from '@/components/ui/separator';
 import { useNavigation } from '@/contexts/navigation-context';
+import { useLocalStorage } from '@/hooks/use-local-storage';
+
 import {
   Tooltip,
   TooltipContent,
@@ -36,7 +40,8 @@ import { TestBlueprint } from '@/types/recording';
 import { MessageType } from '@/types/messages';
 import { RecordingItem } from './components/recording-item';
 import { DetailsPanel } from './components/details-panel';
-import { SearchablePicker } from '../issues/components/searchable-picker';
+import { ProjectSelect } from '@/components/project-select';
+import { StyledCheckbox, SelectAllCheckbox } from '@/components/ui/styled-checkbox';
 import { cn } from '@/lib/utils';
 
 const RecordingSkeleton = () => {
@@ -64,8 +69,23 @@ export const RecordingsPage: React.FC<{
   portalContainer?: HTMLElement | null;
 }> = ({ portalContainer }) => {
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedProjectId, setSelectedProjectId] = useState<string>('all');
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [isDeleting, setIsDeleting] = useState(false);
   const { push } = useNavigation();
+
+  // Track individual deletion states
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  // Use local project state for this page
+  const [selectedProjectId, setSelectedProjectId] = useLocalStorage<string | null>(
+    'qa-extension-recordings-project-id',
+    null
+  );
+
+  const handleProjectSelect = (project: { id: number; name: string } | null) => {
+    setSelectedProjectId(project?.id.toString() ?? null);
+  };
 
   const {
     data: blueprints = [],
@@ -79,11 +99,17 @@ export const RecordingsPage: React.FC<{
         order: 'desc',
       };
 
-      if (selectedProjectId !== 'all' && selectedProjectId !== 'unassigned') {
+      if (selectedProjectId) {
         params.project_id = selectedProjectId;
       }
 
-      return (await listRecordings(params)) as unknown as TestBlueprint[];
+      const result = await listRecordings(params);
+      console.log('API Response for recordings:', result);
+      // Handle both array response and paginated response { data: [...] }
+      if (result && typeof result === 'object' && !Array.isArray(result) && 'data' in result) {
+        return (result as any).data || [];
+      }
+      return Array.isArray(result) ? result : [];
     },
   });
 
@@ -126,14 +152,7 @@ export const RecordingsPage: React.FC<{
     return () => chrome.storage.onChanged.removeListener(handleStorageChange);
   }, [refetchBlueprints, refetchLastBlueprint]);
 
-  const { data: projectsData, isLoading: isProjectsLoading } = useQuery({
-    queryKey: ['projects'],
-    queryFn: getProjects,
-  });
-
-  const isLoading = isBlueprintsLoading || isProjectsLoading;
-
-  const projects = projectsData?.data?.projects || [];
+  const isLoading = isBlueprintsLoading;
 
   const handleRunTest = (blueprint: TestBlueprint) => {
     chrome.runtime.sendMessage({
@@ -143,15 +162,72 @@ export const RecordingsPage: React.FC<{
   };
 
   const handleDelete = async (id: string) => {
-    chrome.runtime.sendMessage(
-      {
-        type: MessageType.DELETE_BLUEPRINT,
-        data: { id },
-      },
-      () => {
-        refetchBlueprints();
-      }
-    );
+    setDeletingId(id);
+    setDeleteError(null);
+    
+    try {
+      // Using chrome runtime message for deletion
+      await new Promise<void>((resolve, reject) => {
+        chrome.runtime.sendMessage(
+          {
+            type: MessageType.DELETE_BLUEPRINT,
+            data: { id },
+          },
+          (response) => {
+            if (chrome.runtime.lastError) {
+              reject(new Error(chrome.runtime.lastError.message));
+            } else {
+              resolve();
+            }
+          }
+        );
+      });
+      toast.success('Test recording deleted successfully');
+      refetchBlueprints();
+    } catch (e: any) {
+      console.error(e);
+      const errorMessage = e?.message || 'Failed to delete test recording';
+      setDeleteError(errorMessage);
+      toast.error(errorMessage);
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    if (selectedIds.size === 0) return;
+    setIsDeleting(true);
+    
+    try {
+      await bulkDeleteRecordings(Array.from(selectedIds));
+      toast.success(`${selectedIds.size} test recording(s) deleted successfully`);
+      setSelectedIds(new Set());
+      refetchBlueprints();
+    } catch (e: any) {
+      console.error('Failed to bulk delete recordings:', e);
+      const errorMessage = e?.message || 'Failed to delete test recordings';
+      toast.error(errorMessage);
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  const toggleSelection = (id: string) => {
+    const newSet = new Set(selectedIds);
+    if (newSet.has(id)) {
+      newSet.delete(id);
+    } else {
+      newSet.add(id);
+    }
+    setSelectedIds(newSet);
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedIds.size === filteredItems.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(filteredItems.map(item => item.id)));
+    }
   };
 
   const handleRename = async (id: string, newName: string) => {
@@ -186,20 +262,39 @@ export const RecordingsPage: React.FC<{
   const handleShareCopyScript = (blueprint: TestBlueprint) => {
     const code = generatePlaywrightTest(blueprint);
     navigator.clipboard.writeText(code);
+    toast.success('Test script copied to clipboard');
+  };
+
+  const handleCopyVideoLink = (blueprint: TestBlueprint) => {
+    if (blueprint.video_url) {
+      navigator.clipboard.writeText(blueprint.video_url);
+      toast.success('Video link copied to clipboard');
+    } else {
+      toast.error('No video available for this recording');
+    }
   };
 
   const handleSaveLastBlueprint = async () => {
-    if (!lastBlueprint) return;
-    chrome.runtime.sendMessage(
-      {
-        type: MessageType.SAVE_BLUEPRINT,
-        data: { blueprint: lastBlueprint },
-      },
-      () => {
-        refetchBlueprints();
-        refetchLastBlueprint();
+    try {
+      // CRITICAL: Fetch the LATEST blueprint from storage to ensure we have enriched xpath data
+      const latestBlueprint = await storageService.get('lastBlueprint');
+      if (!latestBlueprint) {
+        toast.error('No recording to save. Please record a test first.');
+        return;
       }
-    );
+      chrome.runtime.sendMessage(
+        {
+          type: MessageType.SAVE_BLUEPRINT,
+          data: { blueprint: latestBlueprint },
+        },
+        () => {
+          refetchBlueprints();
+          refetchLastBlueprint();
+        }
+      );
+    } catch (e: any) {
+      toast.error(e.message || 'Failed to save blueprint');
+    }
   };
 
   const handleViewDetails = (id: string) => {
@@ -219,9 +314,9 @@ export const RecordingsPage: React.FC<{
         type: MessageType.START_RECORDING,
         data: {
           projectId:
-            selectedProjectId === 'all' || selectedProjectId === 'unassigned'
-              ? undefined
-              : parseInt(selectedProjectId),
+            selectedProjectId
+              ? parseInt(selectedProjectId)
+              : undefined,
         },
       });
     }, 300);
@@ -229,15 +324,18 @@ export const RecordingsPage: React.FC<{
 
   const filteredItems = useMemo(() => {
     const searchLower = searchQuery.toLowerCase();
-    return blueprints.filter(b => {
+    const items = Array.isArray(blueprints) ? blueprints : [];
+    return items.filter(b => {
       const matchesSearch = b.name.toLowerCase().includes(searchLower);
       const matchesProject =
-        selectedProjectId === 'all' ||
-        b.project_id?.toString() === selectedProjectId ||
-        (selectedProjectId === 'unassigned' && !b.project_id);
+        !selectedProjectId ||
+        b.project_id?.toString() === selectedProjectId;
       return matchesSearch && matchesProject;
     });
   }, [blueprints, selectedProjectId, searchQuery]);
+
+  const allSelected = filteredItems.length > 0 && selectedIds.size === filteredItems.length;
+  const someSelected = selectedIds.size > 0 && selectedIds.size < filteredItems.length;
 
   return (
     <div className="flex flex-col h-full bg-white overflow-hidden relative">
@@ -277,30 +375,96 @@ export const RecordingsPage: React.FC<{
                 onChange={e => setSearchQuery(e.target.value)}
               />
             </div>
-            <SearchablePicker
-              options={[
-                { label: 'Unassigned', value: 'unassigned' },
-                ...projects.map(p => ({
-                  label: p.name,
-                  value: p.id.toString(),
-                })),
-              ]}
-              value={selectedProjectId}
-              onSelect={val => setSelectedProjectId(val as string)}
-              placeholder="All Projects"
-              searchPlaceholder="Search projects..."
-              allOption={{ label: 'All Projects', value: 'all' }}
-              portalContainer={portalContainer}
-            />
+            <ProjectSelect
+            value={selectedProjectId}
+            onSelect={handleProjectSelect}
+            mode="single"
+            portalContainer={portalContainer}
+            placeholder="All Projects"
+            extraOptions={{ allProjects: true }}
+          />
           </div>
 
-          <Button
-            variant="ghost"
-            className="hover:bg-zinc-50 border text-zinc-900 rounded-full gap-2 px-4 h-10"
-            onClick={handleStartRecording}
-          >
-            <Plus className="w-5 h-5" /> Test Recording
-          </Button>
+          <AnimatePresence mode="wait">
+            {selectedIds.size > 0 ? (
+              <motion.div
+                initial={{ opacity: 0, x: 20, scale: 0.95 }}
+                animate={{ opacity: 1, x: 0, scale: 1 }}
+                exit={{ opacity: 0, x: 20, scale: 0.95 }}
+                transition={{ duration: 0.2, ease: 'easeOut' }}
+                className="flex items-center gap-3"
+              >
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  className="flex items-center gap-2"
+                >
+                  <span className="text-sm font-medium text-zinc-900 bg-zinc-100 px-3 py-1.5 rounded-full">
+                    {selectedIds.size} selected
+                  </span>
+                </motion.div>
+                <motion.div
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.05 }}
+                >
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setSelectedIds(new Set())}
+                    className="h-10 px-4 border-zinc-300 hover:bg-zinc-50 rounded-full"
+                  >
+                    Clear
+                  </Button>
+                </motion.div>
+                <motion.div
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.1 }}
+                >
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    onClick={handleBulkDelete}
+                    disabled={isDeleting}
+                    className="h-10 px-4 bg-red-600 hover:bg-red-700 border-none rounded-full shadow-lg shadow-red-600/20"
+                  >
+                    {isDeleting ? (
+                      <motion.div
+                        animate={{ rotate: 360 }}
+                        transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
+                      >
+                        <Loader2 className="w-4 h-4" />
+                      </motion.div>
+                    ) : (
+                      <motion.div
+                        whileHover={{ scale: 1.05 }}
+                        whileTap={{ scale: 0.95 }}
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </motion.div>
+                    )}
+                    <span className="ml-1">Delete</span>
+                  </Button>
+                </motion.div>
+              </motion.div>
+            ) : (
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.95 }}
+                transition={{ duration: 0.15 }}
+              >
+                <Button
+                  variant="ghost"
+                  className="hover:bg-zinc-50 border text-zinc-900 rounded-full gap-2 px-4 h-10"
+                  onClick={handleStartRecording}
+                >
+                  <Plus className="w-5 h-5" /> Test Recording
+                </Button>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
       </div>
 
@@ -420,9 +584,46 @@ export const RecordingsPage: React.FC<{
 
                 {/* Recordings Section */}
                 <section>
+                  {filteredItems.length > 0 && (
+                    <div className="mb-4">
+                      <SelectAllCheckbox
+                        checked={allSelected}
+                        indeterminate={someSelected}
+                        onChange={toggleSelectAll}
+                        label="Select all"
+                      />
+                    </div>
+                  )}
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {filteredItems.map(item => (
-                      <div key={item.id} onClick={e => e.stopPropagation()}>
+                    {filteredItems.map((item, index) => (
+                      <motion.div
+                        key={item.id}
+                        onClick={e => e.stopPropagation()}
+                        className="relative"
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: index * 0.03, duration: 0.2 }}
+                      >
+                        <AnimatePresence>
+                          {selectedIds.size > 0 && (
+                            <motion.div
+                              initial={{ opacity: 0, scale: 0.8 }}
+                              animate={{ opacity: 1, scale: 1 }}
+                              exit={{ opacity: 0, scale: 0.8 }}
+                              transition={{ duration: 0.15 }}
+                              className="absolute bottom-3 right-3 z-20"
+                            >
+                              <StyledCheckbox
+                                checked={selectedIds.has(item.id)}
+                                onChange={e => {
+                                  e.stopPropagation();
+                                  toggleSelection(item.id);
+                                }}
+                                size="lg"
+                              />
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
                         <RecordingItem
                           recording={item}
                           viewMode="grid"
@@ -452,9 +653,15 @@ export const RecordingsPage: React.FC<{
                             e.stopPropagation();
                             handleShareCopyScript(item);
                           }}
+                          onCopyVideoLink={e => {
+                            e.stopPropagation();
+                            handleCopyVideoLink(item);
+                          }}
                           portalContainer={portalContainer}
+                          isDeleting={deletingId === item.id}
+                          deleteError={deletingId === item.id ? deleteError : null}
                         />
-                      </div>
+                      </motion.div>
                     ))}
                   </div>
                 </section>

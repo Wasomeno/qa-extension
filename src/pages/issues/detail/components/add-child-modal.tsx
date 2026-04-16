@@ -71,6 +71,8 @@ export const AddChildModal: React.FC<AddChildModalProps> = ({
     queryFn: () =>
       getProjectIssues(parentIssue.project_id, { search: debouncedSearch }),
     enabled: isOpen && activeTab === 'link' && debouncedSearch.length > 0,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
   });
 
   const filteredIssues = (searchResults?.data || [])

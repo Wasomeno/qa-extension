@@ -1,13 +1,13 @@
-import React, { useState, useMemo } from 'react';
+import React, { useMemo } from 'react';
 import { AnimatePresence } from 'framer-motion';
 import { IssueFilterState } from '@/types/issues';
 import { useDebounce } from '@/utils/useDebounce';
 import { IssueDetailPage } from './detail';
 import { IssueFilterBar } from './components/filter-bar';
 import { IssueList } from './components/issue-list';
-import { useGetProjects } from '@/hooks/use-get-projects';
 import { useGetLabels } from '@/hooks/use-get-labels';
 import { useGetIssues } from './hooks/use-get-issues';
+import { useGetLoggedInUser } from '@/hooks/use-get-logged-in-user';
 import { usePinnedIssues } from '@/hooks/use-pinned-issues';
 import { Issue } from '@/api/issue';
 import { useNavigation } from '@/contexts/navigation-context';
@@ -23,33 +23,38 @@ export const IssuesPage: React.FC<IssuesPageProps> = ({
   portalContainer,
 }) => {
   const { current, push, pop } = useNavigation();
-  const [filters, setFilters] = useLocalStorage<IssueFilterState>('qa-extension-issues-filters', {
-    search: '',
-    projectIds: [],
-    status: 'ALL',
-    labels: [],
-    assigneeIds: ['ALL'],
-    sort: 'UPDATED',
-    quickFilters: {
-      assignedToMe: false,
-      createdByMe: false,
-      highPriority: false,
-      inQa: false,
-      blocked: false,
-      hasOpenMr: false,
-      unassigned: false,
-    },
-  });
+  const [filters, setFilters] = useLocalStorage<IssueFilterState>(
+    'qa-extension-issues-filters',
+    {
+      search: '',
+      projectIds: [],
+      status: 'ALL',
+      labels: [],
+      assigneeIds: ['ALL'],
+      sort: 'UPDATED',
+      quickFilters: {
+        assignedToMe: false,
+        createdByMe: false,
+        highPriority: false,
+        inQa: false,
+        blocked: false,
+        hasOpenMr: false,
+        unassigned: false,
+      },
+    }
+  );
 
   const debouncedSearch = useDebounce(filters.search, 300);
 
-  const memoizedFilters = useMemo(() => ({
-    ...filters,
-    search: debouncedSearch,
-  }), [filters, debouncedSearch]);
+  const memoizedFilters = useMemo(
+    () => ({
+      ...filters,
+      search: debouncedSearch,
+    }),
+    [filters, debouncedSearch]
+  );
 
   // Fetch filter options
-  const projects = useGetProjects();
   // For labels, we use the first project if only one is selected, otherwise 'ALL'
   const labels = useGetLabels(
     filters.projectIds.length === 1 ? filters.projectIds[0] : 'ALL'
@@ -58,15 +63,11 @@ export const IssuesPage: React.FC<IssuesPageProps> = ({
   const issues = useGetIssues(memoizedFilters);
   const { togglePin, isPinned } = usePinnedIssues();
 
-  // Map options
-  const projectOptions = useMemo(() => {
-    if (!Array.isArray(projects.data)) return [];
+  // Track if user is still loading - we need this to show proper loading state
+  const isUserLoading = useGetLoggedInUser().isLoading;
 
-    return projects.data.map(p => ({
-      label: p.name_with_namespace || p.name,
-      value: p.id,
-    }));
-  }, [projects.data]);
+  // Show loading skeleton while either user is loading or issues are fetching
+  const isInitialLoading = isUserLoading || issues.isLoading;
 
   const labelOptions = useMemo(() => {
     return labels.data.map(l => ({
@@ -114,7 +115,6 @@ export const IssuesPage: React.FC<IssuesPageProps> = ({
         <IssueFilterBar
           filters={filters}
           onFilterChange={handleFilterChange}
-          projectOptions={projectOptions}
           labelOptions={labelOptions}
           portalContainer={portalContainer}
         />
@@ -124,7 +124,7 @@ export const IssuesPage: React.FC<IssuesPageProps> = ({
       <div className="flex-1 flex flex-col w-full overflow-y-auto overscroll-contain mt-2 px-8 pb-8">
         <IssueList
           issues={issues.data}
-          isLoading={issues.isLoading}
+          isLoading={isInitialLoading}
           isProjectFiltered={filters.projectIds.length === 1}
           onIssueClick={issue => push('issue-detail', issue)}
           onPin={togglePin}

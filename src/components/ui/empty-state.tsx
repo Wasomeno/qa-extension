@@ -9,6 +9,7 @@ interface EmptyStateProps {
   titleClassName?: string;
   descriptionClassName?: string;
   className?: string;
+  action?: React.ReactNode;
 }
 
 export const EmptyState: React.FC<EmptyStateProps> = ({
@@ -19,6 +20,7 @@ export const EmptyState: React.FC<EmptyStateProps> = ({
   titleClassName = 'text-gray-700',
   descriptionClassName = 'text-gray-400',
   className = '',
+  action,
 }) => {
   return (
     <div
@@ -31,6 +33,7 @@ export const EmptyState: React.FC<EmptyStateProps> = ({
       <p className={`text-sm mt-1 max-w-xs px-4 ${descriptionClassName}`}>
         {description}
       </p>
+      {action && <div className="mt-4">{action}</div>}
     </div>
   );
 };

@@ -6,6 +6,8 @@ export function useGetProjectMembers(projectId?: number) {
     queryKey: ['project-members', projectId],
     queryFn: () => getProjectMembers(projectId!),
     enabled: !!projectId,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
   });
 
   const members = query.data?.data?.members || [];

@@ -41,6 +41,7 @@ interface SearchablePickerProps {
   multiple?: boolean;
   onSearchChange?: (search: string) => void;
   shouldFilter?: boolean;
+  isLoading?: boolean;
 }
 
 export const SearchablePicker: React.FC<SearchablePickerProps> = ({
@@ -56,9 +57,16 @@ export const SearchablePicker: React.FC<SearchablePickerProps> = ({
   multiple,
   onSearchChange,
   shouldFilter = true,
+  isLoading,
 }) => {
   const [open, setOpen] = useState(false);
   const isClosingRef = useRef(false);
+  const [localSearch, setLocalSearch] = useState('');
+
+  const handleSearchChange = (search: string) => {
+    setLocalSearch(search);
+    onSearchChange?.(search);
+  };
 
   const handleOpenChange = (newOpen: boolean) => {
     if (!newOpen) {
@@ -182,41 +190,55 @@ export const SearchablePicker: React.FC<SearchablePickerProps> = ({
         <Command shouldFilter={shouldFilter}>
           <CommandInput
             placeholder={searchPlaceholder}
-            onValueChange={onSearchChange}
+            value={localSearch}
+            onValueChange={handleSearchChange}
           />
           <CommandList className="max-h-[300px]">
-            <CommandEmpty>{emptyMessage}</CommandEmpty>
-            <CommandGroup>
-              {allOption && (
-                <CommandItem
-                  value={allOption.label}
-                  onSelect={() => handleSelect(allOption.value)}
-                >
-                  <Check
-                    className={cn(
-                      'mr-2 h-4 w-4',
-                      isSelected(allOption.value) ? 'opacity-100' : 'opacity-0'
-                    )}
-                  />
-                  {allOption.label}
-                </CommandItem>
-              )}
-              {options.map(opt => (
-                <CommandItem
-                  key={opt.value}
-                  value={opt.label}
-                  onSelect={() => handleSelect(opt.value)}
-                >
-                  <Check
-                    className={cn(
-                      'mr-2 h-4 w-4',
-                      isSelected(opt.value) ? 'opacity-100' : 'opacity-0'
-                    )}
-                  />
-                  {opt.label}
-                </CommandItem>
-              ))}
-            </CommandGroup>
+            {isLoading ? (
+              <div className="p-4 space-y-2">
+                {[...Array(3)].map((_, i) => (
+                  <div key={i} className="flex items-center gap-2 px-2 py-2">
+                    <div className="h-4 w-4 rounded bg-muted animate-pulse" />
+                    <div className="h-4 flex-1 rounded bg-muted animate-pulse" />
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <>
+                <CommandEmpty>{emptyMessage}</CommandEmpty>
+                <CommandGroup>
+                  {allOption && (
+                    <CommandItem
+                      value={allOption.label}
+                      onSelect={() => handleSelect(allOption.value)}
+                    >
+                      <Check
+                        className={cn(
+                          'mr-2 h-4 w-4',
+                          isSelected(allOption.value) ? 'opacity-100' : 'opacity-0'
+                        )}
+                      />
+                      {allOption.label}
+                    </CommandItem>
+                  )}
+                  {options.map(opt => (
+                    <CommandItem
+                      key={opt.value}
+                      value={opt.label}
+                      onSelect={() => handleSelect(opt.value)}
+                    >
+                      <Check
+                        className={cn(
+                          'mr-2 h-4 w-4',
+                          isSelected(opt.value) ? 'opacity-100' : 'opacity-0'
+                        )}
+                      />
+                      {opt.label}
+                    </CommandItem>
+                  ))}
+                </CommandGroup>
+              </>
+            )}
           </CommandList>
         </Command>
       </PopoverContent>

@@ -2,6 +2,7 @@ import { TestStep } from '@/types/recording';
 import { MessageType } from '@/types/messages';
 import {
   highlightElement,
+  removeHighlight,
   getElementValue,
   isElementActionable,
   findAllByXPath,
@@ -97,9 +98,16 @@ export class Executor {
     step: TestStep
   ): Promise<string | undefined> {
     console.log(
-      `[Executor] Handling click for selectors:`,
+      `[Executor] Handling click for CSS selectors:`,
       this.getSelectors(step)
     );
+    console.log(
+      `[Executor] Handling click for XPath selectors:`,
+      this.getXPathSelectors(step)
+    );
+    // Clean up any existing highlights before starting new action
+    removeHighlight();
+    
     const element = await this.resolveElement(step, this.DEFAULT_TIMEOUT, true);
     if (!element) {
       console.error(
@@ -138,6 +146,9 @@ export class Executor {
       `[Executor] Handling type "${step.value}" for selectors:`,
       this.getSelectors(step)
     );
+    // Clean up any existing highlights before starting new action
+    removeHighlight();
+    
     const element = await this.resolveElement(step, this.DEFAULT_TIMEOUT, true);
     if (!element) {
       console.error(`[Executor] Type failed: Element not found or actionable.`);
@@ -217,6 +228,9 @@ export class Executor {
       throw new Error(`Missing URL for 'navigate' action`);
     }
 
+    // Clean up any existing highlights before navigating
+    removeHighlight();
+
     let targetUrl = step.value;
     // Resolve relative URLs against current origin
     if (targetUrl && !/^https?:\/\//i.test(targetUrl)) {
@@ -227,6 +241,17 @@ export class Executor {
       }
     }
 
+    // Skip navigation if we're already on the target page (background already navigated)
+    const currentUrl = window.location.href;
+    const normalizedCurrent = currentUrl.endsWith('/') ? currentUrl.slice(0, -1) : currentUrl;
+    const normalizedTarget = targetUrl.endsWith('/') ? targetUrl.slice(0, -1) : targetUrl;
+    
+    if (normalizedCurrent === normalizedTarget) {
+      console.log(`[Executor] Already on target URL ${targetUrl}, skipping navigation`);
+      return targetUrl;
+    }
+
+    console.log(`[Executor] Navigating to: ${targetUrl} (from ${currentUrl})`);
     window.location.href = targetUrl;
     return targetUrl;
   }
@@ -234,6 +259,9 @@ export class Executor {
   private static async handleSelect(
     step: TestStep
   ): Promise<string | undefined> {
+    // Clean up any existing highlights before starting new action
+    removeHighlight();
+    
     const element = await this.resolveElement(step, this.DEFAULT_TIMEOUT, true);
     if (!element) {
       throw new Error(
@@ -332,6 +360,9 @@ export class Executor {
   private static async handleAssert(
     step: TestStep
   ): Promise<string | undefined> {
+    // Clean up any existing highlights before starting new action
+    removeHighlight();
+    
     // Simple assertion: check if element exists
     const element = await this.resolveElement(
       step,
@@ -402,14 +433,7 @@ export class Executor {
     timeout: number,
     requireActionable: boolean
   ): Promise<Element | null> {
-    const selectors = this.getSelectors(step).map(s => {
-      if (s.includes(':has-text(')) {
-        console.warn(
-          `[Executor] Found Playwright-specific selector ":has-text()". This is not standard CSS and might fail: ${s}`
-        );
-      }
-      return s;
-    });
+    const selectors = this.getSelectors(step);
     const xpathSelectors = this.getXPathSelectors(step);
 
     if (selectors.length === 0 && xpathSelectors.length === 0 && !step.elementHints) {
@@ -527,64 +551,145 @@ export class Executor {
     const results: { element: Element; score: number }[] = [];
     const seen = new Set<Element>();
 
-    // 1. Playwright-style CSS and text matches
-    selectors.forEach((selector, priority) => {
-      try {
-        let baseSelector = selector;
-        let textFilter: string | null = null;
-
-        const hasTextMatch =
-          selector.match(/:has-text\('(.+?)'\)/) ||
-          selector.match(/:has-text\("(.+?)"\)/);
-        const textMatch =
-          selector.match(/:text\('(.+?)'\)/) ||
-          selector.match(/:text\("(.+?)"\)/);
-
-        if (hasTextMatch) {
-          baseSelector = selector.replace(hasTextMatch[0], '');
-          textFilter = hasTextMatch[1];
-        } else if (textMatch) {
-          baseSelector = selector.replace(textMatch[0], '');
-          textFilter = textMatch[1];
-        }
-
-        if (!baseSelector) baseSelector = '*';
-
-        const matches = queryAllShadows(baseSelector);
-        matches.forEach((el, index) => {
-          if (el.isConnected && !seen.has(el)) {
-            if (textFilter && !(el.textContent || '').includes(textFilter)) {
-              return;
+    // 1. XPath FIRST (primary matching strategy - more specific)
+    if (xpathSelectors.length > 0) {
+      console.log(`[Executor] Trying ${xpathSelectors.length} XPath selectors...`);
+      
+      xpathSelectors.forEach((xpath, priority) => {
+        try {
+          const matches = findAllByXPath(xpath);
+          console.log(`[Executor] XPath "${xpath}" found ${matches.length} matches`);
+          matches.forEach((el, index) => {
+            if (el.isConnected && !seen.has(el)) {
+              seen.add(el);
+              results.push({
+                element: el,
+                score: this.scoreXPathMatch(el, step, priority, index),
+              });
             }
+          });
+        } catch (e) {
+          console.error(`[Executor] XPath "${xpath}" failed:`, e);
+        }
+      });
+    }
 
-            seen.add(el);
-            results.push({
-              element: el,
-              score: this.scoreElementMatch(el, step, priority, index),
-            });
-          }
-        });
-      } catch (e) {}
-    });
+    // 2. CSS selectors as FALLBACK (when XPath fails)
+    if (results.length === 0) {
+      console.log(`[Executor] XPath found no matches, trying CSS selectors as fallback...`);
+      
+      selectors.forEach((selector, priority) => {
+        try {
+          let baseSelector = selector;
+          let textFilter: string | null = null;
 
-    // 2. XPath matches
-    xpathSelectors.forEach((xpath, priority) => {
-      try {
-        const matches = findAllByXPath(xpath);
-        matches.forEach((el, index) => {
-          if (el.isConnected && !seen.has(el)) {
-            seen.add(el);
-            results.push({
-              element: el,
-              score: this.scoreXPathMatch(el, step, priority, index),
-            });
+          const hasTextMatch =
+            selector.match(/:has-text\('(.+?)'\)/) ||
+            selector.match(/:has-text\("(.+?)"\)/);
+          const textMatch =
+            selector.match(/:text\('(.+?)'\)/) ||
+            selector.match(/:text\("(.+?)"\)/);
+
+          if (hasTextMatch) {
+            baseSelector = selector.replace(hasTextMatch[0], '');
+            textFilter = hasTextMatch[1];
+          } else if (textMatch) {
+            baseSelector = selector.replace(textMatch[0], '');
+            textFilter = textMatch[1];
           }
-        });
-      } catch (e) {}
-    });
+
+          if (!baseSelector) baseSelector = '*';
+
+          const matches = queryAllShadows(baseSelector);
+          matches.forEach((el, index) => {
+            if (el.isConnected && !seen.has(el)) {
+              if (textFilter && !(el.textContent || '').includes(textFilter)) {
+                return;
+              }
+
+              seen.add(el);
+              results.push({
+                element: el,
+                score: this.scoreElementMatch(el, step, priority, index),
+              });
+            }
+          });
+        } catch (e) {}
+      });
+    }
 
     // Sort by score descending (Playwright-style locator disambiguation)
     return results.sort((a, b) => b.score - a.score);
+  }
+
+  /**
+   * Generate additional XPath patterns as fallback when primary XPath fails
+   */
+  private static generateFallbackXPaths(step: TestStep): string[] {
+    const xpaths: string[] = [];
+    const hints = step.elementHints;
+    
+    if (!hints) return xpaths;
+    
+    const tagName = hints.tagName?.toLowerCase() || '*';
+    const textContent = hints.textContent?.trim();
+    
+    // 1. Generate contains() XPath for partial text matching
+    if (textContent && textContent.length > 2) {
+      const escaped = textContent.replace(/'/g, "&apos;");
+      
+      // Partial text with normalize-space
+      xpaths.push(`//${tagName}[contains(normalize-space(.), '${escaped}')]`);
+      
+      // Partial text without normalize-space
+      xpaths.push(`//${tagName}[contains(., '${escaped}')]`);
+      
+      // Role + partial text
+      if (hints.attributes?.role) {
+        const role = hints.attributes.role;
+        xpaths.push(`//*[@role='${role}' and contains(normalize-space(.), '${escaped}')]`);
+        xpaths.push(`//*[@role='${role}' and contains(., '${escaped}')]`);
+      }
+      
+      // Any element with partial text
+      xpaths.push(`//*[contains(normalize-space(.), '${escaped}')]`);
+    }
+    
+    // 2. Generate XPath based on parent context
+    if (hints.parentInfo?.tagName) {
+      const parentTag = hints.parentInfo.tagName.toLowerCase();
+      const parentId = hints.parentInfo.id;
+      
+      // Parent by ID + child tag
+      if (parentId) {
+        xpaths.push(`//${parentId}//${tagName}[normalize-space(.)='${textContent?.replace(/'/g, "&apos;") || ''}']`);
+        xpaths.push(`//*[@id='${parentId}']//${tagName}[normalize-space(.)='${textContent?.replace(/'/g, "&apos;") || ''}']`);
+      }
+      
+      // Parent by tag + child
+      xpaths.push(`//${parentTag}//${tagName}`);
+    }
+    
+    // 3. Generate XPath with data attributes
+    const dataAttrs = ['data-menu-id', 'data-testid', 'data-cy', 'data-qa'];
+    for (const attr of dataAttrs) {
+      const value = hints.attributes?.[attr];
+      if (value) {
+        xpaths.push(`//*[@${attr}='${value.replace(/'/g, "&apos;")}']`);
+        xpaths.push(`//${tagName}[@${attr}='${value.replace(/'/g, "&apos;")}']`);
+      }
+    }
+    
+    // 4. Generate XPath with structural info (sibling index)
+    if (hints.structuralInfo && hints.structuralInfo.siblingIndex > 0) {
+      const { siblingIndex, totalSiblings } = hints.structuralInfo;
+      const parentTag = hints.parentInfo?.tagName?.toLowerCase() || 'div';
+      
+      // XPath with nth-child
+      xpaths.push(`//${parentTag}/*[${tagName}][${siblingIndex}]`);
+    }
+    
+    return xpaths;
   }
 
   private static scoreXPathMatch(
@@ -595,7 +700,8 @@ export class Executor {
   ): number {
     const hints = step.elementHints;
     const text = (element.textContent || '').trim();
-    let score = 30 - selectorPriority * 5 - matchIndex;
+    // Give XPath matches higher base score to prioritize them over CSS
+    let score = 50 - selectorPriority * 3 - matchIndex;
 
     // Tag name match
     if (hints?.tagName) {

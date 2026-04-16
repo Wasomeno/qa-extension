@@ -1,8 +1,9 @@
-import React from 'react';
-import { Search, Filter, User } from 'lucide-react';
+import React, { useRef } from 'react';
+import { Search, Filter } from 'lucide-react';
 import { IssueFilterState } from '@/types/issues';
 import { Input } from '@/components/ui/input';
 import { SearchablePicker } from './searchable-picker';
+import { ProjectSelect } from '@/components/project-select';
 import {
   Select,
   SelectContent,
@@ -22,7 +23,6 @@ interface IssueFilterBarProps {
     key: K,
     value: IssueFilterState[K]
   ) => void;
-  projectOptions: Option[];
   labelOptions: Option[];
   portalContainer?: HTMLElement | null;
 }
@@ -30,7 +30,6 @@ interface IssueFilterBarProps {
 export const IssueFilterBar: React.FC<IssueFilterBarProps> = ({
   filters,
   onFilterChange,
-  projectOptions,
   labelOptions,
   portalContainer,
 }) => {
@@ -38,6 +37,8 @@ export const IssueFilterBar: React.FC<IssueFilterBarProps> = ({
     { label: 'Me', value: 'ME' },
     { label: 'Unassigned', value: 'None' },
   ];
+
+  const prevProjectIdsRef = useRef<string[]>(filters.projectIds);
 
   return (
     <div className="flex flex-col gap-4">
@@ -60,15 +61,17 @@ export const IssueFilterBar: React.FC<IssueFilterBarProps> = ({
       {/* Filters Grid Row */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {/* Project Filter */}
-        <SearchablePicker
-          multiple
-          options={projectOptions}
+        <ProjectSelect
           value={filters.projectIds}
-          onSelect={val => onFilterChange('projectIds', val as string[])}
+          onSelect={() => {}}
+          onSelectMultiple={projects => {
+            const newIds = projects.map(p => p.id.toString());
+            onFilterChange('projectIds', newIds);
+            prevProjectIdsRef.current = newIds;
+          }}
+          mode="multi"
+          portalContainer={portalContainer ?? null}
           placeholder="All Projects"
-          searchPlaceholder="Search projects…"
-          portalContainer={portalContainer}
-          className="w-full"
         />
 
         {/* Assignee Filter */}

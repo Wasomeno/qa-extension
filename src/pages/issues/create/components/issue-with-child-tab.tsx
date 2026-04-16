@@ -150,7 +150,7 @@ export const IssueWithChildTab: React.FC<IssueWithChildTabProps> = ({
                   <Button
                     variant="ghost"
                     size="icon"
-                    className="ml-2 text-gray-400 hover:text-red-500"
+                    className="ml-2 text-gray-400 hover:bg-red-50 hover:text-red-600"
                     onClick={e => {
                       e.stopPropagation();
                       removeChildIssue(child.id);

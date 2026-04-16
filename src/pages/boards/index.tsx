@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { ProjectFilter } from './components/project-filter';
 import { ProjectBoardView } from './components/project-board-view';
-import { useGetProjects } from '@/hooks/use-get-projects';
 import { useGetProjectBoards } from './hooks/use-get-project-boards';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ProjectBoard } from './mock-data';
@@ -19,18 +18,17 @@ export const BoardsPage: React.FC<BoardsPageProps> = ({
   portalContainer,
   onNavigateToIssue,
 }) => {
-  const { data: projects = [], isLoading: isLoadingProjects } =
-    useGetProjects();
   const [selectedProjectId, setSelectedProjectId] = useLocalStorage<
     string | number | undefined
   >('qa-extension-boards-project-id', undefined);
 
-  // Default to first project if none selected
-  const activeProjectId = selectedProjectId ?? projects[0]?.id;
+  const activeProjectId = selectedProjectId;
 
-  const { data: boards = [], isLoading: isLoadingBoards } = useGetProjectBoards(
-    Number(activeProjectId)
-  );
+  const {
+    data: boards = [],
+    isLoading: isLoadingBoards,
+    isFetching: isFetchingBoards,
+  } = useGetProjectBoards(Number(activeProjectId));
 
   const queryClient = useQueryClient();
 
@@ -78,19 +76,17 @@ export const BoardsPage: React.FC<BoardsPageProps> = ({
         toast.success('Issue moved');
         queryClient.invalidateQueries({ queryKey: ['project-boards'] });
       }
-    } catch (e) {
+    } catch {
       toast.error('Failed to move issue');
     }
   };
 
   // Map API data to UI model
-  const activeProject = projects.find(p => p.id === activeProjectId);
-
   const mappedBoard: ProjectBoard | undefined = selectedBoardData
     ? {
         id: selectedBoardData.id.toString(),
         name: selectedBoardData.name,
-        avatarUrl: activeProject?.avatar_url,
+        avatarUrl: undefined,
         columns: (selectedBoardData.lists ?? [])
           .map(list => ({
             id: list.id.toString(),
@@ -101,13 +97,10 @@ export const BoardsPage: React.FC<BoardsPageProps> = ({
               id: issue.id.toString(),
               iid: issue.iid,
               title: issue.title,
-              weight: 0, // Not provided in API yet
-              projectId: activeProject?.id || 0,
-              projectName:
-                activeProject?.name_with_namespace || activeProject?.name || '',
-              webUrl: activeProject?.web_url
-                ? `${activeProject.web_url}/-/issues/${issue.iid}`
-                : '',
+              weight: 0,
+              projectId: activeProjectId ? Number(activeProjectId) : 0,
+              projectName: '',
+              webUrl: '',
               assignee: issue.assignees?.[0]
                 ? {
                     id: issue.assignees[0].id.toString(),
@@ -124,35 +117,30 @@ export const BoardsPage: React.FC<BoardsPageProps> = ({
               })),
             })),
           }))
-          .sort((a, b) => {
-            return 0;
-          }),
+          .sort(() => 0),
       }
     : undefined;
 
-  const isLoading = isLoadingProjects || (!!activeProjectId && isLoadingBoards);
+  // Only show skeletons when there's no cached board data at all (initial load).
+  // Board content is never affected by project search refetches.
+  const isBoardLoading = isLoadingBoards && !boards.length;
 
   return (
     <div className="h-full flex flex-col bg-white">
       {/* Filter Bar */}
       <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between sticky top-0 bg-white z-20">
-        <div className="flex items-center gap-4">
-          <h1 className="text-xl font-bold text-gray-900">Issue Boards</h1>
-          <div className="h-6 w-px bg-gray-200" />
-          {isLoadingProjects ? (
-            <Skeleton className="h-9 w-[250px]" />
+        <div className="flex items-center gap-4 min-w-0">
+          <h1 className="text-xl font-bold text-gray-900 shrink-0 whitespace-nowrap">Issue Boards</h1>
+          <div className="h-6 w-px bg-gray-200 shrink-0" />
+          {isBoardLoading ? (
+            <Skeleton className="h-9 w-[250px] shrink-0" />
           ) : (
             <ProjectFilter
-              projects={projects.map(p => ({
-                id: p.id,
-                name: p.name,
-                name_with_namespace: p.name_with_namespace,
-                avatar_url: p.avatar_url,
-              }))}
               selectedProjectIds={activeProjectId ? [activeProjectId] : []}
               onSelect={handleProjectSelect}
               portalContainer={portalContainer}
               singleSelect={true}
+              className="w-[260px] shrink-0"
             />
           )}
         </div>
@@ -161,7 +149,7 @@ export const BoardsPage: React.FC<BoardsPageProps> = ({
       {/* Boards Content */}
       <div className="flex-1 flex flex-col w-full overflow-y-auto">
         <div className="flex flex-1 flex-col w-full">
-          {isLoading ? (
+          {isBoardLoading ? (
             <div className="flex flex-1 gap-4 px-6 py-4 min-w-min overflow-hidden">
               <Skeleton className="w-[280px] rounded-lg" />
               <Skeleton className="w-[280px] rounded-lg" />
@@ -177,17 +165,16 @@ export const BoardsPage: React.FC<BoardsPageProps> = ({
                   onMoveIssue={handleMoveIssue}
                   onOpenIssue={issue => {
                     // Map BoardIssue to structure expected by IssueDetail
-                    // Minimal mapping; detail page will fetch full data or use partials
                     onNavigateToIssue?.({
                       id: Number(issue.id),
                       iid: issue.iid,
                       title: issue.title,
                       project_id: issue.projectId,
                       project_name: issue.projectName,
-                      description: '', // Loaded in detail
-                      state: 'opened', // Default, updated in detail
+                      description: '',
+                      state: 'opened',
                       web_url: issue.webUrl,
-                      author: { name: 'Unknown', avatar_url: '' }, // Placeholder
+                      author: { name: 'Unknown', avatar_url: '' },
                       assignees: issue.assignee
                         ? [
                             {
@@ -200,12 +187,12 @@ export const BoardsPage: React.FC<BoardsPageProps> = ({
                         : [],
                       labels: (issue.labels ?? []).map(l => l.name),
                       label_details: (issue.labels ?? []).map(l => ({
-                        id: Number(l.id.split('-')[0]) || 0, // Best effort parse if id is composite
+                        id: Number(l.id.split('-')[0]) || 0,
                         name: l.name,
                         color: l.color,
                         text_color: l.textColor,
                       })),
-                      created_at: new Date().toISOString(), // Fallback
+                      created_at: new Date().toISOString(),
                       merge_requests_count: 0,
                     });
                   }}

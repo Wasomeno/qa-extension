@@ -451,6 +451,7 @@ export const DescriptionEditor = ({
               <DropdownMenuItem
                 onClick={() => editor.chain().focus().deleteColumn().run()}
                 disabled={!editor.can().deleteColumn()}
+                className="text-red-600 focus:text-red-600 focus:bg-red-50"
               >
                 <Trash2 className="w-4 h-4 mr-2" />
                 Delete Column
@@ -473,6 +474,7 @@ export const DescriptionEditor = ({
               <DropdownMenuItem
                 onClick={() => editor.chain().focus().deleteRow().run()}
                 disabled={!editor.can().deleteRow()}
+                className="text-red-600 focus:text-red-600 focus:bg-red-50"
               >
                 <Trash2 className="w-4 h-4 mr-2" />
                 Delete Row

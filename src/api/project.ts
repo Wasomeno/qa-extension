@@ -15,6 +15,11 @@ export async function getProjects(searchParam?: string | any) {
   return api.get<{ projects: GitLabProject[] }>(url);
 }
 
+export async function getProjectById(projectId: number | string) {
+  const response = await api.get<{ project: GitLabProject }>(`/projects/${projectId}`);
+  return response;
+}
+
 export async function getProjectBoards(projectId: number) {
   return api.get<GetProjectBoardsResponse>(`/projects/${projectId}/boards`);
 }

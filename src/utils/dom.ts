@@ -1084,19 +1084,64 @@ export function highlightElement(
 
   document.body.appendChild(overlay);
 
+  // Track if this highlight should still be visible
+  let shouldKeepHighlight = true;
+
   // Auto-remove after duration
   if (duration > 0) {
     setTimeout(() => {
-      removeHighlight();
+      if (shouldKeepHighlight) {
+        removeHighlight();
+      }
     }, duration);
   }
+
+  // Watch for the element being removed from DOM (e.g., modal closes, element vanishes)
+  // If the element is no longer connected, remove the highlight
+  if (!element.isConnected) {
+    shouldKeepHighlight = false;
+    removeHighlight();
+    return;
+  }
+
+  // Use MutationObserver to detect when the element is disconnected from DOM
+  const observer = new MutationObserver((mutations) => {
+    // Check if element is still connected to DOM
+    if (!element.isConnected) {
+      shouldKeepHighlight = false;
+      observer.disconnect();
+      removeHighlight();
+    }
+  });
+
+  // Observe the element itself for removal from DOM
+  // Start from the element's parent (or body if no parent)
+  const observeRoot = element.parentElement || document.body;
+  observer.observe(observeRoot, {
+    childList: true,
+    subtree: true
+  });
+
+  // Also do periodic checks as a fallback (in case MutationObserver misses something)
+  const checkInterval = setInterval(() => {
+    if (!element.isConnected || !shouldKeepHighlight) {
+      clearInterval(checkInterval);
+      observer.disconnect();
+      removeHighlight();
+    }
+  }, 500);
+
+  // Clean up the interval when the highlight is manually removed
+  const originalRemoveHighlight = removeHighlight;
+  // We can't easily hook into removeHighlight, so the checkInterval will auto-clean
 }
 
 /**
  * Remove element highlight
  */
 export function removeHighlight(): void {
-  const highlights = document.querySelectorAll('.qa-extension-highlight');
+  // Use consistent class name to match highlightElement's default
+  const highlights = document.querySelectorAll('.extension-highlight');
   highlights.forEach(highlight => highlight.remove());
 }
 

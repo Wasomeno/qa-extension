@@ -21,8 +21,26 @@ const StandaloneDetailApp = () => {
 
     const loadData = async () => {
       try {
-        const recordings = await listRecordings();
+        const result = await listRecordings();
+        console.log('[StandaloneDetail] API result:', result);
+        
+        // Handle both array response and paginated response { data: [...] }
+        let recordings: any[] = [];
+        if (result && typeof result === 'object' && !Array.isArray(result) && 'data' in result) {
+          recordings = (result as any).data || [];
+          console.log('[StandaloneDetail] Using paginated response, found recordings:', recordings.length);
+        } else if (Array.isArray(result)) {
+          recordings = result;
+          console.log('[StandaloneDetail] Using array response, found recordings:', recordings.length);
+        } else {
+          console.warn('[StandaloneDetail] Unexpected API response format:', result);
+        }
+        
+        console.log('[StandaloneDetail] Looking for ID:', id);
+        recordings.forEach(r => console.log('[StandaloneDetail] Recording ID:', r.id, 'Name:', r.name));
+        
         const found = recordings.find((b: any) => b.id === id);
+        console.log('[StandaloneDetail] Found blueprint:', found);
         setBlueprint(found as unknown as TestBlueprint || null);
       } catch (error) {
         console.error('Failed to load recordings:', error);

@@ -16,6 +16,8 @@ export function useGetLabels(projectId?: string | number) {
     queryKey: ['labels', projectId],
     queryFn: () => getProjectLabels(numericId),
     enabled: !!isProjectSelected && !isNaN(numericId),
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
   });
 
   return {

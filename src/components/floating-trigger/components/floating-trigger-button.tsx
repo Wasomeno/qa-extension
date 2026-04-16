@@ -36,6 +36,7 @@ interface FloatingTriggerButtonProps {
   ) => void;
   hasActivePopup?: boolean;
   isLoggedIn?: boolean;
+  isLoading?: boolean;
   tooltipContainer?: HTMLElement | null;
 }
 
@@ -89,6 +90,7 @@ const FloatingTriggerButton: React.FC<FloatingTriggerButtonProps> = ({
   onActionClick,
   hasActivePopup = false,
   isLoggedIn = false,
+  isLoading = false,
   tooltipContainer,
 }) => {
   const keyboardIsolation = useKeyboardIsolation();
@@ -130,9 +132,12 @@ const FloatingTriggerButton: React.FC<FloatingTriggerButtonProps> = ({
   // Show expanded state if hovered OR if there's an active popup OR if popover is open
   const isExpanded = isHovered || hasActivePopup || isPopoverOpen;
 
+  // During loading, hide content and show pulsing animation
+  const isLoadingState = isLoading;
+
   // Calculate position adjustment to keep capsule centered horizontally
   // and grow from bottom to top vertically
-  const restingWidth = isLoggedIn ? 100 : 40;
+  const restingWidth = isLoadingState ? 40 : isLoggedIn ? 100 : 40;
   const expandedWidth = isLoggedIn ? 240 : 60; // Wider for 4 buttons
   const restingHeight = 24;
   const expandedHeight = 52; // Slightly taller for elegance
@@ -140,6 +145,9 @@ const FloatingTriggerButton: React.FC<FloatingTriggerButtonProps> = ({
   const heightDiff = expandedHeight - restingHeight;
   const offsetX = isExpanded ? -widthDiff / 2 : 0;
   const offsetY = isExpanded ? -heightDiff : 0; // Move up when expanding
+
+  // During loading, hide content
+  const showContent = !isLoadingState;
 
   return (
     <>
@@ -158,27 +166,78 @@ const FloatingTriggerButton: React.FC<FloatingTriggerButtonProps> = ({
           zIndex: 999999,
           pointerEvents: hidden ? 'none' : 'auto',
           overflow: isExpanded ? 'visible' : 'hidden',
+          transformOrigin: 'center center',
         }}
-        animate={{
-          left: position.x + offsetX,
-          top: position.y + offsetY,
-          width: isExpanded ? expandedWidth : restingWidth,
-          height: isExpanded ? expandedHeight : restingHeight,
-          borderRadius: isExpanded ? 26 : isLoggedIn ? 20 : 26,
-          opacity: opacity,
-        }}
-        transition={{
-          type: 'spring',
-          stiffness: 260,
-          damping: 25,
-          mass: 0.8,
-        }}
+        animate={
+          isLoadingState
+            ? {
+                left: position.x + (100 - 100 * 0.9) / 2, // Center the 90% button
+                top: position.y + (24 - 24 * 0.9) / 2, // Center the 90% height
+                width: 100 * 0.9, // 90% of authenticated button size (100px)
+                height: 24 * 0.9, // 90% of authenticated button height (24px)
+                borderRadius: 26,
+                opacity: opacity,
+                scale: [1, 1.08, 1],
+                backgroundColor: ['rgb(250 250 252)', 'rgb(248 248 250)', 'rgb(250 250 252)'], // very light gray, almost white
+                boxShadow: [
+                  '0 2px 8px rgba(0, 0, 0, 0.08)',
+                  '0 6px 24px rgba(0, 0, 0, 0.2)',
+                  '0 2px 8px rgba(0, 0, 0, 0.08)',
+                ],
+              }
+            : {
+                left: isExpanded ? position.x - (expandedWidth - restingWidth) / 2 : position.x, // Center-aligned expansion
+                top: isExpanded ? position.y - (expandedHeight - restingHeight) : position.y, // Grow upward from center
+                width: isExpanded ? expandedWidth : restingWidth,
+                height: isExpanded ? expandedHeight : restingHeight,
+                borderRadius: isExpanded ? 26 : isLoggedIn ? 20 : 26,
+                opacity: opacity,
+                scale: 1,
+                backgroundColor: 'rgb(255 255 255)',
+                boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)',
+              }
+        }
+        transition={
+          isLoadingState
+            ? {
+                scale: {
+                  duration: 0.8,
+                  repeat: Infinity,
+                  repeatType: 'loop',
+                  ease: 'easeInOut',
+                },
+                backgroundColor: {
+                  duration: 0.8,
+                  repeat: Infinity,
+                  repeatType: 'loop',
+                  ease: 'easeInOut',
+                },
+                boxShadow: {
+                  duration: 0.8,
+                  repeat: Infinity,
+                  repeatType: 'loop',
+                  ease: 'easeInOut',
+                },
+                left: { type: 'spring', stiffness: 260, damping: 25, mass: 0.8 },
+                top: { type: 'spring', stiffness: 260, damping: 25, mass: 0.8 },
+                width: { type: 'spring', stiffness: 260, damping: 25, mass: 0.8 },
+                height: { type: 'spring', stiffness: 260, damping: 25, mass: 0.8 },
+                borderRadius: { type: 'spring', stiffness: 260, damping: 25, mass: 0.8 },
+                opacity: { type: 'spring', stiffness: 260, damping: 25, mass: 0.8 },
+              }
+            : {
+                type: 'spring',
+                stiffness: 260,
+                damping: 25,
+                mass: 0.8,
+              }
+        }
         {...keyboardIsolation}
       >
         <TooltipProvider delayDuration={200}>
           <div className="flex items-center justify-center h-full w-full">
             <AnimatePresence mode="wait">
-              {isExpanded && !isLoggedIn && (
+              {showContent && isExpanded && !isLoggedIn && (
                 <motion.div
                   key="login-container"
                   variants={containerVariants}

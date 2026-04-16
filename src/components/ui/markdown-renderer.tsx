@@ -85,6 +85,8 @@ export function MarkdownRenderer({
             const isVideo = VIDEO_EXTENSIONS.some(ext =>
               href?.toLowerCase().endsWith(ext)
             );
+            // For video links, render just VideoPlaceholder without wrapping in anchor
+            // (VideoPlaceholder already has its own anchor for the link)
             if (isVideo && href) {
               return <VideoPlaceholder url={href} className={className} />;
             }

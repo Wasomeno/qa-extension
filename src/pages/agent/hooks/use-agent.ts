@@ -20,6 +20,13 @@ export const useAgent = (options?: UseAgentOptions) => {
   // Track which session is currently being processed for stream events
   const activeSessionIdRef = useRef<string | null>(null);
 
+  // Store the callback in a ref to avoid dependency issues
+  const onMessagesChangeRef = useRef(options?.onMessagesChange);
+  onMessagesChangeRef.current = options?.onMessagesChange;
+
+  // Track if this is the initial mount to avoid calling onMessagesChange on first render
+  const isInitialMountRef = useRef(true);
+
   // Subscribe to stream events to update progress message dynamically
   // We don't filter by resourceId so we receive all events
   useStreamEvents({
@@ -38,18 +45,33 @@ export const useAgent = (options?: UseAgentOptions) => {
     },
   });
 
-  // Notify parent when messages change
+  // Notify parent when messages change - but skip initial mount to avoid circular updates
   useEffect(() => {
-    options?.onMessagesChange?.(messages);
-  }, [messages, options]);
+    if (isInitialMountRef.current) {
+      isInitialMountRef.current = false;
+      return;
+    }
+    
+    // Call the ref-based callback to avoid dependency issues
+    onMessagesChangeRef.current?.(messages);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [messages]);
 
   const sendMessage = useCallback(
-    async (content: string, _files: File[] = []) => {
+    async (content: string, files: File[] = []) => {
+      // Create attachment entries for files
+      const attachments = files.map(file => ({
+        name: file.name,
+        type: file.type,
+        url: URL.createObjectURL(file),
+      }));
+
       const userMsg: Message = {
         id: Date.now().toString(),
         role: 'user',
         content,
         timestamp: Date.now(),
+        attachments: attachments.length > 0 ? attachments : undefined,
       };
       setMessages(prev => [...prev, userMsg]);
       setIsAgentLoading(true);

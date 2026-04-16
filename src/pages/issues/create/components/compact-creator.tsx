@@ -20,22 +20,15 @@ import {
   CheckSquare,
   Zap,
   AlertTriangle,
-  FolderGit2,
   CheckCircle,
-  ChevronDown,
+  ExternalLink,
 } from 'lucide-react';
 import { CreateIssueRequest } from '@/api/issue';
-import { useGetProjects } from '../hooks/use-get-projects';
 import { useCreateIssue } from '../hooks/use-create-issue';
+import { ProjectSelect } from '@/components/project-select';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Skeleton } from '@/components/ui/skeleton';
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from '@/components/ui/popover';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -43,16 +36,18 @@ import {
   DropdownMenuTrigger,
   DropdownMenuSeparator,
   DropdownMenuLabel,
+  DropdownMenuSub,
+  DropdownMenuSubTrigger,
+  DropdownMenuSubContent,
 } from '@/components/ui/dropdown-menu';
+import * as TooltipPrimitive from '@radix-ui/react-tooltip';
 import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
-import { Portal as TooltipPortal } from '@radix-ui/react-tooltip';
 import { useKeyboardIsolation } from '@/hooks/use-keyboard-isolation';
-import { formatProjectName } from '@/utils/project-formatter';
 import { cn } from '@/lib/utils';
 import { uploadService } from '@/services/upload';
 import { toast } from 'sonner';
@@ -60,6 +55,7 @@ import MarkdownIt from 'markdown-it';
 
 interface CompactIssueCreatorProps {
   onClose: () => void;
+  onGoToMain?: () => void;
   portalContainer: HTMLElement | null;
   initialData?: {
     title?: string;
@@ -76,6 +72,7 @@ interface CompactIssueCreatorProps {
 
 const CompactIssueCreator: React.FC<CompactIssueCreatorProps> = ({
   onClose,
+  onGoToMain,
   portalContainer,
   initialData = {},
 }) => {
@@ -99,8 +96,6 @@ const CompactIssueCreator: React.FC<CompactIssueCreatorProps> = ({
   }, [portalContainer, portalReady]);
 
   // Data Fetching
-  const { data: projects = [], isLoading: isLoadingProjects } =
-    useGetProjects();
 
   const createIssueMutation = useCreateIssue({
     onSuccess: () => {
@@ -119,23 +114,10 @@ const CompactIssueCreator: React.FC<CompactIssueCreatorProps> = ({
   const [selectedProject, setSelectedProject] = useState<any | null>(null);
 
   const publicDomain = process.env.R2_PUBLIC_DOMAIN || 'https://pub-03dd816d26684f7fba942512f600ddf5.r2.dev';
-
-  // Initialize selected project if ID is provided
-  useEffect(() => {
-    if (initialData.projectId && projects.length > 0 && !selectedProject) {
-      const found = projects.find((p: any) => p.id === initialData.projectId);
-      if (found) setSelectedProject(found);
-    }
-  }, [initialData.projectId, projects]);
-
-  // UI state
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [mdTab, setMdTab] = useState<'write' | 'preview'>('write');
   const [aiLoading, setAiLoading] = useState(false);
-
-  // Popover states
-  const [openProject, setOpenProject] = useState(false);
 
   // Markdown renderer
   const md = useMemo(() => {
@@ -380,57 +362,7 @@ const CompactIssueCreator: React.FC<CompactIssueCreatorProps> = ({
     [getSel]
   );
 
-  // Project picker state
-  const [projectQuery, setProjectQuery] = useState('');
-  const [projectHighlight, setProjectHighlight] = useState(0);
-  const projectInputRef = useRef<HTMLInputElement>(null);
-
-  // Filtered project list
-  const filteredProjects = useMemo(() => {
-    const q = projectQuery.trim().toLowerCase();
-    return (projects || []).filter(
-      (p: any) =>
-        !q ||
-        p.name.toLowerCase().includes(q) ||
-        (p.path_with_namespace &&
-          p.path_with_namespace.toLowerCase().includes(q))
-    );
-  }, [projects, projectQuery]);
-
-  // Reset picker state when popover opens
-  useEffect(() => {
-    if (openProject) {
-      setProjectQuery('');
-      setProjectHighlight(0);
-      setTimeout(() => projectInputRef.current?.focus(), 0);
-    }
-  }, [openProject]);
-
   // Project picker handlers
-  const selectProject = (idx: number) => {
-    const p = filteredProjects[idx];
-    if (!p) return;
-    setSelectedProject(p);
-    setOpenProject(false);
-  };
-
-  const handleProjectKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'ArrowDown') {
-      e.preventDefault();
-      setProjectHighlight(h =>
-        Math.min(h + 1, Math.max(0, filteredProjects.length - 1))
-      );
-    } else if (e.key === 'ArrowUp') {
-      e.preventDefault();
-      setProjectHighlight(h => Math.max(h - 1, 0));
-    } else if (e.key === 'Enter') {
-      e.preventDefault();
-      selectProject(projectHighlight);
-    } else if (e.key === 'Escape') {
-      setOpenProject(false);
-    }
-  };
-
   return (
     <div
       ref={containerRef}
@@ -474,88 +406,26 @@ const CompactIssueCreator: React.FC<CompactIssueCreatorProps> = ({
           handleCreate();
         }}
       >
-        {/* Project selector - full width */}
-        <Popover open={openProject} onOpenChange={setOpenProject}>
-          <PopoverTrigger asChild>
+        {onGoToMain && (
+          <div className="flex justify-end">
             <button
               type="button"
-              className={cn(
-                'w-full flex items-center justify-between px-3 py-2 text-sm border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors',
-                createIssueMutation.isPending &&
-                  'opacity-50 pointer-events-none'
-              )}
+              onClick={onGoToMain}
+              className="flex items-center gap-1 text-[10px] text-gray-500 hover:text-gray-700 hover:bg-gray-100 px-2 py-1 rounded transition-colors"
             >
-              <div className="flex items-center gap-2 min-w-0">
-                <FolderGit2 className="w-4 h-4 text-blue-600 flex-shrink-0" />
-                <span className="text-gray-500">Project</span>
-                <span className="text-gray-900 font-medium truncate">
-                  {selectedProject
-                    ? formatProjectName(selectedProject)
-                    : 'Select project'}
-                </span>
-              </div>
-              <ChevronDown
-                className={cn(
-                  'w-4 h-4 text-gray-400 flex-shrink-0 transition-transform',
-                  openProject && 'rotate-180'
-                )}
-              />
+              <ExternalLink className="w-3 h-3" />
+              Open full page
             </button>
-          </PopoverTrigger>
-          <PopoverContent
-            className="p-2 w-[var(--radix-popover-trigger-width)]"
-            container={getPortalContainer()}
-            align="start"
-          >
-            <div className="space-y-2">
-              <input
-                ref={projectInputRef}
-                className="text-sm w-full px-2 py-1.5 h-8 border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="Search projects..."
-                value={projectQuery}
-                onChange={e => setProjectQuery(e.target.value)}
-                onKeyDown={handleProjectKeyDown}
-              />
-              <div className="max-h-48 overflow-auto">
-                {isLoadingProjects ? (
-                  <div className="space-y-2 p-1">
-                    <SkeletonRow />
-                    <SkeletonRow />
-                    <SkeletonRow />
-                  </div>
-                ) : filteredProjects.length === 0 ? (
-                  <div className="text-xs text-gray-500 px-2 py-3 text-center">
-                    No projects found
-                  </div>
-                ) : (
-                  <ul role="listbox" className="text-sm">
-                    {filteredProjects.map((p: any, idx) => (
-                      <li
-                        key={p.id}
-                        role="option"
-                        aria-selected={idx === projectHighlight}
-                      >
-                        <button
-                          type="button"
-                          className={cn(
-                            'w-full text-left px-2 py-1.5 rounded-md transition-colors',
-                            idx === projectHighlight
-                              ? 'bg-blue-50 text-blue-700'
-                              : 'hover:bg-gray-50'
-                          )}
-                          onMouseEnter={() => setProjectHighlight(idx)}
-                          onClick={() => selectProject(idx)}
-                        >
-                          {formatProjectName(p)}
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-            </div>
-          </PopoverContent>
-        </Popover>
+          </div>
+        )}
+        {/* Project selector - full width */}
+        <ProjectSelect
+          value={selectedProject?.id ?? null}
+          onSelect={project => setSelectedProject(project)}
+          mode="single"
+          portalContainer={getPortalContainer()}
+          placeholder="Select project..."
+        />
 
         {/* Title Input */}
         <div className="space-y-1">
@@ -713,11 +583,11 @@ const CompactIssueCreator: React.FC<CompactIssueCreatorProps> = ({
                       )}
                     </Button>
                   </TooltipTrigger>
-                  <TooltipPortal container={getPortalContainer()}>
+                  <TooltipPrimitive.Portal container={getPortalContainer()}>
                     <TooltipContent side="bottom">
                       <p className="text-xs">Enhance with AI</p>
                     </TooltipContent>
-                  </TooltipPortal>
+                  </TooltipPrimitive.Portal>
                 </Tooltip>
               </TooltipProvider>
             </div>
@@ -783,12 +653,5 @@ const CompactIssueCreator: React.FC<CompactIssueCreatorProps> = ({
     </div>
   );
 };
-
-const SkeletonRow: React.FC = () => (
-  <div className="flex items-center gap-2 px-2 py-1">
-    <Skeleton className="h-4 w-4 rounded" />
-    <Skeleton className="h-4 w-32" />
-  </div>
-);
 
 export default CompactIssueCreator;

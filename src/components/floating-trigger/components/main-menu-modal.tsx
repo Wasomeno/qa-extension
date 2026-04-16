@@ -18,6 +18,9 @@ import {
   NavigationProvider,
   useNavigation,
 } from '@/contexts/navigation-context';
+import {
+  SelectedProjectProvider,
+} from '@/contexts/selected-project-context';
 import { ViewType } from '@/types/navigation';
 import { useSession } from '@/contexts/session-context';
 
@@ -28,8 +31,12 @@ import { PinnedPage } from '@/pages/pinned';
 import { CreateIssuePage } from '@/pages/issues/create';
 import { ProfilePage } from '@/pages/profile';
 import { AgentPage } from '@/pages/agent';
+import { SessionsListPage } from '@/pages/agent/sessions-list';
+import { ChatViewPage } from '@/pages/agent/chat-view-page';
 import { RecordingsPage } from '@/pages/recordings';
 import { TestScenariosPage } from '@/pages/test-scenarios';
+import { ScenarioDetail } from '@/pages/test-scenarios/components/scenario-detail';
+
 
 import {
   SidebarProvider,
@@ -52,6 +59,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
+import { Toaster } from '@/components/ui/sonner';
 
 interface MenuItem {
   id: ViewType;
@@ -87,11 +95,14 @@ const MainMenuInner: React.FC<MainMenuModalProps> = ({
   initialIssue,
   initialView,
 }) => {
-  const { current, reset, push } = useNavigation();
+  const { current, reset, push, pop } = useNavigation();
   const queryClient = useQueryClient();
   const isFetching = useIsFetching();
   const keyboardIsolation = useKeyboardIsolation();
   const [container, setContainer] = useState<HTMLDivElement | null>(null);
+  const [modalContainer, setModalContainer] = useState<HTMLDivElement | null>(
+    null
+  );
   const [isRefreshing, setIsRefreshing] = useState(false);
   const session = useSession();
   const hookUser = useSessionUser();
@@ -167,10 +178,41 @@ const MainMenuInner: React.FC<MainMenuModalProps> = ({
         return <ProfilePage portalContainer={container} />;
       case 'agent':
         return <AgentPage portalContainer={container} />;
+      case 'chat-sessions':
+        return <SessionsListPage />;
+      case 'chat-view':
+        return <ChatViewPage sessionId={current.params?.sessionId} />;
       case 'recordings':
         return <RecordingsPage portalContainer={container} />;
       case 'test-scenarios':
-        return <TestScenariosPage portalContainer={container} />;
+        return (
+          <TestScenariosPage
+            portalContainer={container}
+          />
+        );
+      case 'test-scenario-detail':
+        return (
+          <ScenarioDetail
+            scenario={current.params}
+            onClose={() => pop()}
+            onGenerate={(sheets) => {
+              // Handle generate - this would need to be connected to the test scenario API
+              console.log('Generate for sheets:', sheets);
+            }}
+            onDelete={() => {
+              // Handle delete
+              pop();
+            }}
+            onViewGeneratedId={(id) => {
+              // Navigate to the generated test detail (same as test recording detail)
+              const url = chrome.runtime.getURL(`recording-detail.html?id=${id}`);
+              chrome.runtime.sendMessage({
+                type: MessageType.OPEN_URL,
+                data: { url },
+              });
+            }}
+          />
+        );
       default:
         return <AgentPage portalContainer={container} />;
     }
@@ -202,6 +244,7 @@ const MainMenuInner: React.FC<MainMenuModalProps> = ({
         style={{ zIndex: 999999 }}
       >
         <motion.div
+          ref={setModalContainer}
           initial={{ opacity: 0, scale: 0.95, y: 20 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.95, y: 20 }}
@@ -318,35 +361,31 @@ const MainMenuInner: React.FC<MainMenuModalProps> = ({
               <div className="flex-1 flex flex-col min-w-0 overflow-hidden bg-background relative">
                 {/* Global Refresh Icon */}
                 <div className="absolute bottom-4 right-4 z-[60]">
-                  <TooltipProvider>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <button
-                          onClick={handleRefresh}
-                          className="p-2 hover:bg-gray-100 rounded-full transition-colors text-gray-500 hover:text-gray-900"
-                        >
-                          <RefreshCw
-                            className={cn(
-                              'w-4 h-4',
-                              isRefreshing && 'animate-spin'
-                            )}
-                          />
-                        </button>
-                      </TooltipTrigger>
-                      <TooltipContent side="left">Refresh data</TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
+                  <button
+                    onClick={handleRefresh}
+                    className="p-2 hover:bg-gray-100 rounded-full transition-colors text-gray-500 hover:text-gray-900"
+                  >
+                    <RefreshCw
+                      className={cn(
+                        'w-4 h-4',
+                        isRefreshing && 'animate-spin'
+                      )}
+                    />
+                  </button>
                 </div>
-
-                <motion.div
-                  key={current.view}
-                  initial={{ opacity: 0, x: 10 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ duration: 0.15 }}
-                  className="flex-1 flex flex-col relative w-full h-full"
-                >
-                  {renderContent()}
-                </motion.div>
+                <TooltipProvider delayDuration={500}>
+                  <div className="flex-1 flex flex-col relative w-full h-full">
+                    <motion.div
+                      key={current.view}
+                      initial={{ opacity: 0, x: 10 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ duration: 0.15 }}
+                      className="flex-1 flex flex-col relative w-full h-full"
+                    >
+                      {renderContent()}
+                    </motion.div>
+                  </div>
+                </TooltipProvider>
               </div>
             </div>
           </SidebarProvider>
@@ -359,9 +398,12 @@ const MainMenuInner: React.FC<MainMenuModalProps> = ({
 const MainMenuModal: React.FC<MainMenuModalProps> = props => {
   return (
     <NavigationProvider initialView={props.initialView || 'agent'}>
-      <AnimatePresence>
-        {props.isOpen && <MainMenuInner {...props} />}
-      </AnimatePresence>
+      <SelectedProjectProvider>
+        <AnimatePresence>
+          {props.isOpen && <MainMenuInner {...props} />}
+        </AnimatePresence>
+        <Toaster position="bottom-right" />
+      </SelectedProjectProvider>
     </NavigationProvider>
   );
 };

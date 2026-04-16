@@ -2,10 +2,39 @@ import { EventLogger } from './event-logger';
 import { MessageType } from '@/types/messages';
 
 const IFRAME_ID = 'qa-recorder-iframe';
+const BRIDGE_MESSAGE_TYPE = '__QA_EXTENSION_MESSAGE__';
+
+interface BridgeMessage {
+  type: string;
+  message?: {
+    type: string;
+    data?: any;
+  };
+  data?: any;
+}
+
 let iframe: HTMLIFrameElement | null = null;
 let logger: EventLogger | null = null;
 let isRecording = false;
 let initializationPromise: Promise<void> | null = null;
+
+// Helper to send message to iframe via postMessage
+function sendToIframe(message: BridgeMessage) {
+  if (!iframe?.contentWindow) {
+    console.log('[Recorder] Iframe not ready, cannot send message:', message.type);
+    return;
+  }
+  console.log('[Recorder] Sending to iframe:', message.type);
+  iframe.contentWindow.postMessage(
+    { type: BRIDGE_MESSAGE_TYPE, message },
+    '*'
+  );
+}
+
+// Helper to relay message to background
+function sendToBackground(message: { type: string; data?: any }) {
+  chrome.runtime.sendMessage(message).catch(e => console.error('[Recorder] Failed to send to background:', e));
+}
 
 function setIframeStyles(state: 'hidden' | 'overlay' | 'recording') {
   if (!iframe) {
@@ -13,7 +42,7 @@ function setIframeStyles(state: 'hidden' | 'overlay' | 'recording') {
     return;
   }
 
-  console.log(`[Recorder] Setting iframe styles to: ${state}`);
+  console.log(`[Recorder] setIframeStyles called with: ${state}, iframe opacity: ${iframe.style.opacity}, width: ${iframe.style.width}`);
 
   if (state === 'hidden') {
     iframe.style.width = '0px';
@@ -60,6 +89,12 @@ async function initializeRecorder() {
 async function doInitialize() {
   console.log('[Recorder] Initializing recorder...');
   
+  // Check if iframe already exists
+  if (document.getElementById(IFRAME_ID)) {
+    console.log('[Recorder] Iframe already exists, not creating another one');
+    iframe = document.getElementById(IFRAME_ID) as HTMLIFrameElement;
+  }
+  
   // Only run in main frame
   if (window !== window.top) {
     console.log('[Recorder] Not in main frame, skipping initialization');
@@ -103,35 +138,91 @@ async function doInitialize() {
       };
     });
 
-    // Initialize EventLogger with callback
+    // Initialize EventLogger with callback to send events to iframe
     logger = new EventLogger(IFRAME_ID, event => {
       console.log('[Recorder] Local callback: event captured', event.type);
-      try {
-        chrome.runtime.sendMessage({ 
-          type: MessageType.IFRAME_LOG_EVENT, 
-          data: event 
-        }).catch(e => console.error('[Recorder] Failed to send event:', e));
-      } catch (e) {
-        console.error('[Recorder] Local callback error:', e);
-      }
+      // Send event to iframe via postMessage
+      sendToIframe({
+        type: MessageType.IFRAME_LOG_EVENT,
+        data: event,
+      });
     });
     
     console.log('[Recorder] EventLogger initialized');
 
-    // Set up message listener
+    // Listen for messages from iframe
+    window.addEventListener('message', (event) => {
+      const message = event.data as BridgeMessage;
+      
+      // Only accept our bridge messages (check the unique message type)
+      if (!message || message.type !== BRIDGE_MESSAGE_TYPE) return;
+      
+      const innerMessage = message.message;
+      console.log('[Recorder] Message from iframe:', innerMessage?.type);
+
+      if (innerMessage?.type === 'ACTUAL_START_RECORDING') {
+        // Relay to background
+        chrome.runtime.sendMessage({
+          type: MessageType.ACTUAL_START_RECORDING,
+          data: innerMessage.data,
+        }).catch(e => {
+          console.error('[Recorder] Failed to start recording:', e);
+          sendToIframe({
+            type: MessageType.RECORDING_ERROR,
+            data: { error: e?.message || 'Failed to start recording' },
+          });
+        });
+      } else if (innerMessage?.type === MessageType.IFRAME_STARTED_RECORDING) {
+        console.log('[Recorder] IFRAME_STARTED_RECORDING from iframe');
+        if (!isRecording) {
+          console.log('[Recorder] Starting recording...');
+          isRecording = true;
+          logger?.start();
+          setIframeStyles('recording');
+          console.log('[Recorder] Recording started, logger active:', logger?.isActive());
+          
+          // Send confirmation back to iframe so it knows to show recording UI
+          sendToIframe({
+            type: 'RECORDING_CONFIRMED',
+          });
+        }
+        // Also relay to background
+        sendToBackground({ type: MessageType.IFRAME_STARTED_RECORDING });
+      } else if (innerMessage?.type === MessageType.STOP_RECORDING) {
+        console.log('[Recorder] STOP_RECORDING from iframe');
+        if (isRecording) {
+          isRecording = false;
+          const eventCount = logger?.getEventCount() || 0;
+          logger?.stop();
+          console.log(`[Recorder] Recording stopped. Total events captured: ${eventCount}`);
+        }
+        setIframeStyles('hidden');
+        sendToBackground({ type: MessageType.STOP_RECORDING });
+      } else if (innerMessage?.type === MessageType.IFRAME_CLOSED_OVERLAY) {
+        console.log('[Recorder] IFRAME_CLOSED_OVERLAY from iframe');
+        if (isRecording) {
+          isRecording = false;
+          logger?.stop();
+          console.log('[Recorder] Recording stopped');
+        }
+        setIframeStyles('hidden');
+        sendToBackground({ type: MessageType.IFRAME_CLOSED_OVERLAY });
+      }
+    });
+
+    // Set up message listener for messages from background/popup
     chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-      console.log('[Recorder] Message received:', message.type, 'from:', sender.url?.substring(0, 50));
+      console.log('[Recorder] Message from background:', message.type, 'sender:', sender.url?.substring(0, 50));
       
       switch (message.type) {
         case MessageType.OPEN_RECORDING_OVERLAY:
           console.log('[Recorder] OPEN_RECORDING_OVERLAY received');
           setIframeStyles('overlay');
-          chrome.runtime
-            .sendMessage({
-              type: MessageType.IFRAME_PREPARE_RECORDING,
-              data: message.data,
-            })
-            .catch(e => console.error('[Recorder] Failed to prepare:', e));
+          // Send prepare message to iframe
+          sendToIframe({
+            type: MessageType.IFRAME_PREPARE_RECORDING,
+            data: message.data,
+          });
           sendResponse({ success: true });
           break;
 
@@ -167,9 +258,10 @@ async function doInitialize() {
             console.log(`[Recorder] Recording stopped. Total events captured: ${eventCount}`);
           }
           setIframeStyles('hidden');
-          chrome.runtime
-            .sendMessage({ type: MessageType.IFRAME_STOP_RECORDING })
-            .catch(() => {});
+          // Notify iframe
+          sendToIframe({
+            type: MessageType.IFRAME_STOP_RECORDING,
+          });
           sendResponse({ success: true });
           break;
 
@@ -200,32 +292,6 @@ async function doInitialize() {
       logger?.start();
       setIframeStyles('recording');
     }
-
-    // Listen for storage changes
-    chrome.storage.onChanged.addListener((changes, areaName) => {
-      if (areaName !== 'local') return;
-      
-      console.log('[Recorder] Storage changed:', Object.keys(changes));
-      
-      if ('isRecording' in changes) {
-        const newValue = changes.isRecording.newValue;
-        console.log('[Recorder] isRecording changed to:', newValue);
-        
-        if (newValue && !isRecording) {
-          console.log('[Recorder] Starting recording from storage change');
-          isRecording = true;
-          logger?.start();
-          setIframeStyles('recording');
-        } else if (!newValue && isRecording) {
-          console.log('[Recorder] Stopping recording from storage change');
-          const eventCount = logger?.getEventCount() || 0;
-          isRecording = false;
-          logger?.stop();
-          console.log(`[Recorder] Recording stopped. Total events: ${eventCount}`);
-          setIframeStyles('hidden');
-        }
-      }
-    });
 
     (window as any).__QA_RECORDER_INITIALIZED__ = true;
     console.log('[Recorder] Initialization complete');

@@ -1,11 +1,10 @@
 import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { ProjectPicker } from './project-picker';
+import { ProjectSelect } from '@/components/project-select';
 import { LabelPicker } from './label-picker';
 import { AssigneePicker } from './assignee-picker';
 import { DescriptionEditor } from './description-editor';
-import { useGetProjects } from '../hooks/use-get-projects';
 import { useGetProjectLabels } from '../hooks/use-get-project-labels';
 import { useGetProjectMembers } from '../hooks/use-get-project-members';
 import { toast } from 'sonner';
@@ -41,9 +40,6 @@ export const IssueFormFields: React.FC<IssueFormFieldsProps> = ({
     selectedAssignee,
   } = formState;
 
-  // --- Data Fetching ---
-  const { data: projects = [], isLoading: isLoadingProjects } =
-    useGetProjects();
   const { data: labels = [], isLoading: isLoadingLabels } = useGetProjectLabels(
     selectedProject?.id
   );
@@ -60,7 +56,6 @@ export const IssueFormFields: React.FC<IssueFormFieldsProps> = ({
 
   const handleAIRequest = () => {
     setAiLoading(true);
-    // Simulate AI delay
     setTimeout(() => {
       setAiLoading(false);
       toast.info('AI enhancement is coming soon!');
@@ -113,10 +108,8 @@ export const IssueFormFields: React.FC<IssueFormFieldsProps> = ({
       {!hideProjectPicker && (
         <div className="space-y-2">
           <label className="text-sm font-medium text-gray-700">Project</label>
-          <ProjectPicker
-            projects={projects}
-            isLoading={isLoadingProjects}
-            selectedProject={selectedProject}
+          <ProjectSelect
+            value={selectedProject?.id ?? null}
             onSelect={project => {
               onChange({
                 selectedProject: project,
@@ -124,7 +117,9 @@ export const IssueFormFields: React.FC<IssueFormFieldsProps> = ({
                 selectedAssignee: null,
               });
             }}
-            portalContainer={portalContainer}
+            mode="single"
+            portalContainer={portalContainer ?? null}
+            placeholder="Select a project..."
           />
         </div>
       )}

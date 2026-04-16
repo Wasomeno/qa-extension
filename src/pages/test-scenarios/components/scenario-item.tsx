@@ -10,8 +10,12 @@ import {
   Check,
   X,
   Sheet,
+  Loader2,
+  CheckCircle,
+  AlertCircle,
 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
+import { motion, AnimatePresence } from 'framer-motion';
 import { TestScenario } from '@/types/test-scenario';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -30,6 +34,8 @@ interface ScenarioItemProps {
   onClick: () => void;
   onGenerate: (e: React.MouseEvent) => void;
   onDelete: (e: React.MouseEvent) => void;
+  isDeleting?: boolean;
+  deleteError?: string | null;
 }
 
 export const ScenarioItem: React.FC<ScenarioItemProps> = ({
@@ -39,11 +45,20 @@ export const ScenarioItem: React.FC<ScenarioItemProps> = ({
   onClick,
   onGenerate,
   onDelete,
+  isDeleting = false,
+  deleteError = null,
 }) => {
   const [isConfirmingDelete, setIsConfirmingDelete] = React.useState(false);
   const isGenerating = scenario.status === 'generating';
   const isReady = scenario.status === 'ready';
   const isFailed = scenario.status === 'failed';
+
+  // Close confirmation dialog when deletion starts
+  React.useEffect(() => {
+    if (isDeleting) {
+      setIsConfirmingDelete(false);
+    }
+  }, [isDeleting]);
 
   const totalTestCases = (scenario.sheets || []).reduce(
     (acc, sheet) => acc + (sheet.testCases?.length || 0),
@@ -64,32 +79,80 @@ export const ScenarioItem: React.FC<ScenarioItemProps> = ({
           className="absolute inset-0 z-10 bg-white/95 backdrop-blur-sm flex flex-col items-center justify-center p-4 text-center animate-in fade-in duration-200"
           onClick={e => e.stopPropagation()}
         >
-          <Trash2 className="w-8 h-8 text-red-500 mb-2" />
-          <p className="text-sm font-bold text-gray-900 mb-1">
-            Delete this test scenario?
-          </p>
-          <p className="text-xs text-gray-500 mb-4">
-            This action cannot be undone.
-          </p>
-          <div className="flex items-center gap-2 w-full">
-            <Button
-              variant="outline"
-              className="flex-1 h-9 text-xs"
-              onClick={e => {
-                e.stopPropagation();
-                setIsConfirmingDelete(false);
-              }}
-            >
-              Cancel
-            </Button>
-            <Button
-              variant="destructive"
-              className="flex-1 h-9 text-xs bg-red-600 hover:bg-red-700"
-              onClick={onDelete}
-            >
-              Delete
-            </Button>
-          </div>
+          {isDeleting ? (
+            <>
+              <motion.div
+                animate={{ rotate: 360 }}
+                transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
+              >
+                <Loader2 className="w-8 h-8 text-zinc-600 mb-2" />
+              </motion.div>
+              <p className="text-sm font-semibold text-zinc-900 mb-1">
+                Deleting...
+              </p>
+              <p className="text-xs text-zinc-500">
+                Please wait while we remove this scenario.
+              </p>
+            </>
+          ) : deleteError ? (
+            <>
+              <AlertCircle className="w-8 h-8 text-red-500 mb-2" />
+              <p className="text-sm font-bold text-gray-900 mb-1">
+                Failed to delete
+              </p>
+              <p className="text-xs text-red-600 mb-4 max-w-[200px]">
+                {deleteError}
+              </p>
+              <div className="flex items-center gap-2 w-full">
+                <Button
+                  variant="outline"
+                  className="flex-1 h-9 text-xs"
+                  onClick={e => {
+                    e.stopPropagation();
+                    setIsConfirmingDelete(false);
+                  }}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  variant="destructive"
+                  className="flex-1 h-9 text-xs bg-red-600 hover:bg-red-700"
+                  onClick={onDelete}
+                >
+                  Retry
+                </Button>
+              </div>
+            </>
+          ) : (
+            <>
+              <Trash2 className="w-8 h-8 text-red-500 mb-2" />
+              <p className="text-sm font-bold text-gray-900 mb-1">
+                Delete this test scenario?
+              </p>
+              <p className="text-xs text-gray-500 mb-4">
+                This action cannot be undone.
+              </p>
+              <div className="flex items-center gap-2 w-full">
+                <Button
+                  variant="outline"
+                  className="flex-1 h-9 text-xs"
+                  onClick={e => {
+                    e.stopPropagation();
+                    setIsConfirmingDelete(false);
+                  }}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  variant="destructive"
+                  className="flex-1 h-9 text-xs bg-red-600 hover:bg-red-700"
+                  onClick={onDelete}
+                >
+                  Delete
+                </Button>
+              </div>
+            </>
+          )}
         </div>
       )}
 
@@ -118,16 +181,30 @@ export const ScenarioItem: React.FC<ScenarioItemProps> = ({
                   <Button
                     variant="ghost"
                     size="icon"
-                    className="h-8 w-8 text-zinc-500 hover:text-red-600 hover:bg-red-50"
+                    className={cn(
+                      "h-8 w-8",
+                      isDeleting 
+                        ? "text-zinc-400 cursor-not-allowed" 
+                        : "text-zinc-500 hover:text-red-600 hover:bg-red-50"
+                    )}
                     onClick={e => {
                       e.stopPropagation();
-                      setIsConfirmingDelete(true);
+                      if (!isDeleting) {
+                        setIsConfirmingDelete(true);
+                      }
                     }}
+                    disabled={isDeleting}
                   >
-                    <Trash2 className="w-4 h-4" />
+                    {isDeleting ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <Trash2 className="w-4 h-4" />
+                    )}
                   </Button>
                 </TooltipTrigger>
-                <TooltipContent>Delete Wrapper</TooltipContent>
+                <TooltipContent>
+                  {isDeleting ? 'Deleting...' : 'Delete Wrapper'}
+                </TooltipContent>
               </Tooltip>
 
               <Tooltip>
@@ -135,8 +212,14 @@ export const ScenarioItem: React.FC<ScenarioItemProps> = ({
                   <Button
                     variant="ghost"
                     size="icon"
-                    className="h-8 w-8 text-zinc-500 hover:text-blue-600 hover:bg-blue-50"
+                    className={cn(
+                      "h-8 w-8",
+                      isDeleting
+                        ? "text-zinc-300 cursor-not-allowed"
+                        : "text-zinc-500 hover:text-blue-600 hover:bg-blue-50"
+                    )}
                     onClick={onGenerate}
+                    disabled={isDeleting}
                   >
                     <Play className="w-4 h-4" />
                   </Button>

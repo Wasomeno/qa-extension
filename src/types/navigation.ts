@@ -6,8 +6,12 @@ export type ViewType =
   | 'create-issue'
   | 'profile'
   | 'agent'
+  | 'chat-sessions'
+  | 'chat-view'
   | 'recordings'
   | 'test-scenarios'
+  | 'test-scenario-detail'
+
   | 'login'
   | 'loading'
   | 'recording-detail';

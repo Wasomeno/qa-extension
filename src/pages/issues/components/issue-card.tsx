@@ -44,6 +44,7 @@ interface BaseIssueCardProps {
   onClick: (issue: IssueWithPin) => void;
   actions?: React.ReactNode;
   showPinnedStyles?: boolean;
+  className?: string;
 }
 
 /**
@@ -54,6 +55,7 @@ export const BaseIssueCard: React.FC<BaseIssueCardProps> = ({
   onClick,
   actions,
   showPinnedStyles = false,
+  className = '',
 }) => {
   const assignee = issue.assignees?.[0];
 
@@ -61,7 +63,8 @@ export const BaseIssueCard: React.FC<BaseIssueCardProps> = ({
     <div
       onClick={() => onClick(issue)}
       className={cn(
-        'group relative p-3 bg-white border border-gray-200 rounded-lg hover:border-gray-300 hover:shadow-sm transition-all cursor-pointer mb-2 overflow-hidden'
+        'group relative p-3 bg-white border border-gray-200 rounded-lg hover:border-gray-300 hover:shadow-sm transition-all cursor-pointer mb-2 overflow-hidden w-full',
+        className
       )}
     >
       {/* Dynamic Pin Color Bar */}
@@ -182,6 +185,7 @@ interface IssueCardProps {
   onSetPinColor?: (issue: IssueWithPin) => void;
   onAddNote?: (issue: IssueWithPin) => void;
   variant?: 'default' | 'pinned';
+  className?: string;
 }
 
 /**
@@ -189,7 +193,7 @@ interface IssueCardProps {
  */
 const withIssueActions = (variant: 'default' | 'pinned') => {
   return (props: IssueCardProps) => {
-    const { issue, onPin, onUnpin, onSetPinColor, onAddNote } = props;
+    const { issue, onPin, onUnpin, onSetPinColor, onAddNote, className } = props;
     const isPinned = variant === 'pinned';
 
     const handleOpenGitlab = (e: React.MouseEvent) => {
@@ -267,7 +271,7 @@ const withIssueActions = (variant: 'default' | 'pinned') => {
     );
 
     return (
-      <BaseIssueCard {...props} showPinnedStyles={isPinned} actions={actions} />
+      <BaseIssueCard {...props} showPinnedStyles={isPinned} actions={actions} className={className} />
     );
   };
 };
@@ -283,7 +287,8 @@ export const PinnedIssueCard = withIssueActions('pinned');
  * but uses the HOC-refactored architecture under the hood.
  */
 export const IssueCard: React.FC<IssueCardProps> = props => {
+  const { className, ...rest } = props;
   const Component =
-    props.variant === 'pinned' ? PinnedIssueCard : DefaultIssueCard;
-  return <Component {...props} />;
+    rest.variant === 'pinned' ? PinnedIssueCard : DefaultIssueCard;
+  return <Component {...rest} className={className} />;
 };

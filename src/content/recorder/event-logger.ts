@@ -88,10 +88,27 @@ export class EventLogger {
 
     this.eventCount++;
 
+    const elementInfo = getElementInfo(target);
+    
+    // Debug: Log xpath generation status
+    console.log(`[EventLogger] Element info for ${target.tagName.toLowerCase()}:`, {
+      selector: elementInfo.selector,
+      xpath: elementInfo.xpath,
+      xpathCandidatesCount: elementInfo.xpathCandidates?.length || 0,
+      xpathCandidates: elementInfo.xpathCandidates,
+      hasText: !!elementInfo.textContent,
+      hasAttributes: !!Object.keys(elementInfo.attributes || {}).length,
+      hasDataTestId: !!(
+        elementInfo.attributes?.['data-testid'] ||
+        elementInfo.attributes?.['data-qa'] ||
+        elementInfo.attributes?.['data-cy']
+      ),
+    });
+
     const interactionEvent: RawEvent = {
       type: event.type as any,
       timestamp: Date.now(),
-      element: getElementInfo(target),
+      element: elementInfo,
       url: window.location.href,
       viewport: {
         width: window.innerWidth,

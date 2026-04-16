@@ -37,16 +37,21 @@ export const useSessionUser = () => {
     try {
       setLoading(true);
       const response = await getCurrentUser();
+      console.log('[useSessionUser] API response:', response);
       if (response.success && response.data) {
+        console.log('[useSessionUser] User data:', response.data);
+        console.log('[useSessionUser] avatar_url:', response.data.avatar_url);
+        setLoading(false);
         await setUser(response.data);
         return response.data;
-      } else if (response.success === false) {
+      } else {
+        setLoading(false);
         await clearUser();
       }
     } catch (err) {
-      // Keep existing state on network error, but we could clear it here too if desired
-    } finally {
+      console.log('[useSessionUser] Error:', err);
       setLoading(false);
+      // Keep existing state on network error, but we could clear it here too if desired
     }
     return null;
   }, [setUser, clearUser]);
@@ -58,11 +63,11 @@ export const useSessionUser = () => {
       chrome.storage.session.get(STORAGE_KEY).then(result => {
         if (result[STORAGE_KEY]) {
           setUserState(result[STORAGE_KEY]);
+          setLoading(false); // User exists in storage, no need to fetch
         } else {
-          // Auto-check session on mount
+          // No user in storage - need to check API (syncUser will set loading: false)
           syncUser();
         }
-        setLoading(false);
       });
     } else {
       setLoading(false);
@@ -93,7 +98,9 @@ export const useSessionUser = () => {
     };
 
     const handleFocus = () => {
-      syncUser();
+      // Don't auto-refetch on focus - we want session to remain stable
+      // The user session is stored in chrome.storage.session which persists until browser close
+      // Explicit sync only happens when needed (e.g., after login/logout)
     };
 
     chrome.storage.onChanged.addListener(handleStorageChange);

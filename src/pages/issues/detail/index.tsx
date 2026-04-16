@@ -1,9 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import {
   ArrowLeft,
   ExternalLink,
-  MoreVertical,
   Pin,
   GitPullRequest,
   Pencil,
@@ -12,6 +11,8 @@ import {
   Smile,
   Reply,
   Trash2,
+  Copy,
+  Check,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -37,6 +38,7 @@ import { useGetIssue } from '../hooks/use-get-issue';
 import { useGetIssueComments } from '../hooks/use-get-issue-comments';
 import { ChildIssuesList } from '@/pages/issues/detail/components/child-issues-list';
 import { useIssueCommentMutations } from '@/pages/issues/hooks/use-issue-comment-mutations';
+import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from '@/components/ui/tooltip';
 
 interface IssueDetailPageProps {
   issue?: Issue;
@@ -167,12 +169,29 @@ export const IssueDetailPage: React.FC<IssueDetailPageProps> = ({
     projectId!,
     issueId!
   );
-  const currentIssue = fetchedIssueData?.data || issue;
+  
+  // Merge fetched data with initial issue, prioritizing fetched data but keeping label_details from initial issue
+  // This fixes the bug where fetched data loses label_details and causes colors to disappear
+  const currentIssue = useMemo(() => {
+    const fetched = fetchedIssueData?.data;
+    if (!fetched) return issue;
+    
+    // If fetched data lacks label_details but initial issue has them, preserve initial label_details
+    if (!fetched.label_details?.length && issue?.label_details?.length) {
+      return {
+        ...fetched,
+        label_details: issue.label_details,
+      };
+    }
+    
+    return fetched;
+  }, [fetchedIssueData, issue]);
 
   const [editingField, setEditingField] = useState<
     'description' | 'status' | 'assignee' | 'labels' | null
   >(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [copied, setCopied] = useState(false);
   const { togglePin, isPinned } = usePinnedIssues();
 
   const [description, setDescription] = useState(
@@ -251,11 +270,17 @@ export const IssueDetailPage: React.FC<IssueDetailPageProps> = ({
     projectId!
   );
 
+  // Effect to sync fetched data with local state - only update when data changes to avoid overwriting prop-based data
   useEffect(() => {
     if (fetchedIssueData?.data) {
       const data = fetchedIssueData.data;
+      
+      // Only update state if we don't have data from the prop (issue) already
+      // This prevents overwriting initial prop data when the API response lacks label_details
       setDescription(data.description);
       setStatus(data.state === 'closed' ? 'closed' : 'opened');
+      
+      // Only update assignee from fetched data
       setSelectedAssignee(
         data.assignees?.[0]
           ? {
@@ -268,23 +293,10 @@ export const IssueDetailPage: React.FC<IssueDetailPageProps> = ({
             }
           : undefined
       );
-      setSelectedLabels(
-        data.label_details
-          ? data.label_details.map(l => ({
-              id: String(l.id),
-              name: l.name,
-              color: l.color,
-              textColor: l.text_color,
-              description: l.description,
-            }))
-          : (data.labels || []).map(l => ({
-              id: String(l),
-              name: String(l),
-              color: '#ccc',
-              textColor: '#000',
-              description: '',
-            }))
-      );
+      
+      // Don't update selectedLabels from fetched data - currentIssue already has preserved label_details
+      // This prevents the bug where the API response (which lacks label_details) would 
+      // overwrite the initial prop data (which has label_details with colors)
     }
   }, [fetchedIssueData]);
 
@@ -399,23 +411,20 @@ export const IssueDetailPage: React.FC<IssueDetailPageProps> = ({
           }
         : undefined
     );
-    setSelectedLabels(
-      currentIssue.label_details
-        ? currentIssue.label_details.map(l => ({
-            id: String(l.id),
-            name: l.name,
-            color: l.color,
-            textColor: l.text_color,
-            description: l.description,
-          }))
-        : (currentIssue.labels || []).map(l => ({
-            id: String(l),
-            name: String(l),
-            color: '#ccc',
-            textColor: '#000',
-            description: '',
-          }))
-    );
+    
+    // Only reset labels if we have label_details in currentIssue
+    // This fixes the bug where resetting would lose label colors
+    if (currentIssue.label_details && currentIssue.label_details.length > 0) {
+      setSelectedLabels(
+        currentIssue.label_details.map(l => ({
+          id: String(l.id),
+          name: l.name,
+          color: l.color,
+          textColor: l.text_color,
+          description: l.description,
+        }))
+      );
+    }
   };
 
   return (
@@ -465,40 +474,99 @@ export const IssueDetailPage: React.FC<IssueDetailPageProps> = ({
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <Button
-              variant="ghost"
-              onClick={() =>
-                currentIssue.web_url &&
-                window.open(currentIssue.web_url, '_blank')
-              }
-              className="!p-2 h-auto hover:bg-gray-100 rounded-lg text-gray-400 hover:text-blue-600 transition-colors"
-              title="Open in GitLab"
-            >
-              <ExternalLink className="w-4 h-4" />
-            </Button>
-            <Button
-              variant="ghost"
-              onClick={() => togglePin(currentIssue)}
-              className={cn(
-                '!p-2 h-auto rounded-lg transition-colors',
-                isPinned(currentIssue.iid, currentIssue.project_id)
-                  ? 'bg-amber-100 text-amber-500 hover:bg-amber-200 hover:text-amber-600'
-                  : 'text-gray-400 hover:bg-gray-100 hover:text-gray-900'
-              )}
-              title={
-                isPinned(currentIssue.iid, currentIssue.project_id)
-                  ? 'Unpin Issue'
-                  : 'Pin Issue'
-              }
-            >
-              <Pin
-                className={cn(
-                  'w-4 h-4',
-                  isPinned(currentIssue.iid, currentIssue.project_id) &&
-                    'fill-current'
-                )}
-              />
-            </Button>
+            <TooltipProvider delayDuration={0}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <motion.button
+                    whileTap={{ scale: 0.9 }}
+                    transition={{ duration: 0.1 }}
+                    onClick={() => {
+                      const content = [
+                        `# ${currentIssue.title}`,
+                        '',
+                        `**Description:**`,
+                        currentIssue.description || '_No description_',
+                        '',
+                        `**Labels:** ${currentIssue.labels?.join(', ') || 'None'}`,
+                        '',
+                        `**Assignees:** ${currentIssue.assignees?.map((a: any) => a.name).join(', ') || 'Unassigned'}`,
+                        '',
+                        `**Status:** ${currentIssue.state || 'Open'}`,
+                        '',
+                        `**Link:** ${currentIssue.web_url}`,
+                      ].filter(Boolean).join('\n');
+
+                      navigator.clipboard.writeText(content);
+                      setCopied(true);
+                      setTimeout(() => setCopied(false), 2000);
+                    }}
+                    className={cn(
+                      'p-2 rounded-lg transition-colors',
+                      copied
+                        ? 'text-green-600'
+                        : 'text-gray-400 hover:bg-gray-100 hover:text-gray-700'
+                    )}
+                  >
+                    {copied ? (
+                      <Check className="w-4 h-4" />
+                    ) : (
+                      <Copy className="w-4 h-4" />
+                    )}
+                  </motion.button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">
+                  <p>{copied ? 'Copied!' : 'Copy to clipboard'}</p>
+                </TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <motion.button
+                    whileTap={{ scale: 0.9 }}
+                    transition={{ duration: 0.1 }}
+                    onClick={() =>
+                      currentIssue.web_url &&
+                      window.open(currentIssue.web_url, '_blank')
+                    }
+                    className="p-2 hover:bg-gray-100 rounded-lg text-gray-400 hover:text-blue-600 transition-colors"
+                  >
+                    <ExternalLink className="w-4 h-4" />
+                  </motion.button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">
+                  <p>Open in GitLab</p>
+                </TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <motion.button
+                    whileTap={{ scale: 0.9 }}
+                    transition={{ duration: 0.1 }}
+                    onClick={() => togglePin(currentIssue)}
+                    className={cn(
+                      'p-2 rounded-lg transition-colors',
+                      isPinned(currentIssue.iid, currentIssue.project_id)
+                        ? 'bg-amber-100 text-amber-500 hover:bg-amber-200 hover:text-amber-600'
+                        : 'text-gray-400 hover:bg-gray-100 hover:text-gray-900'
+                    )}
+                  >
+                    <Pin
+                      className={cn(
+                        'w-4 h-4',
+                        isPinned(currentIssue.iid, currentIssue.project_id) &&
+                          'fill-current'
+                      )}
+                    />
+                  </motion.button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">
+                  <p>
+                    {isPinned(currentIssue.iid, currentIssue.project_id)
+                      ? 'Unpin Issue'
+                      : 'Pin Issue'}
+                  </p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           </div>
         </div>
       </div>
@@ -613,7 +681,7 @@ export const IssueDetailPage: React.FC<IssueDetailPageProps> = ({
                                     onClick={() =>
                                       handleDeleteComment(comment.id)
                                     }
-                                    className="p-1 hover:bg-gray-200 rounded text-gray-400 hover:text-red-600"
+                                    className="p-1 hover:bg-red-50 rounded text-gray-400 hover:text-red-600"
                                   >
                                     <Trash2 className="w-3.5 h-3.5" />
                                   </button>

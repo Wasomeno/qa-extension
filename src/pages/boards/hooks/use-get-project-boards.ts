@@ -6,6 +6,8 @@ export function useGetProjectBoards(projectId: number) {
     queryKey: ['project-boards', projectId],
     queryFn: () => getProjectBoards(projectId),
     enabled: !!projectId,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
   });
 
   return {

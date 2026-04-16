@@ -1,19 +1,24 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
+import { motion } from 'framer-motion';
 import { useQuery } from '@tanstack/react-query';
-import { Upload, X, File as FileIcon, Loader2, Check } from 'lucide-react';
+import { Upload, X, Loader2, Check } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { getProjects } from '@/api/project';
 import { testScenarioApi } from '@/api/test-scenario';
+import { cn } from '@/lib/utils';
 import { AuthConfig, TestScenario } from '@/types/test-scenario';
 import { SearchablePicker } from '@/pages/issues/components/searchable-picker';
+import { useDebounce } from '@/utils/useDebounce';
 
 interface UploadWizardProps {
   isOpen: boolean;
   onClose: () => void;
   onSuccess: () => void;
   portalContainer?: HTMLElement | null;
+  variant?: 'overlay' | 'inline';
 }
 
 export const UploadWizard: React.FC<UploadWizardProps> = ({
@@ -21,7 +26,35 @@ export const UploadWizard: React.FC<UploadWizardProps> = ({
   onClose,
   onSuccess,
   portalContainer,
+  variant = 'overlay',
 }) => {
+  // Stable refs — avoid stale closures
+  const onCloseRef = useRef(onClose);
+  const onSuccessRef = useRef(onSuccess);
+  useEffect(() => {
+    onCloseRef.current = onClose;
+    onSuccessRef.current = onSuccess;
+  });
+
+  // isClosing=true means the exit animation is running.
+  // It is set to true when isOpen becomes false, and reset to false
+  // when isOpen becomes true (new enter cycle starts).
+  const [isClosing, setIsClosing] = useState(false);
+
+  useEffect(() => {
+    if (isOpen) {
+      setIsClosing(false);
+    } else {
+      setIsClosing(true);
+    }
+  }, [isOpen]);
+
+  // handleClose must be unconditional (Rules of Hooks)
+  const handleClose = useCallback(() => {
+    onCloseRef.current();
+  }, []);
+
+  // All other hooks — always called before any early return
   const [step, setStep] = useState<1 | 2>(1);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(null);
@@ -46,13 +79,20 @@ export const UploadWizard: React.FC<UploadWizardProps> = ({
   const [selectedSheets, setSelectedSheets] = useState<string[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
   const [projectSearch, setProjectSearch] = useState('');
+  const debouncedProjectSearch = useDebounce(projectSearch, 400);
 
-  const { data: projectsData } = useQuery({
-    queryKey: ['projects', projectSearch],
-    queryFn: () => getProjects(projectSearch),
+  const { data: projectsData, isFetching: isFetchingProjects } = useQuery({
+    queryKey: ['projects', debouncedProjectSearch],
+    queryFn: () => getProjects(debouncedProjectSearch),
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
   });
   const projects = projectsData?.data?.projects || [];
 
+  const isInline = variant === 'inline';
+  const usePortal = isInline && !!portalContainer;
+
+  // ─── Event handlers ────────────────────────────────────────────────────────
   const handleUpload = async () => {
     if (!file || !projectId || !authConfig.baseUrl || !authConfig.username)
       return;
@@ -66,7 +106,6 @@ export const UploadWizard: React.FC<UploadWizardProps> = ({
       );
 
       setUploadedScenario(res);
-      // Fetch the full scenario to see sheets
       const details = await testScenarioApi.getScenario(res.id);
       setScenarioDetails(details);
 
@@ -87,8 +126,8 @@ export const UploadWizard: React.FC<UploadWizardProps> = ({
     try {
       setIsGenerating(true);
       await testScenarioApi.generateTests(uploadedScenario.id, selectedSheets);
-      onSuccess();
-      onClose();
+      onSuccessRef.current();
+      onCloseRef.current();
     } catch (err) {
       console.error('Failed to start generation', err);
     } finally {
@@ -96,17 +135,50 @@ export const UploadWizard: React.FC<UploadWizardProps> = ({
     }
   };
 
-  if (!isOpen) return null;
-
-  return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4 font-sans">
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-lg flex flex-col overflow-hidden max-h-[90vh]">
+  // ─── Render ────────────────────────────────────────────────────────────────
+  // Always render the motion elements — opacity is controlled by isOpen/isClosing.
+  // AnimatePresence (in the parent) handles mount/unmount timing for exit animations.
+  // When isOpen=false + isClosing=true: exit animation plays (opacity 1→0).
+  // After animation: onAnimationComplete fires, calls onClose() to truly unmount parent.
+  const overlay = (
+    <motion.div
+      // Opacity 1 when open (or entering), 0 when closing
+      animate={{ opacity: isOpen ? 1 : 0 }}
+      // Start at opacity 0 on initial mount so there's no flash
+      initial={{ opacity: 0 }}
+      transition={{ duration: 0.2 }}
+      onAnimationComplete={() => {
+        // Only act after an exit animation (isClosing=true means isOpen just became false)
+        if (isClosing) {
+          // Defer onClose so the exit animation has painted before parent unmounts us
+          requestAnimationFrame(() => {
+            onCloseRef.current();
+          });
+        }
+      }}
+      className={cn(
+        'z-[100] flex items-center justify-center bg-black/50 p-4 font-sans pointer-events-auto',
+        isInline ? 'absolute -inset-px' : 'fixed inset-0'
+      )}
+      style={{ pointerEvents: isOpen ? 'auto' : 'none' }}
+    >
+      <motion.div
+        animate={{
+          opacity: isOpen ? 1 : 0,
+          scale: isOpen ? 1 : 0.95,
+          y: isOpen ? 0 : 8,
+        }}
+        initial={{ opacity: 0, scale: 0.95, y: 8 }}
+        transition={{ duration: 0.2, ease: 'easeOut' }}
+        className="bg-white rounded-xl shadow-xl w-full max-w-lg flex flex-col overflow-hidden max-h-[90vh]"
+        style={{ pointerEvents: isOpen ? 'auto' : 'none' }}
+      >
         <div className="flex items-center justify-between p-4 border-b shrink-0">
           <h2 className="text-lg font-semibold">Generate Test from AI</h2>
           <Button
             variant="ghost"
             size="icon"
-            onClick={onClose}
+            onClick={handleClose}
             className="h-8 w-8"
           >
             <X className="w-4 h-4" />
@@ -153,6 +225,7 @@ export const UploadWizard: React.FC<UploadWizardProps> = ({
                     portalContainer={portalContainer}
                     onSearchChange={setProjectSearch}
                     shouldFilter={false}
+                    isLoading={isFetchingProjects}
                     className="w-full"
                   />
                 </div>
@@ -297,7 +370,7 @@ export const UploadWizard: React.FC<UploadWizardProps> = ({
         <div className="p-4 border-t shrink-0 flex justify-end gap-3 bg-zinc-50">
           <Button
             variant="outline"
-            onClick={onClose}
+            onClick={handleClose}
             disabled={isUploading || isGenerating}
           >
             Cancel
@@ -335,7 +408,13 @@ export const UploadWizard: React.FC<UploadWizardProps> = ({
             </Button>
           )}
         </div>
-      </div>
-    </div>
+      </motion.div>
+    </motion.div>
   );
+
+  if (usePortal && portalContainer) {
+    return createPortal(overlay, portalContainer);
+  }
+
+  return overlay;
 };

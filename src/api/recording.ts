@@ -40,6 +40,21 @@ export const deleteRecording = async (id: string) => {
   return response.data;
 };
 
+export const bulkDeleteRecordings = async (ids: string[]) => {
+  const response = await api.post<{
+    message: string;
+    deletedCount: number;
+    notFound: string[];
+    errors: string[];
+  }>('/recordings/bulk-delete', {
+    body: { ids },
+  });
+  if (!response.success) {
+    throw new Error(response.error || 'Failed to bulk delete recordings');
+  }
+  return response.data;
+};
+
 export const updateRecording = async (
   id: string,
   data: Partial<TestRecording>

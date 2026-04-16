@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useMemo } from 'react';
-import { Loader2, AlertCircle, ChevronRight } from 'lucide-react';
+import { Loader2, AlertCircle, ChevronRight, ExternalLink } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -14,6 +14,7 @@ import {
 import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
 import { useDebounce } from '@/utils/useDebounce';
+import { ProjectSelect } from '@/components/project-select';
 
 // Using a simplified MockIssue for compact list to match original behavior
 // or we can reuse the shared types if they fit. For now, adapting to match old compact list logic.
@@ -28,6 +29,7 @@ interface IssueListItem {
 
 interface CompactIssueListProps {
   onClose: () => void;
+  onGoToMain?: () => void;
   onSelect?: (issue: IssueListItem) => void;
   portalContainer: HTMLElement | null;
 }
@@ -50,6 +52,7 @@ const INITIAL_FILTERS: FilterState = {
 
 const CompactIssueList: React.FC<CompactIssueListProps> = ({
   onClose,
+  onGoToMain,
   onSelect,
   portalContainer,
 }) => {
@@ -122,6 +125,19 @@ const CompactIssueList: React.FC<CompactIssueListProps> = ({
       />
 
       {/* Issue List */}
+      <div className="flex items-center justify-between px-3 py-2 border-b border-gray-100">
+        <span className="text-xs font-semibold text-gray-700">Issues</span>
+        {onGoToMain && (
+          <button
+            type="button"
+            onClick={onGoToMain}
+              className="flex items-center gap-1 text-[10px] text-gray-500 hover:text-gray-700 hover:bg-gray-100 px-2 py-1 rounded transition-colors"
+          >
+            <ExternalLink className="w-3 h-3" />
+            Open full page
+          </button>
+        )}
+      </div>
       <ScrollArea className="flex-1">
         <div className="p-2 space-y-1">
           <EmptyState />
@@ -173,7 +189,6 @@ const CompactFilters: React.FC<CompactFiltersProps> = ({
           selectedIds={filters.projectIds}
           onToggle={onToggleProject}
           portalContainer={portalContainer}
-          isLoading={isLoading}
         />
 
         <LabelsStatusFilter
@@ -204,55 +219,38 @@ interface ProjectFilterProps {
   selectedIds: string[];
   onToggle: (id: string) => void;
   portalContainer: HTMLElement | null;
-  isLoading: boolean;
 }
 
 const ProjectFilter: React.FC<ProjectFilterProps> = ({
   selectedIds,
   onToggle,
   portalContainer,
-  isLoading,
 }) => {
-  const [open, setOpen] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
-  const debouncedQuery = useDebounce(searchQuery, 300);
+  const prevIdsRef = React.useRef<string[]>(selectedIds);
 
   return (
     <div className="space-y-1">
       <Label className="text-xs text-gray-600">Project</Label>
-      <Popover open={open} onOpenChange={setOpen}>
-        <PopoverTrigger asChild>
-          <Button
-            variant="outline"
-            className="text-xs h-8 w-full justify-between"
-            disabled={isLoading}
-          >
-            <span className="truncate">MOOO</span>
-            <ChevronRight
-              className={cn(
-                'h-3.5 w-3.5 text-gray-400 transition-transform',
-                open && 'rotate-90'
-              )}
-            />
-          </Button>
-        </PopoverTrigger>
-        <PopoverContent
-          className="p-2 w-64"
-          container={portalContainer ?? undefined}
-          align="start"
-          sideOffset={4}
-        >
-          <div className="space-y-2">
-            <Input
-              value={searchQuery}
-              onChange={e => setSearchQuery(e.target.value)}
-              placeholder="Search projects"
-              className="text-xs h-8"
-            />
-            <div className="max-h-56 overflow-auto space-y-1"></div>
-          </div>
-        </PopoverContent>
-      </Popover>
+      <ProjectSelect
+        value={selectedIds}
+        onSelect={() => {}}
+        onSelectMultiple={projects => {
+          const newIds = projects.map(p => p.id.toString());
+          const prev = prevIdsRef.current;
+          // Toggle added
+          newIds.forEach(id => {
+            if (!prev.includes(id)) onToggle(id);
+          });
+          // Toggle removed
+          prev.forEach(id => {
+            if (!newIds.includes(id)) onToggle(id);
+          });
+          prevIdsRef.current = newIds;
+        }}
+        mode="multi"
+        portalContainer={portalContainer ?? null}
+        placeholder="Project"
+      />
     </div>
   );
 };

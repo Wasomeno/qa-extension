@@ -21,6 +21,8 @@ const LoginPopup: React.FC<LoginPopupProps> = ({ onClose, onLoginSuccess }) => {
   // Watch for user session to appear while polling
   useEffect(() => {
     if (user && isPolling) {
+      // Stop polling immediately when user is detected
+      setIsPolling(false);
       onLoginSuccess();
       onClose();
     }

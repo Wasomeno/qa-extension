@@ -21,6 +21,7 @@ export interface RecordingSession {
 }
 
 export interface TestStep {
+  id?: string;
   action: 'click' | 'type' | 'navigate' | 'select' | 'assert';
   selector: string;
   selectorCandidates?: string[];
@@ -74,6 +75,8 @@ export interface RecordingStep {
   value?: string;
   elementHints?: ElementHints;
   selectorCandidates?: string[];
+  xpath?: string;
+  xpathCandidates?: string[];
   assertionType?: string;
   expectedValue?: string;
 }
@@ -84,6 +87,7 @@ export interface TestRecording {
   description?: string;
   status: string;
   project_id?: string;
+  project_name?: string;
   issue_id?: string;
   steps: RecordingStep[];
   parameters: any[];
@@ -120,6 +124,7 @@ export interface TestBlueprint {
   description: string;
   baseUrl?: string;
   project_id?: number;
+  project_name?: string;
   issue_id?: string;
   created_at?: string | number;
   auth?: {

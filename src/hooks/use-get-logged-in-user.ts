@@ -5,6 +5,8 @@ export function useGetLoggedInUser() {
   const query = useQuery({
     queryKey: ['current-user'],
     queryFn: () => getCurrentUser(),
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
   });
 
   return {

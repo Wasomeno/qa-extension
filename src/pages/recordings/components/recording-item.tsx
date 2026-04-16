@@ -13,7 +13,12 @@ import {
   Pencil,
   Check,
   X,
+  Loader2,
+  AlertCircle,
+  Link,
 } from 'lucide-react';
+import { toast } from 'sonner';
+import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -28,9 +33,7 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuSubContent,
 } from '@/components/ui/dropdown-menu';
-import { RecordingProjectPicker } from './recording-project-picker';
-import { useQuery } from '@tanstack/react-query';
-import { getProjects } from '@/api/project';
+import { ProjectSelect } from '@/components/project-select';
 import { MessageType } from '@/types/messages';
 
 interface RecordingItemProps {
@@ -44,7 +47,10 @@ interface RecordingItemProps {
   onExportJson: (e: React.MouseEvent) => void;
   onRunInAgent: (e: React.MouseEvent) => void;
   onCopyScript: (e: React.MouseEvent) => void;
+  onCopyVideoLink?: (e: React.MouseEvent) => void;
   portalContainer?: HTMLElement | null;
+  isDeleting?: boolean;
+  deleteError?: string | null;
 }
 
 export const RecordingItem: React.FC<RecordingItemProps> = ({
@@ -58,25 +64,28 @@ export const RecordingItem: React.FC<RecordingItemProps> = ({
   onExportJson,
   onRunInAgent,
   onCopyScript,
+  onCopyVideoLink,
   portalContainer,
+  isDeleting = false,
+  deleteError = null,
 }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
   const [editName, setEditName] = useState(recording.name);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const { data: projectsData } = useQuery({
-    queryKey: ['projects'],
-    queryFn: getProjects,
-  });
+  // Close confirmation dialog when deletion starts
+  useEffect(() => {
+    if (isDeleting) {
+      setIsConfirmingDelete(false);
+    }
+  }, [isDeleting]);
 
-  const projects = projectsData?.data?.projects || [];
-
-  const handleUpdateProject = (projectId: number | null) => {
+  const handleUpdateProject = (project: any) => {
     chrome.runtime.sendMessage(
       {
         type: MessageType.UPDATE_BLUEPRINT,
-        data: { id: recording.id, data: { project_id: projectId?.toString() } },
+        data: { id: recording.id, data: { project_id: project?.id ?? null } },
       },
       () => {
         // This should trigger refetching if set up correctly in the parent list
@@ -149,15 +158,36 @@ export const RecordingItem: React.FC<RecordingItemProps> = ({
         <DropdownMenuItem className="gap-2" onClick={onCopyScript}>
           <Copy className="w-4 h-4" /> Copy Test Script
         </DropdownMenuItem>
+        <DropdownMenuItem 
+          className="gap-2"
+          onClick={(e) => {
+            e.stopPropagation();
+            onCopyVideoLink?.(e);
+          }}
+          disabled={!recording.video_url}
+        >
+          <Link className="w-4 h-4" /> Copy Video Link
+        </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem
-          className="gap-2 text-red-600 focus:text-red-600"
+          className={cn(
+            "gap-2",
+            isDeleting ? "text-zinc-400 cursor-not-allowed" : "text-red-600 focus:text-red-600"
+          )}
           onClick={e => {
             e.stopPropagation();
-            setIsConfirmingDelete(true);
+            if (!isDeleting) {
+              setIsConfirmingDelete(true);
+            }
           }}
+          disabled={isDeleting}
         >
-          <Trash2 className="w-4 h-4" /> Delete
+          {isDeleting ? (
+            <Loader2 className="w-4 h-4 animate-spin" />
+          ) : (
+            <Trash2 className="w-4 h-4" />
+          )}
+          {isDeleting ? 'Deleting...' : 'Delete'}
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
@@ -216,32 +246,80 @@ export const RecordingItem: React.FC<RecordingItemProps> = ({
           className="absolute inset-0 z-10 bg-white/95 backdrop-blur-sm flex flex-col items-center justify-center p-5 text-center animate-in fade-in duration-200"
           onClick={e => e.stopPropagation()}
         >
-          <Trash2 className="w-8 h-8 text-red-500 mb-2" />
-          <p className="text-sm font-bold text-zinc-900 mb-1">
-            Delete this test script?
-          </p>
-          <p className="text-xs text-zinc-500 mb-4">
-            This action cannot be undone.
-          </p>
-          <div className="flex items-center gap-2 w-full">
-            <Button
-              variant="outline"
-              className="flex-1 h-9 text-xs"
-              onClick={e => {
-                e.stopPropagation();
-                setIsConfirmingDelete(false);
-              }}
-            >
-              Cancel
-            </Button>
-            <Button
-              variant="destructive"
-              className="flex-1 h-9 text-xs bg-red-600 hover:bg-red-700"
-              onClick={onDelete}
-            >
-              Delete
-            </Button>
-          </div>
+          {isDeleting ? (
+            <>
+              <motion.div
+                animate={{ rotate: 360 }}
+                transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
+              >
+                <Loader2 className="w-8 h-8 text-zinc-600 mb-2" />
+              </motion.div>
+              <p className="text-sm font-semibold text-zinc-900 mb-1">
+                Deleting...
+              </p>
+              <p className="text-xs text-zinc-500">
+                Please wait while we remove this recording.
+              </p>
+            </>
+          ) : deleteError ? (
+            <>
+              <AlertCircle className="w-8 h-8 text-red-500 mb-2" />
+              <p className="text-sm font-bold text-zinc-900 mb-1">
+                Failed to delete
+              </p>
+              <p className="text-xs text-red-600 mb-4 max-w-[200px]">
+                {deleteError}
+              </p>
+              <div className="flex items-center gap-2 w-full">
+                <Button
+                  variant="outline"
+                  className="flex-1 h-9 text-xs"
+                  onClick={e => {
+                    e.stopPropagation();
+                    setIsConfirmingDelete(false);
+                  }}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  variant="destructive"
+                  className="flex-1 h-9 text-xs bg-red-600 hover:bg-red-700"
+                  onClick={onDelete}
+                >
+                  Retry
+                </Button>
+              </div>
+            </>
+          ) : (
+            <>
+              <Trash2 className="w-8 h-8 text-red-500 mb-2" />
+              <p className="text-sm font-bold text-zinc-900 mb-1">
+                Delete this test script?
+              </p>
+              <p className="text-xs text-zinc-500 mb-4">
+                This action cannot be undone.
+              </p>
+              <div className="flex items-center gap-2 w-full">
+                <Button
+                  variant="outline"
+                  className="flex-1 h-9 text-xs"
+                  onClick={e => {
+                    e.stopPropagation();
+                    setIsConfirmingDelete(false);
+                  }}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  variant="destructive"
+                  className="flex-1 h-9 text-xs bg-red-600 hover:bg-red-700"
+                  onClick={onDelete}
+                >
+                  Delete
+                </Button>
+              </div>
+            </>
+          )}
         </div>
       )}
 
@@ -309,11 +387,17 @@ export const RecordingItem: React.FC<RecordingItemProps> = ({
             <span className="bg-zinc-100/80 px-2 py-0.5 rounded-full text-[10px] font-medium text-zinc-500 flex items-center gap-1">
               <Clock className="w-3 h-3 text-zinc-400" /> {recording.steps.length} steps
             </span>
-            <RecordingProjectPicker
-              currentProjectId={recording.project_id}
-              projects={projects}
-              onSelect={handleUpdateProject}
+            <ProjectSelect
+              value={recording.project_id ?? null}
+              projectName={recording.project_name}
+              onSelect={project => {
+                const newProjectId = project?.id ?? null;
+                handleUpdateProject({ id: recording.id, project_id: newProjectId });
+              }}
+              mode="single"
+              size="compact"
               portalContainer={portalContainer}
+              stopPropagation
             />
           </div>
         </div>

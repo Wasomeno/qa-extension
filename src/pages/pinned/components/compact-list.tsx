@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Pin } from 'lucide-react';
+import { X, Pin, ExternalLink } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Issue } from '@/api/issue';
@@ -11,12 +11,14 @@ import { PinNoteModal } from '../components/pin-note-modal';
 
 interface CompactPinnedListProps {
   onClose: () => void;
+  onGoToMain?: () => void;
   onSelect?: (issue: Issue) => void;
   portalContainer: HTMLElement | null;
 }
 
 const CompactPinnedList: React.FC<CompactPinnedListProps> = ({
   onClose,
+  onGoToMain,
   onSelect,
 }) => {
   const { pinnedIssues, isLoading, togglePin, updatePinMeta } =
@@ -37,9 +39,21 @@ const CompactPinnedList: React.FC<CompactPinnedListProps> = ({
 
   return (
     <div className="flex flex-col h-[360px] relative">
+      {onGoToMain && (
+        <div className="flex justify-end px-3 py-2">
+          <button
+            type="button"
+            onClick={onGoToMain}
+            className="flex items-center gap-1 text-[10px] text-gray-500 hover:text-gray-700 hover:bg-gray-100 px-2 py-1 rounded transition-colors"
+          >
+            <ExternalLink className="w-3 h-3" />
+            Open full page
+          </button>
+        </div>
+      )}
       {/* List */}
-      <ScrollArea className="flex-1 pt-8">
-        <div className="p-3 space-y-3">
+      <ScrollArea className="flex-1 w-full">
+        <div className="p-3 space-y-3 overflow-hidden w-full">
           {isLoading ? (
             <div className="space-y-2">
               {[...Array(3)].map((_, i) => (
@@ -61,7 +75,7 @@ const CompactPinnedList: React.FC<CompactPinnedListProps> = ({
             </div>
           ) : (
             pinnedIssues.map(issue => (
-              <div key={issue.id} className="relative">
+              <div key={issue.id} className="relative w-full overflow-hidden flex-shrink-0">
                 <IssueCard
                   issue={issue}
                   variant="pinned"
@@ -69,6 +83,7 @@ const CompactPinnedList: React.FC<CompactPinnedListProps> = ({
                   onUnpin={togglePin}
                   onSetPinColor={iss => setEditingColorIssueId(iss.id)}
                   onAddNote={iss => setEditingNoteIssue(iss as PinnedIssue)}
+                  className="max-w-full"
                 />
 
                 {/* Color Picker Overlay */}

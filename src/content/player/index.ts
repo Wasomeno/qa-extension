@@ -166,7 +166,26 @@ class PlayerEngine {
         console.log(`[Player] Navigating to: ${step.value}`);
         this.state.currentStepIndex++;
         await this.saveState();
-        await Executor.executeStep(step);
+        const actualUrl = await Executor.executeStep(step);
+        
+        // Notify background about current step completion
+        chrome.runtime.sendMessage({
+          type: MessageType.PLAYBACK_STATUS_UPDATE,
+          data: { 
+            ...this.state,
+            stepStatus: 'completed',
+            stepDescription: step.description,
+            actualValue: actualUrl,
+            expectedValue: step.expectedValue || step.value
+          }
+        });
+        
+        // If navigation was skipped (already on page), continue immediately
+        // Otherwise, wait for page reload and checkAutoResume will continue
+        if (actualUrl === window.location.href || actualUrl === undefined) {
+          console.log(`[Player] Navigation skipped, continuing to next step...`);
+          setTimeout(() => this.runNextStep(), 500);
+        }
         return;
       }
 

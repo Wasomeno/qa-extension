@@ -5,6 +5,8 @@ export function useGetProjects() {
   const query = useQuery({
     queryKey: ['projects'],
     queryFn: getProjects,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
   });
 
   const projects = query.data?.data?.projects || [];

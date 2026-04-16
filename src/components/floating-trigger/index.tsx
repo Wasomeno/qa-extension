@@ -19,6 +19,7 @@ import { MessageType } from '@/types/messages';
 import { useSessionUser } from '@/hooks/use-session-user';
 import { ViewType } from '@/types/navigation';
 import { SessionProvider, useSession } from '@/contexts/session-context';
+import { SelectedProjectProvider } from '@/contexts/selected-project-context';
 
 interface FloatingTriggerProps {
   onClose?: () => void;
@@ -29,6 +30,8 @@ const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       refetchOnWindowFocus: false,
+      refetchOnReconnect: false,
+      retry: 1,
       staleTime: 300_000, // 5 minutes
       gcTime: 300_000, // 5 minutes
     },
@@ -40,6 +43,7 @@ const FloatingTriggerInner: React.FC<FloatingTriggerProps> = ({ onClose }) => {
   // Fallback to hook if provider is missing (though it shouldn't be here)
   const hookUser = useSessionUser();
   const { user, clearUser, syncUser } = sessionUser || hookUser;
+  const isLoading = sessionUser?.loading || hookUser?.loading || false;
 
   const [activeFeature, setActiveFeature] = useState<
     'issue' | 'issues' | 'pinned' | 'menu' | 'login' | 'record' | null
@@ -67,9 +71,10 @@ const FloatingTriggerInner: React.FC<FloatingTriggerProps> = ({ onClose }) => {
     queryKey: ['session'],
     queryFn: async () => getGitlabLoginSession(),
     retry: 1,
+    staleTime: Infinity, // Keep session data until browser closes or explicit logout
   });
 
-  const isSessionExists = !!user;
+  const isSessionExists = !isLoading && !!user;
 
   // Sync state on logout
   useEffect(() => {
@@ -200,6 +205,26 @@ const FloatingTriggerInner: React.FC<FloatingTriggerProps> = ({ onClose }) => {
     setActiveFeature('menu');
   };
 
+  const handleGoToCreateIssue = () => {
+    setActiveFeature('menu');
+    setInitialView('create-issue');
+  };
+
+  const handleGoToIssues = () => {
+    setActiveFeature('menu');
+    setInitialView('issues');
+  };
+
+  const handleGoToPinned = () => {
+    setActiveFeature('menu');
+    setInitialView('pinned');
+  };
+
+  const handleGoToRecordings = () => {
+    setActiveFeature('menu');
+    setInitialView('recordings');
+  };
+
   const handleViewAllRecordings = () => {
     setInitialView('recordings');
     setActiveFeature('menu');
@@ -211,6 +236,7 @@ const FloatingTriggerInner: React.FC<FloatingTriggerProps> = ({ onClose }) => {
         return (
           <CompactIssueCreator
             onClose={handleClose}
+            onGoToMain={handleGoToCreateIssue}
             portalContainer={popupContainer}
           />
         );
@@ -218,6 +244,7 @@ const FloatingTriggerInner: React.FC<FloatingTriggerProps> = ({ onClose }) => {
         return (
           <CompactIssueList
             onClose={handleClose}
+            onGoToMain={handleGoToIssues}
             onSelect={handleIssueSelect}
             portalContainer={popupContainer}
           />
@@ -226,6 +253,7 @@ const FloatingTriggerInner: React.FC<FloatingTriggerProps> = ({ onClose }) => {
         return (
           <CompactPinnedIssues
             onClose={handleClose}
+            onGoToMain={handleGoToPinned}
             onSelect={handleIssueSelect}
             portalContainer={popupContainer}
           />
@@ -241,6 +269,7 @@ const FloatingTriggerInner: React.FC<FloatingTriggerProps> = ({ onClose }) => {
         return (
           <CompactRecordingsList
             onClose={handleClose}
+            onGoToMain={handleGoToRecordings}
             onViewAll={handleViewAllRecordings}
             portalContainer={popupContainer}
           />
@@ -260,6 +289,7 @@ const FloatingTriggerInner: React.FC<FloatingTriggerProps> = ({ onClose }) => {
         onActionClick={handleActionClick}
         hasActivePopup={!!activeFeature}
         isLoggedIn={isSessionExists}
+        isLoading={isLoading}
         containerRef={setButtonContainer}
         tooltipContainer={buttonContainer}
       />
@@ -292,7 +322,9 @@ const FloatingTrigger: React.FC<FloatingTriggerProps> = props => {
   return (
     <QueryClientProvider client={queryClient}>
       <SessionProvider>
-        <FloatingTriggerInner {...props} />
+        <SelectedProjectProvider>
+          <FloatingTriggerInner {...props} />
+        </SelectedProjectProvider>
       </SessionProvider>
     </QueryClientProvider>
   );

@@ -102,109 +102,7 @@ export const ProjectBoardView: React.FC<ProjectBoardViewProps> = ({
     if (activeColumn) setStartColumnId(activeColumn.id);
   };
 
-  const handleDragOver = (event: DragOverEvent) => {
-    const { active, over } = event;
-    if (!over) return;
-
-    const activeId = active.id;
-    const overId = over.id;
-
-    // Find the containers
-    const activeColumn = findColumn(activeId as string);
-    const overColumn = findColumn(overId as string);
-
-    if (!activeColumn || !overColumn || activeColumn === overColumn) {
-      return;
-    }
-
-    setColumns(prev => {
-      const activeItems = activeColumn.issues;
-      const overItems = overColumn.issues;
-      const activeIndex = activeItems.findIndex(i => i.id === activeId);
-      const overIndex = overItems.findIndex(i => i.id === overId);
-
-      let newIndex;
-      if (overId in prev.find(c => c.id === overId)?.issues!) {
-        // We're over another item in the target column
-        newIndex = overItems.length + 1;
-      } else {
-        // We're over the column itself or empty space
-        const isBelowOverItem =
-          over &&
-          active.rect.current.translated &&
-          active.rect.current.translated.top > over.rect.top + over.rect.height;
-
-        const modifier = isBelowOverItem ? 1 : 0;
-        newIndex = overIndex >= 0 ? overIndex + modifier : overItems.length + 1;
-      }
-
-      // Actually, standard dnd-kit logic for dragging between containers is simpler:
-      // Just move it to the new container's list
-
-      const newActiveColumn = {
-        ...activeColumn,
-        issues: [...activeColumn.issues.filter(item => item.id !== activeId)],
-      };
-
-      const newOverColumn = {
-        ...overColumn,
-        issues: [
-          ...overColumn.issues.slice(
-            0,
-            overIndex >= 0 ? overIndex : overColumn.issues.length
-          ),
-          activeItems[activeIndex],
-          ...overColumn.issues.slice(
-            overIndex >= 0 ? overIndex : overColumn.issues.length
-          ),
-        ],
-      };
-
-      // Fix: If over is a column, append to end
-      if (over.data.current?.type === 'Column') {
-        newOverColumn.issues = [...overColumn.issues, activeItems[activeIndex]];
-        // Correctly remove from old
-        // But wait, the slice logic above might have duplicated it if we didn't check type
-        // Let's reset logic for Column drop
-        newOverColumn.issues = [...overColumn.issues, activeItems[activeIndex]];
-        // This is messy. Let's simplify.
-      }
-
-      return prev.map(c => {
-        if (c.id === activeColumn.id) {
-          return { ...c, issues: c.issues.filter(i => i.id !== activeId) };
-        }
-        if (c.id === overColumn.id) {
-          // If dropping on the Column itself (empty or end)
-          if (over.data.current?.type === 'Column') {
-            // Check if already there to avoid flicker?
-            if (c.issues.find(i => i.id === activeId)) return c;
-            return { ...c, issues: [...c.issues, activeItems[activeIndex]] };
-          }
-          // Dropping on an Item
-          const overItemIndex = c.issues.findIndex(i => i.id === overId);
-          const isBelowLastItem =
-            over &&
-            overIndex === c.issues.length - 1 &&
-            active.rect.current.translated &&
-            active.rect.current.translated.top >
-              over.rect.top + over.rect.height;
-
-          const modifier = isBelowLastItem ? 1 : 0;
-          const newIndex =
-            overItemIndex >= 0 ? overItemIndex + modifier : c.issues.length;
-
-          // Insert
-          const newIssues = [...c.issues];
-          newIssues.splice(newIndex, 0, activeItems[activeIndex]);
-          return { ...c, issues: newIssues };
-        }
-        return c;
-      });
-    });
-  };
-
-  // Let's try a robust approach for DragOver
+  // Drag-over handler for cross-column moves (same-column reordering is handled in handleDragEnd)
   const onDragOver = (event: DragOverEvent) => {
     const { active, over } = event;
     if (!over) return;
@@ -279,7 +177,7 @@ export const ProjectBoardView: React.FC<ProjectBoardViewProps> = ({
     }
 
     // If same column, reorder
-    if (activeColumn === overColumn) {
+    if (activeColumn.id === overColumn.id) {
       const activeIndex = activeColumn.issues.findIndex(
         i => i.id === active.id
       );

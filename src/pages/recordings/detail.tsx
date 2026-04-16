@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   ChevronLeft,
   Play,
@@ -11,7 +11,12 @@ import {
   ListFilter,
   AlertCircle,
   Video,
+  Link,
+  Copy,
+  Eye,
+  EyeOff,
 } from 'lucide-react';
+import { toast } from 'sonner';
 import { useNavigation } from '@/contexts/navigation-context';
 import { TestBlueprint } from '@/types/recording';
 import { Button } from '@/components/ui/button';
@@ -28,12 +33,22 @@ export const RecordingDetailPage: React.FC<RecordingDetailProps> = ({
   blueprint,
 }) => {
   const { pop } = useNavigation();
+  const [showVideo, setShowVideo] = useState(true);
 
   const handleRunTest = () => {
     chrome.runtime.sendMessage({
       type: MessageType.START_PLAYBACK,
       data: { blueprint, active: false },
     });
+  };
+
+  const handleCopyVideoLink = () => {
+    if (blueprint.video_url) {
+      navigator.clipboard.writeText(blueprint.video_url);
+      toast.success('Video link copied to clipboard');
+    } else {
+      toast.error('No video available for this recording');
+    }
   };
 
   const getStepIcon = (action: string) => {
@@ -64,10 +79,22 @@ export const RecordingDetailPage: React.FC<RecordingDetailProps> = ({
             {blueprint.name}
           </h1>
         </div>
-        <Button size="sm" className="gap-2" onClick={handleRunTest}>
-          <Play className="w-3 h-3 fill-current" />
-          Run Live
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button 
+            variant="outline" 
+            size="sm" 
+            className="gap-2"
+            onClick={handleCopyVideoLink}
+            disabled={!blueprint.video_url}
+          >
+            <Link className="w-3 h-3" />
+            Copy Video Link
+          </Button>
+          <Button size="sm" className="gap-2" onClick={handleRunTest}>
+            <Play className="w-3 h-3 fill-current" />
+            Run Live
+          </Button>
+        </div>
       </header>
 
       <ScrollArea className="flex-1">
@@ -85,27 +112,49 @@ export const RecordingDetailPage: React.FC<RecordingDetailProps> = ({
           )}
 
           {/* Video Player Section */}
-          <section className="space-y-2">
-            <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider flex items-center gap-2">
-              <Video className="w-4 h-4" /> Recording Playback
-            </h2>
-            {blueprint.video_url ? (
-              <div className="aspect-video w-full overflow-hidden rounded-xl border border-zinc-200 bg-black shadow-sm">
-                <video
-                  src={blueprint.video_url}
-                  controls
-                  className="h-full w-full object-contain"
+          {blueprint.video_url && (
+            <section className="space-y-2">
+              <div className="flex items-center justify-between">
+                <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider flex items-center gap-2">
+                  <Video className="w-4 h-4" /> Recording Playback
+                </h2>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 text-xs gap-1.5 text-zinc-500 hover:text-zinc-700"
+                  onClick={() => setShowVideo(!showVideo)}
                 >
-                  Your browser does not support the video tag.
-                </video>
+                  {showVideo ? (
+                    <>
+                      <EyeOff className="w-3.5 h-3.5" />
+                      Hide Video
+                    </>
+                  ) : (
+                    <>
+                      <Eye className="w-3.5 h-3.5" />
+                      Show Video
+                    </>
+                  )}
+                </Button>
               </div>
-            ) : (
-              <div className="flex aspect-video w-full flex-col items-center justify-center rounded-xl border-2 border-dashed border-zinc-100 bg-zinc-50 text-zinc-400">
-                <AlertCircle className="mb-2 h-8 w-8 opacity-20" />
-                <span className="text-xs">No video recording available</span>
-              </div>
-            )}
-          </section>
+              {showVideo ? (
+                <div className="aspect-video w-full overflow-hidden rounded-xl border border-zinc-200 bg-black shadow-sm">
+                  <video
+                    src={blueprint.video_url}
+                    controls
+                    className="h-full w-full object-contain"
+                  >
+                    Your browser does not support the video tag.
+                  </video>
+                </div>
+              ) : (
+                <div className="flex aspect-video w-full flex-col items-center justify-center rounded-xl border-2 border-dashed border-zinc-200 bg-zinc-50 text-zinc-400">
+                  <Video className="mb-2 h-8 w-8 opacity-30" />
+                  <span className="text-xs">Video hidden - click "Show Video" to view</span>
+                </div>
+              )}
+            </section>
+          )}
 
           {/* Metadata */}
           <div className="flex gap-4">
@@ -156,7 +205,7 @@ export const RecordingDetailPage: React.FC<RecordingDetailProps> = ({
                       {step.value && (
                         <Badge
                           variant="secondary"
-                          className="text-[10px] py-0 h-4 font-normal max-w-[150px] truncate"
+                          className="text-[10px] py-0 font-normal whitespace-normal break-words max-w-full"
                         >
                           {step.value}
                         </Badge>
@@ -165,9 +214,50 @@ export const RecordingDetailPage: React.FC<RecordingDetailProps> = ({
                     <p className="text-sm text-gray-600 mb-1">
                       {step.description}
                     </p>
-                    <code className="text-[10px] bg-gray-50 text-gray-400 px-1.5 py-0.5 rounded border border-gray-100 block truncate max-w-full">
-                      {step.selector}
-                    </code>
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-1">
+                        <span className="text-[9px] text-gray-400 uppercase">CSS:</span>
+                        <code className="text-[10px] bg-gray-50 text-blue-600 px-1.5 py-0.5 rounded border border-gray-100 block truncate max-w-full">
+                          {step.selector}
+                        </code>
+                      </div>
+                      {step.xpath && (
+                        <div className="flex items-center gap-1">
+                          <span className="text-[9px] text-gray-400 uppercase">XPath:</span>
+                          <code className="text-[10px] bg-amber-50 text-amber-700 px-1.5 py-0.5 rounded border border-amber-100 block truncate max-w-full">
+                            {step.xpath}
+                          </code>
+                        </div>
+                      )}
+                      {step.xpathCandidates && step.xpathCandidates.length > 0 && (
+                        <details className="group">
+                          <summary className="text-[9px] text-amber-500 uppercase cursor-pointer hover:text-amber-600">
+                            {step.xpathCandidates.length} XPath candidates
+                          </summary>
+                          <div className="mt-1 space-y-0.5 pl-3">
+                            {step.xpathCandidates.map((xpath, i) => (
+                              <code key={i} className="text-[10px] bg-amber-50/50 text-amber-600 px-1 py-0.5 rounded block truncate max-w-full">
+                                {i + 1}. {xpath}
+                              </code>
+                            ))}
+                          </div>
+                        </details>
+                      )}
+                      {step.selectorCandidates && step.selectorCandidates.length > 0 && (
+                        <details className="group">
+                          <summary className="text-[9px] text-blue-400 uppercase cursor-pointer hover:text-blue-500">
+                            {step.selectorCandidates.length} CSS candidates
+                          </summary>
+                          <div className="mt-1 space-y-0.5 pl-3">
+                            {step.selectorCandidates.map((sel, i) => (
+                              <code key={i} className="text-[10px] bg-blue-50/50 text-blue-600 px-1 py-0.5 rounded block truncate max-w-full">
+                                {i + 1}. {sel}
+                              </code>
+                            ))}
+                          </div>
+                        </details>
+                      )}
+                    </div>
                   </div>
                 </div>
               ))}

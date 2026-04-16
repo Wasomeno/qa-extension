@@ -4,7 +4,7 @@ import {
   BackgroundFetchRequest,
 } from '../types/messages';
 import { AIProcessor } from '../services/ai-processor';
-import { RawEvent, TestRecording } from '../types/recording';
+import { RawEvent, TestRecording, TestStep } from '../types/recording';
 import { api } from '../services/api';
 import { SAMPLE_BLUEPRINT } from '../lib/seed-data';
 import { isRestrictedUrl } from '../utils/domain-matcher';
@@ -798,10 +798,44 @@ class BackgroundService {
             sendResponse({ success: false, error: 'Missing blueprint' });
             return;
           }
+          
+          // Debug: Check if incoming blueprint has xpath (skip navigate step)
+          console.log('[Background] SAVE_BLUEPRINT received blueprint, checking steps:');
+          if (blueprint.steps && blueprint.steps.length > 1) {
+            for (let i = 1; i < Math.min(blueprint.steps.length, 4); i++) {
+              const step = blueprint.steps[i];
+              console.log(`[Background] SAVE_BLUEPRINT: Step ${i} (${step.action}) xpath:`, step.xpath);
+              console.log(`[Background] SAVE_BLUEPRINT: Step ${i} (${step.action}) xpathCandidates length:`, step.xpathCandidates?.length);
+            }
+          }
 
           // Ensure blueprint has an ID
           if (!blueprint.id) {
             blueprint.id = `rec-${Date.now()}`;
+          }
+
+          // Ensure navigate step is always first if baseUrl is available
+          let finalSteps = blueprint.steps || [];
+          if (blueprint.baseUrl && finalSteps.length > 0) {
+            const hasNavigateStep =
+              finalSteps[0].action === 'navigate' &&
+              (finalSteps[0].value === blueprint.baseUrl ||
+                finalSteps[0].value?.includes(blueprint.baseUrl));
+
+            if (!hasNavigateStep) {
+              console.log('[Background] SAVE_BLUEPRINT: Prepending navigate step');
+              finalSteps = [
+                {
+                  action: 'navigate',
+                  selector: 'body',
+                  selectorCandidates: ['body'],
+                  value: blueprint.baseUrl,
+                  description: `Navigate to ${blueprint.baseUrl}`,
+                  elementHints: { tagName: 'body' },
+                },
+                ...finalSteps,
+              ];
+            }
           }
 
           // Map TestBlueprint to TestRecording if necessary, though they are very similar
@@ -815,11 +849,13 @@ class BackgroundService {
             created_at: new Date(
               blueprint.created_at || blueprint.createdAt || Date.now()
             ).toISOString(),
-            steps: (blueprint.steps || []).map((step: any) => ({
+            steps: finalSteps.map((step: any) => ({
               action: step.action,
               description: step.description || '',
               selector: step.selector,
               selectorCandidates: step.selectorCandidates || [],
+              xpath: step.xpath,
+              xpathCandidates: step.xpathCandidates || [],
               value: step.value,
               assertionType: step.assertionType,
               expectedValue: step.expectedValue,
@@ -833,6 +869,15 @@ class BackgroundService {
           };
 
           console.log('[Background] Saving recording payload:', recording);
+          
+          // Debug: Check if xpath is in the steps (skip navigate step)
+          if (recording.steps && recording.steps.length > 1) {
+            for (let i = 1; i < Math.min(recording.steps.length, 3); i++) {
+              const step = recording.steps[i];
+              console.log(`[Background] DEBUG: Step ${i} (${step.action}) has xpath:`, step.xpath);
+              console.log(`[Background] DEBUG: Step ${i} (${step.action}) has xpathCandidates:`, step.xpathCandidates);
+            }
+          }
 
           const response = await api.post<any>('/recordings', {
             body: recording as any,
@@ -1340,10 +1385,21 @@ class BackgroundService {
 
       // Send message to offscreen document to initiate native capture
       // This is triggered by a user gesture from the Iframe Start button
-      chrome.runtime.sendMessage({
+      const captureResponse = await chrome.runtime.sendMessage({
         type: MessageType.START_VIDEO_CAPTURE,
         data: { recordingId: currentRecordingId },
       });
+
+      // If the user cancelled the native Chrome tab picker, clean up
+      if (captureResponse?.success === false) {
+        console.warn('[Background] User cancelled the tab picker, cleaning up recording state');
+        await chrome.storage.local.set({ isRecording: false });
+        chrome.action.setBadgeText({ text: '' });
+        await this.notifyTab(targetTabId, {
+          type: MessageType.IFRAME_CLOSED_OVERLAY,
+        });
+        return;
+      }
     } catch (e) {
       this.isStartingRecording = false;
       throw e;
@@ -1494,7 +1550,7 @@ class BackgroundService {
     allEvents.sort((a, b) => a.timestamp - b.timestamp);
 
     // ALWAYS add the navigate step as the first step
-    const navigateStep = {
+    const navigateStep: TestStep = {
       id: '0-nav',
       action: 'navigate' as const,
       value: startUrl,
@@ -1504,6 +1560,7 @@ class BackgroundService {
       elementHints: {
         tagName: 'body',
       },
+      expectedValue: undefined,
     };
 
     // 3. Generate blueprint if we have events
@@ -1523,6 +1580,8 @@ class BackgroundService {
               selectorCandidates: e.element.selectorCandidates || [
                 e.element.selector,
               ],
+              xpath: e.element.xpath,
+              xpathCandidates: e.element.xpathCandidates || [],
               elementHints: {
                 tagName: e.element.tagName,
                 textContent: e.element.textContent,
@@ -1559,7 +1618,7 @@ class BackgroundService {
         // Wait for video upload to complete (runs in parallel with AI)
         const resolvedVideoUrl = await videoPromise;
 
-        const enrichedSteps = (blueprint.steps || []).map((step, index) => {
+        const enrichedSteps = (blueprint.steps || []).map((step, index): TestStep => {
           // Find the corresponding event. Note that AI might group events, so this is heuristic.
           // If the first step is navigate and we prepended it, we need to adjust indexing
           const isPrependedNav =
@@ -1595,23 +1654,408 @@ class BackgroundService {
             : step.expectedValue;
 
           const fallbackSelector = fallbackEvent?.element?.selector;
-          const selectorCandidates = Array.from(
-            new Set(
-              [
-                ...(step.selectorCandidates || []),
-                ...(fallbackEvent?.element?.selectorCandidates || []),
-                step.selector,
-                fallbackSelector,
-              ].filter(Boolean)
-            )
-          );
-
+          
+          // FIX: Use elementHints.attributes as source of truth for THIS element's identity
+          // Do NOT rely on fallbackEvent index matching which can be wrong when AI groups/reorders events
+          const thisElementAttrs = step.elementHints?.attributes || fallbackEvent?.element?.attributes || {};
+          
+          const thisElementUniqueValues = {
+            name: thisElementAttrs['name'],
+            id: thisElementAttrs['id'],
+            placeholder: thisElementAttrs['placeholder'],
+            type: thisElementAttrs['type'],
+            role: thisElementAttrs['role'],
+          };
+          
+          // Generate selectorCandidates from the AI's primary selector + hints
+          // This ensures they match the actual element, not a misaligned fallback event
+          const aiCandidates = step.selectorCandidates || [];
+          
+          // Simple CSS selector escape function (background script doesn't have CSS API)
+          const escapeCssSelector = (value: string): string => {
+            // Escape special CSS selector characters
+            return value.replace(/[!#"$%&'()*+,.\/:;<=>?@\[\\\]^`{|}~]/g, '\\\\$&');
+          };
+          
+          // Helper to generate a specific selector for an attribute
+          const generateAttrSelector = (attr: string, value: string, tagName?: string): string | null => {
+            if (!value) return null;
+            const escapedValue = value.replace(/'/g, "\\'");
+            if (attr === 'id') {
+              const escapedId = escapeCssSelector(value);
+              return tagName ? `${tagName}#${escapedId}` : `#${escapedId}`;
+            }
+            return tagName ? `${tagName}[${attr}='${escapedValue}']` : `[${attr}='${escapedValue}']`;
+          };
+          
+          const tagName = step.elementHints?.tagName || fallbackEvent?.element?.tagName;
+          
+          // Generate candidates from element hints attributes (GUARANTEED to be for THIS element)
+          const generatedFromHints: string[] = [];
+          const generatedXPathFromHints: string[] = [];
+          const singleAttrXPaths: string[] = [];
+          
+          // Collect single-attribute XPaths (order: id > name > type > placeholder > role)
+          // Most specific attributes first
+          if (thisElementAttrs['id']) {
+            const sel = generateAttrSelector('id', thisElementAttrs['id'], tagName);
+            if (sel) generatedFromHints.unshift(sel); // unshift to put first
+            singleAttrXPaths.push(`//*[@id='${thisElementAttrs['id'].replace(/'/g, "&apos;")}']`);
+          }
+          if (thisElementAttrs['name']) {
+            const sel = generateAttrSelector('name', thisElementAttrs['name'], tagName);
+            if (sel) generatedFromHints.push(sel);
+            singleAttrXPaths.push(`//${tagName}[@name='${thisElementAttrs['name'].replace(/'/g, "&apos;")}']`);
+          }
+          if (thisElementAttrs['placeholder']) {
+            const sel = generateAttrSelector('placeholder', thisElementAttrs['placeholder'], tagName);
+            if (sel) generatedFromHints.push(sel);
+            singleAttrXPaths.push(`//${tagName}[@placeholder='${thisElementAttrs['placeholder'].replace(/'/g, "&apos;")}']`);
+          }
+          if (thisElementAttrs['type'] && tagName === 'input') {
+            const sel = generateAttrSelector('type', thisElementAttrs['type'], tagName);
+            if (sel) generatedFromHints.push(sel);
+            singleAttrXPaths.push(`//${tagName}[@type='${thisElementAttrs['type'].replace(/'/g, "&apos;")}']`);
+          }
+          if (thisElementAttrs['role']) {
+            singleAttrXPaths.push(`//${tagName}[@role='${thisElementAttrs['role'].replace(/'/g, "&apos;")}']`);
+          }
+          
+          // Generate combined attribute xpath (most specific) - ADD FIRST
+          const combinedAttrs: string[] = [];
+          // Order: id > name > type > role (most specific first)
+          if (thisElementAttrs['id']) {
+            combinedAttrs.push(`@id='${thisElementAttrs['id'].replace(/'/g, "&apos;")}'`);
+          }
+          if (thisElementAttrs['name']) {
+            combinedAttrs.push(`@name='${thisElementAttrs['name'].replace(/'/g, "&apos;")}'`);
+          }
+          if (thisElementAttrs['type']) {
+            combinedAttrs.push(`@type='${thisElementAttrs['type'].replace(/'/g, "&apos;")}'`);
+          }
+          if (thisElementAttrs['role']) {
+            combinedAttrs.push(`@role='${thisElementAttrs['role'].replace(/'/g, "&apos;")}'`);
+          }
+          if (combinedAttrs.length > 0) {
+            generatedXPathFromHints.push(`//${tagName}[${combinedAttrs.join(' and ')}]`);
+          }
+          
+          // Add single-attribute XPaths (less specific) - ADD AFTER combined
+          generatedXPathFromHints.push(...singleAttrXPaths);
+          
+          // Filter AI candidates: only keep selectors that match THIS element's attributes
+          const isValidForThisElement = (selector: string): boolean => {
+            // If selector references an attribute, it must match THIS element's value
+            
+            // Check name attribute - selector with [name='X'] must have X = this element's name
+            if (thisElementUniqueValues.name) {
+              const nameMatch = selector.match(/\[name=['"]([^'"]*)['"]/);
+              if (nameMatch && nameMatch[1] !== thisElementUniqueValues.name) {
+                return false; // Selector says name=X but this element has name=Y
+              }
+            } else if (/\[name=['"][^'"]*['"]\]/.test(selector)) {
+              // Element has no name, but selector requires one - reject if selector is specific about name
+              return false;
+            }
+            
+            // Check id attribute
+            if (thisElementUniqueValues.id) {
+              const idMatch = selector.match(/#([^[\s,]+)/);
+              if (idMatch && idMatch[1] !== thisElementUniqueValues.id) {
+                return false;
+              }
+            } else if (/#([^[\s,]+)/.test(selector)) {
+              // Element has no id, but selector specifies one
+              return false;
+            }
+            
+            // Check placeholder
+            if (thisElementUniqueValues.placeholder) {
+              const phMatch = selector.match(/\[placeholder=['"]([^'"]*)['"]/);
+              if (phMatch && phMatch[1] !== thisElementUniqueValues.placeholder) {
+                return false;
+              }
+            }
+            
+            // Check type (only for inputs)
+            if (thisElementUniqueValues.type) {
+              const typeMatch = selector.match(/\[type=['"]([^'"]*)['"]/);
+              if (typeMatch && typeMatch[1] !== thisElementUniqueValues.type) {
+                return false;
+              }
+            }
+            
+            return true;
+          };
+          
+          // Combine: generated from hints (most reliable) + filtered AI candidates
+          const filteredAiCandidates = aiCandidates
+            .filter(isValidForThisElement)
+            .filter(c => !generatedFromHints.includes(c)); // Avoid duplicates
+          
+          const allCandidates = [...generatedFromHints, ...filteredAiCandidates];
+          
+          // Deduplicate
+          const seen = new Set<string>();
+          const uniqueCandidates: string[] = [];
+          for (const candidate of allCandidates) {
+            if (candidate && !seen.has(candidate)) {
+              seen.add(candidate);
+              uniqueCandidates.push(candidate);
+            }
+          }
+          
+          // Reorder: specific selectors first (match this element's attrs)
+          const uniqueAttrs = ['name', 'id', 'placeholder', 'type', 'role'];
+          const isSpecific = (selector: string): boolean => {
+            for (const attr of uniqueAttrs) {
+              const value = thisElementUniqueValues[attr as keyof typeof thisElementUniqueValues];
+              if (value) {
+                if (selector.includes(`[${attr}='${value}']`) || 
+                    selector.includes(`[${attr}="${value}"]`) || 
+                    selector.includes(`#${value}`)) {
+                  return true;
+                }
+              }
+            }
+            return false;
+          };
+          
+          // CONVERT :has-text() to XPath normalize-space() and move to xpathCandidates
+          const xpathCandidates: string[] = [];
+          
+          // Helper: extract text and escape it for XPath from :has-text() selector
+          const extractTextFromHasText = (selector: string): string | null => {
+            const match = selector.match(/:has-text\(['"](.+)['"]\)/);
+            if (!match) return null;
+            return match[1].replace(/'/g, '&apos;');
+          };
+          
+          // Helper: convert CSS :has-text() to XPath normalize-space()
+          const convertHasTextToXPath = (selector: string, tag?: string, text?: string): string | null => {
+            if (!text) return null;
+            const elementTag = tag || '*';
+            // Build XPath with normalize-space() - handles whitespace variations
+            return `//${elementTag}[normalize-space(.)='${text}']`;
+          };
+          
+          // Reorder: specific selectors first (match this element's attrs)
+          const specificFirst = uniqueCandidates.filter(isSpecific);
+          const genericLast = uniqueCandidates.filter(s => !isSpecific(s));
+          
+          // Combine and reorder before converting :has-text()
+          const combinedCandidates = [...specificFirst, ...genericLast];
+          
+          // Separate :has-text() selectors from regular ones
+          const cssOnlyCandidates: string[] = [];
+          for (const candidate of combinedCandidates) {
+            if (candidate.includes(':has-text(')) {
+              const escapedText = extractTextFromHasText(candidate);
+              // Convert to XPath and add to xpathCandidates
+              const xpath = convertHasTextToXPath(candidate, tagName, escapedText || undefined);
+              if (xpath) {
+                xpathCandidates.push(xpath);
+              }
+              // Also add role+text combination if role is available
+              if (thisElementAttrs['role'] && escapedText) {
+                const roleXPath = `//*[@role='${thisElementAttrs['role']}' and normalize-space(.)='${escapedText}']`;
+                xpathCandidates.push(roleXPath);
+              }
+            } else {
+              cssOnlyCandidates.push(candidate);
+            }
+          }
+          
+          // CRITICAL: Also convert the PRIMARY selector if it contains :has-text()
+          const primarySelector = step.selector || fallbackSelector || 'body';
+          let finalPrimarySelector = primarySelector;
+          
+          if (primarySelector.includes(':has-text(')) {
+            const escapedText = extractTextFromHasText(primarySelector);
+            const primaryXPath = convertHasTextToXPath(primarySelector, tagName, escapedText || undefined);
+            if (primaryXPath) {
+              xpathCandidates.unshift(primaryXPath); // Add as first priority
+            }
+            // Try to find a fallback CSS selector from the candidates
+            const fallbackCSS = cssOnlyCandidates[0] || generatedFromHints[0];
+            if (fallbackCSS) {
+              finalPrimarySelector = fallbackCSS;
+            } else {
+              // Generate a selector from attributes
+              if (thisElementAttrs['role']) {
+                finalPrimarySelector = `[role='${thisElementAttrs['role']}']`;
+              } else if (thisElementAttrs['id']) {
+                finalPrimarySelector = tagName ? `${tagName}#${thisElementAttrs['id']}` : `#${thisElementAttrs['id']}`;
+              } else if (thisElementAttrs['name']) {
+                finalPrimarySelector = tagName ? `${tagName}[name='${thisElementAttrs['name']}']` : `[name='${thisElementAttrs['name']}']`;
+              }
+            }
+          }
+          
+          // Add AI's existing xpathCandidates and filter out invalid ones
+          const aiXPathCandidates = step.xpathCandidates || [];
+          
+          // Filter AI xpathCandidates - reject any that reference DIFFERENT elements' attributes
+          // Also reject GENERIC xpaths (like @role='textbox') when we have more specific attributes
+          const validAiXPath = aiXPathCandidates.filter(xpath => {
+            // Check if xpath references this element's attributes - reject if different
+            if (thisElementUniqueValues.name) {
+              const nameMatch = xpath.match(/@name=['"]([^'"]*)['"]/);
+              if (nameMatch && nameMatch[1] !== thisElementUniqueValues.name) return false;
+            }
+            if (thisElementUniqueValues.id) {
+              const idMatch = xpath.match(/@id=['"]([^'"]*)['"]/);
+              if (idMatch && idMatch[1] !== thisElementUniqueValues.id) return false;
+            }
+            if (thisElementUniqueValues.placeholder) {
+              const phMatch = xpath.match(/@placeholder=['"]([^'"]*)['"]/);
+              if (phMatch && phMatch[1] !== thisElementUniqueValues.placeholder) return false;
+            }
+            
+            // If element has id, name, or placeholder, REJECT generic role-only xpaths
+            // UNLESS it's a combined xpath with more attributes
+            if ((thisElementUniqueValues.id || thisElementUniqueValues.name || thisElementUniqueValues.placeholder)) {
+              // Check if this is a generic single-attribute xpath (role only)
+              const isGenericRoleOnly = 
+                /^\/\/[a-z\*]+\[@role=['"][^'"]*['"]\]$/.test(xpath) &&
+                !xpath.includes('@name=') && 
+                !xpath.includes('@id=') &&
+                !xpath.includes('@placeholder=') &&
+                !xpath.includes('@type=');
+              
+              if (isGenericRoleOnly && thisElementUniqueValues.name) {
+                return false; // Reject generic role xpath when we have name
+              }
+              if (isGenericRoleOnly && thisElementUniqueValues.id) {
+                return false; // Reject generic role xpath when we have id
+              }
+            }
+            
+            return true;
+          });
+          
+          // Merge xpathCandidates: generated hints FIRST (most specific), then filtered AI xpaths
+          // Generated hints use name/id/placeholder/type - most specific attributes
+          // Then AI's valid xpaths (may have text-based xpaths)
+          const allXPathCandidates = [...new Set([...generatedXPathFromHints, ...xpathCandidates, ...validAiXPath])];
+          
+          // Reorder xpathCandidates by specificity:
+          // 1. Combined attributes (id+name+type+role) - MOST specific
+          // 2. Text-based (normalize-space) - MORE specific (identifies specific element)
+          // 3. Text + role combined - specific
+          // 4. ID/name/type/placeholder - specific
+          // 5. Role-only - LEAST specific (matches many elements)
+          const reorderBySpecificity = (xpaths: string[]): string[] => {
+            const hasText = (x: string) => x.includes('normalize-space(.)') || x.includes('[.=');
+            const hasRole = (x: string) => x.includes('@role=');
+            const hasCombinedAttrs = (x: string) => {
+              const attrCount = (x.match(/\[/g) || []).length;
+              return attrCount >= 3; // 3+ attributes = combined
+            };
+            
+            const grouped: { priority: number; xpath: string }[] = xpaths.map((x, i) => {
+              let priority = 10; // default lowest priority
+              
+              if (hasCombinedAttrs(x)) {
+                priority = 1; // Combined attrs = most specific
+              } else if (hasText(x) && hasRole(x)) {
+                priority = 2; // Text + role = very specific
+              } else if (hasText(x)) {
+                priority = 3; // Text only = more specific (identifies element)
+              } else if (x.includes('@id=') || x.includes('@name=') || x.includes('@placeholder=') || x.includes('@type=')) {
+                priority = 4; // ID/name/type/placeholder = specific
+              } else if (hasRole(x)) {
+                priority = 5; // Role only = generic
+              } else {
+                priority = 6; // Other/fallback
+              }
+              
+              return { priority, xpath: x, originalIndex: i };
+            });
+            
+            // Sort by priority (ascending), then by original index (stable sort)
+            grouped.sort((a, b) => {
+              if (a.priority !== b.priority) return a.priority - b.priority;
+              return a.originalIndex - b.originalIndex;
+            });
+            
+            return grouped.map(g => g.xpath);
+          };
+          
+          const reorderedXPathCandidates = reorderBySpecificity(allXPathCandidates);
+          
+          // CRITICAL: Always include xpath data - fall back to original event's xpath if empty
+          // Use the MOST SPECIFIC xpath as primary (first in array after reordering)
+          const finalXPath = reorderedXPathCandidates[0] || fallbackEvent?.element?.xpath;
+          const finalXPathCandidates = reorderedXPathCandidates.length > 0 
+            ? reorderedXPathCandidates 
+            : (fallbackEvent?.element?.xpathCandidates || []);
+          
+          // Final CSS candidates (without :has-text)
+          // Combine generated hints + AI's CSS candidates
+          let finalCssCandidates = [...generatedFromHints, ...cssOnlyCandidates];
+          
+          // If no CSS candidates and element has role, add role-based CSS
+          if (finalCssCandidates.length === 0 && thisElementAttrs['role']) {
+            finalCssCandidates.push(`[role='${thisElementAttrs['role']}']`);
+          }
+          
+          // Reorder CSS selectors by specificity (similar to XPath):
+          // 1. Combined attributes first (tag[name][type]) - MOST specific
+          // 2. ID-based: #id or tag#id
+          // 3. Name/Type/Placeholder-based: [name=X] or [type=X]
+          // 4. Role-based: [role=X] - LEAST specific
+          const hasId = (s: string) => /#[\w-]+/.test(s);
+          const hasName = (s: string) => s.includes("[name='") || s.includes('[name="');
+          const hasType = (s: string) => s.includes("[type='") || s.includes('[type="');
+          const hasPlaceholder = (s: string) => s.includes("[placeholder='") || s.includes('[placeholder="');
+          const hasRole = (s: string) => s.includes("[role='") || s.includes('[role="');
+          const hasCombinedAttrs = (s: string) => {
+            const match = s.match(/\[/g);
+            return match && match.length >= 2; // 2+ attributes = combined
+          };
+          
+          const cssReorderFn = (cssList: string[]): string[] => {
+            const tagged: { priority: number; css: string }[] = cssList.map((c, i) => {
+              let priority = 10;
+              
+              if (hasCombinedAttrs(c)) {
+                priority = 1; // Combined = most specific
+              } else if (hasId(c)) {
+                priority = 2; // ID-based
+              } else if (hasName(c)) {
+                priority = 3; // Name-based
+              } else if (hasType(c)) {
+                priority = 4; // Type-based
+              } else if (hasPlaceholder(c)) {
+                priority = 5; // Placeholder-based
+              } else if (hasRole(c)) {
+                priority = 6; // Role-based = generic
+              } else {
+                priority = 7; // Other/fallback
+              }
+              
+              return { priority, css: c, index: i };
+            });
+            
+            tagged.sort((a, b) => {
+              if (a.priority !== b.priority) return a.priority - b.priority;
+              return a.index - b.index; // Stable sort
+            });
+            
+            return tagged.map(t => t.css);
+          };
+          
+          const finalSelectorCandidates = cssReorderFn(finalCssCandidates);
+          
           return {
             ...step,
             value: resolvedValue,
             expectedValue: resolvedExpectedValue,
-            selector: step.selector || fallbackSelector || 'body',
-            selectorCandidates,
+            selector: finalPrimarySelector,
+            selectorCandidates: finalSelectorCandidates,
+            xpath: finalXPath,
+            xpathCandidates: finalXPathCandidates,
             elementHints:
               step.elementHints ||
               (fallbackEvent
@@ -1628,9 +2072,26 @@ class BackgroundService {
           'lastBlueprint',
         ]);
 
+        // ENSURE NAVIGATE STEP IS ALWAYS FIRST
+        // The AI might not include it, so we need to check and prepend if missing
+        let finalSteps = enrichedSteps;
+        const hasNavigateStep =
+          enrichedSteps.length > 0 &&
+          enrichedSteps[0].action === 'navigate' &&
+          (enrichedSteps[0].value === startUrl ||
+            enrichedSteps[0].value?.includes(startUrl || ''));
+
+        if (!hasNavigateStep && startUrl) {
+          console.log('[Background] AI did not include navigate step, prepending it');
+          finalSteps = [
+            navigateStep,
+            ...enrichedSteps,
+          ];
+        }
+
         const finalBlueprint = {
           ...blueprint,
-          steps: enrichedSteps,
+          steps: finalSteps,
           id: tempId,
           status: 'ready' as const,
           baseUrl: startUrl,
@@ -1646,6 +2107,16 @@ class BackgroundService {
             currentLast?.video_url ||
             currentLast?.videoUrl,
         };
+        
+        // DEBUG: Check if finalBlueprint has xpath before storing
+        console.log('[Background] DEBUG BLUEPRINT_GENERATED: Checking xpath in finalBlueprint:');
+        if (finalBlueprint.steps && finalBlueprint.steps.length > 1) {
+          for (let i = 1; i < Math.min(finalBlueprint.steps.length, 4); i++) {
+            const step = finalBlueprint.steps[i];
+            console.log(`[Background] DEBUG: Step ${i} (${step.action}) xpath:`, step.xpath);
+          }
+        }
+        
         await chrome.storage.local.set({ lastBlueprint: finalBlueprint });
 
         this.broadcast({
@@ -1671,10 +2142,14 @@ class BackgroundService {
               action: e.type,
               selector: e.element.selector,
               selectorCandidates: e.element.selectorCandidates || [e.element.selector],
+              xpath: e.element.xpath,
+              xpathCandidates: e.element.xpathCandidates || [],
               elementHints: {
                 tagName: e.element.tagName,
                 textContent: e.element.textContent,
                 attributes: e.element.attributes,
+                parentInfo: e.element.parentInfo,
+                structuralInfo: e.element.structuralInfo,
               },
             })),
           ],

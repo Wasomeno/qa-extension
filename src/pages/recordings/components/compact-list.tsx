@@ -10,8 +10,12 @@ import {
   PlusCircle,
   Loader2,
   Pencil,
+  Check,
   X,
+  Link,
 } from 'lucide-react';
+import { toast } from 'sonner';
+import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -23,14 +27,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { RecordingProjectPicker } from './recording-project-picker';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { getProjects } from '@/api/project';
 import { listRecordings } from '@/api/recording';
 import { storageService } from '@/services/storage';
+import { useSelectedProject } from '@/contexts/selected-project-context';
 import { TestBlueprint } from '@/types/recording';
 import { MessageType } from '@/types/messages';
 import { isRestrictedUrl } from '@/utils/domain-matcher';
+import { ProjectSelect } from '@/components/project-select';
 
 interface CompactRecordingsListProps {
   onClose: () => void;
@@ -60,7 +64,6 @@ export const CompactRecordingsList: React.FC<CompactRecordingsListProps> = ({
   onViewAll,
   portalContainer,
 }) => {
-  const [selectedProjectId, setSelectedProjectId] = useState<string>('all');
   const [error, setError] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
@@ -84,20 +87,30 @@ export const CompactRecordingsList: React.FC<CompactRecordingsListProps> = ({
   }, [portalContainer, portalReady]);
 
   const queryClient = useQueryClient();
-
-  const { data: projectsData } = useQuery({
-    queryKey: ['projects'],
-    queryFn: getProjects,
-  });
+  const { selectedProjectId, setSelectedProject } = useSelectedProject();
 
   const {
     data: recordings = [],
     isLoading,
     refetch: refetchRecordings,
   } = useQuery({
-    queryKey: ['recordings-blueprints'],
+    queryKey: ['recordings-blueprints', selectedProjectId],
     queryFn: async () => {
-      return (await listRecordings()) as unknown as TestBlueprint[];
+      const params: any = {
+        sort_by: 'created_at',
+        order: 'desc',
+      };
+
+      if (selectedProjectId) {
+        params.project_id = selectedProjectId;
+      }
+
+      const result = await listRecordings(params);
+      // Handle both array response and paginated response { data: [...] }
+      if (result && typeof result === 'object' && !Array.isArray(result) && 'data' in result) {
+        return (result as any).data || [];
+      }
+      return Array.isArray(result) ? result : [];
     },
     refetchOnMount: 'always',
   });
@@ -149,16 +162,22 @@ export const CompactRecordingsList: React.FC<CompactRecordingsListProps> = ({
     return () => chrome.storage.onChanged.removeListener(handleStorageChange);
   }, [refetchRecordings, refetchLastBlueprint]);
 
-  const handleSaveDraft = () => {
-    if (!lastBlueprint) return;
+  const handleSaveDraft = useCallback(async () => {
     try {
+      // CRITICAL: Fetch the LATEST blueprint from storage to ensure we have enriched xpath data
+      const latestBlueprint = await storageService.get('lastBlueprint');
+      if (!latestBlueprint) {
+        setError('No recording to save. Please record a test first.');
+        return;
+      }
+
       // Create a copy of the blueprint with the currently selected project if one is chosen
       const blueprintToSave = {
-        ...lastBlueprint,
+        ...latestBlueprint,
         projectId:
           selectedProjectId !== 'all'
             ? parseInt(selectedProjectId)
-            : lastBlueprint.projectId,
+            : latestBlueprint.projectId,
       };
 
       chrome.runtime.sendMessage(
@@ -182,14 +201,12 @@ export const CompactRecordingsList: React.FC<CompactRecordingsListProps> = ({
     } catch (e: any) {
       setError(e.message || 'Failed to save draft');
     }
-  };
+  }, [selectedProjectId, refetchRecordings]);
 
-  const projects = projectsData?.data?.projects || [];
-
-  const filteredRecordings = recordings
+  const filteredRecordings = (Array.isArray(recordings) ? recordings : [])
     .filter(
       rec =>
-        selectedProjectId === 'all' ||
+        !selectedProjectId ||
         rec.project_id?.toString() === selectedProjectId
     )
     .slice(0, 5);
@@ -205,7 +222,7 @@ export const CompactRecordingsList: React.FC<CompactRecordingsListProps> = ({
             type: MessageType.START_RECORDING,
             data: {
               projectId:
-                selectedProjectId !== 'all'
+                selectedProjectId
                   ? parseInt(selectedProjectId)
                   : undefined,
             },
@@ -227,7 +244,7 @@ export const CompactRecordingsList: React.FC<CompactRecordingsListProps> = ({
       } else {
         onClose();
       }
-    }, 300);
+    }, 100);
   };
 
   useEffect(() => {
@@ -297,6 +314,16 @@ export const CompactRecordingsList: React.FC<CompactRecordingsListProps> = ({
     );
   };
 
+  const handleCopyVideoLink = (e: React.MouseEvent, blueprint: TestBlueprint) => {
+    e.stopPropagation();
+    if (blueprint.video_url) {
+      navigator.clipboard.writeText(blueprint.video_url);
+      toast.success('Video link copied to clipboard');
+    } else {
+      toast.error('No video available for this recording');
+    }
+  };
+
   return (
     <div
       ref={containerRef}
@@ -309,22 +336,16 @@ export const CompactRecordingsList: React.FC<CompactRecordingsListProps> = ({
     >
       <div className="px-4 py-3 border-b bg-gray-50/50 flex items-center justify-end gap-3 shrink-0">
         <div className="flex items-center gap-2 flex-1 justify-end min-w-0">
-          <Select
+          <ProjectSelect
             value={selectedProjectId}
-            onValueChange={setSelectedProjectId}
-          >
-            <SelectTrigger className="h-8 text-[11px] w-[130px] bg-white border-gray-200 focus:ring-0">
-              <SelectValue placeholder="Project" />
-            </SelectTrigger>
-            <SelectContent container={getPortalContainer()}>
-              <SelectItem value="all">All Projects</SelectItem>
-              {projects.map(p => (
-                <SelectItem key={p.id} value={p.id.toString()}>
-                  {p.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+            onSelect={project => {
+              setSelectedProject(project);
+            }}
+            mode="single"
+            portalContainer={getPortalContainer()}
+            placeholder="All Projects"
+            extraOptions={{ allProjects: true }}
+          />
 
           <Button
             variant="default"
@@ -498,7 +519,7 @@ export const CompactRecordingsList: React.FC<CompactRecordingsListProps> = ({
                     </span>
                   )}
                   <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
-                    {!editingId && !confirmDeleteId && !isDeletingId && !deletedId && (
+                    {!editingId && confirmDeleteId !== rec.id && isDeletingId !== rec.id && deletedId !== rec.id && (
                       <>
                         <Button
                           variant="ghost"
@@ -522,6 +543,21 @@ export const CompactRecordingsList: React.FC<CompactRecordingsListProps> = ({
                         <Button
                           variant="ghost"
                           size="icon"
+                          className={cn(
+                            "h-7 w-7",
+                            rec.video_url 
+                              ? "hover:bg-blue-50 hover:text-blue-600" 
+                              : "opacity-40 cursor-not-allowed"
+                          )}
+                          onClick={e => handleCopyVideoLink(e, rec)}
+                          disabled={!rec.video_url}
+                          title={rec.video_url ? "Copy video link" : "No video available"}
+                        >
+                          <Link className="w-3.5 h-3.5" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
                           className="h-7 w-7 hover:bg-red-50 hover:text-red-600"
                           onClick={e => {
                             e.stopPropagation();
@@ -534,53 +570,80 @@ export const CompactRecordingsList: React.FC<CompactRecordingsListProps> = ({
                     )}
                   </div>
                 </div>
-                {/* Delete Confirmation Overlays */}
-                <AnimatePresence mode="wait">
+
+                {/* Delete state overlays: confirmation → loading → success */}
+                <AnimatePresence>
                   {(confirmDeleteId === rec.id || isDeletingId === rec.id || deletedId === rec.id) && (
                     <motion.div
                       initial={{ opacity: 0 }}
                       animate={{ opacity: 1 }}
                       exit={{ opacity: 0 }}
-                      className="absolute inset-0 z-10 bg-white/95 px-4 flex items-center justify-between"
+                      transition={{ duration: 0.15 }}
+                      className="absolute inset-0 z-10 bg-white/[0.97] backdrop-blur-[1px] px-4 flex items-center"
+                      onClick={e => e.stopPropagation()}
                     >
-                      {confirmDeleteId === rec.id && (
-                        <motion.div
-                          key="confirm"
-                          initial={{ opacity: 0, x: 10 }}
-                          animate={{ opacity: 1, x: 0 }}
-                          exit={{ opacity: 0, x: -10 }}
-                          className="flex items-center justify-between w-full"
-                        >
-                          <span className="text-xs font-medium text-gray-700">Delete this recording?</span>
-                          <div className="flex gap-2">
-                            <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={e => { e.stopPropagation(); setConfirmDeleteId(null); }}>Cancel</Button>
-                            <Button size="sm" variant="destructive" className="h-7 text-xs" onClick={e => { e.stopPropagation(); handleDelete(rec.id); }}>Delete</Button>
-                          </div>
-                        </motion.div>
-                      )}
-                      {isDeletingId === rec.id && (
-                        <motion.div
-                          key="deleting"
-                          initial={{ opacity: 0 }}
-                          animate={{ opacity: 1 }}
-                          exit={{ opacity: 0 }}
-                          className="flex items-center gap-2 text-xs text-gray-500"
-                        >
-                          <Loader2 className="w-4 h-4 animate-spin" />
-                          Deleting...
-                        </motion.div>
-                      )}
-                      {deletedId === rec.id && (
-                        <motion.div
-                          key="success"
-                          initial={{ opacity: 0 }}
-                          animate={{ opacity: 1 }}
-                          exit={{ opacity: 0 }}
-                          className="flex items-center gap-2 text-xs text-green-700 font-medium"
-                        >
-                          Deleted successfully
-                        </motion.div>
-                      )}
+                      <AnimatePresence mode="wait">
+                        {confirmDeleteId === rec.id && (
+                          <motion.div
+                            key="confirm"
+                            initial={{ opacity: 0, y: 4 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: -4 }}
+                            transition={{ duration: 0.14 }}
+                            className="flex items-center justify-between w-full"
+                          >
+                            <span className="text-xs font-medium text-gray-600">
+                              Delete this recording?
+                            </span>
+                            <div className="flex gap-1.5">
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="h-7 text-xs text-gray-500 hover:text-gray-800"
+                                onClick={e => { e.stopPropagation(); setConfirmDeleteId(null); }}
+                              >
+                                Cancel
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="destructive"
+                                className="h-7 text-xs bg-red-600 hover:bg-red-700"
+                                onClick={e => { e.stopPropagation(); handleDelete(rec.id); }}
+                              >
+                                Delete
+                              </Button>
+                            </div>
+                          </motion.div>
+                        )}
+
+                        {isDeletingId === rec.id && (
+                          <motion.div
+                            key="loading"
+                            initial={{ opacity: 0, y: 4 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: -4 }}
+                            transition={{ duration: 0.14 }}
+                            className="flex items-center gap-2 text-xs text-gray-500"
+                          >
+                            <Loader2 className="w-3.5 h-3.5 animate-spin text-gray-400" />
+                            <span>Deleting…</span>
+                          </motion.div>
+                        )}
+
+                        {deletedId === rec.id && (
+                          <motion.div
+                            key="success"
+                            initial={{ opacity: 0, y: 4 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: -4 }}
+                            transition={{ duration: 0.14 }}
+                            className="flex items-center gap-2 text-xs text-green-600 font-medium"
+                          >
+                            <Check className="w-3.5 h-3.5" />
+                            <span>Deleted</span>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
                     </motion.div>
                   )}
                 </AnimatePresence>
@@ -590,21 +653,24 @@ export const CompactRecordingsList: React.FC<CompactRecordingsListProps> = ({
                   </span>
                   {rec.project_id && (
                     <div onClick={e => e.stopPropagation()}>
-                    <RecordingProjectPicker
-                    currentProjectId={rec.project_id}
-                    projects={projects}
-                    onSelect={(projectId) => {
+                    <ProjectSelect
+                    value={rec.project_id ?? null}
+                    projectName={rec.project_name}
+                    onSelect={(project) => {
                       chrome.runtime.sendMessage(
                           {
                             type: MessageType.UPDATE_BLUEPRINT,
-                            data: { id: rec.id, data: { project_id: projectId } },
+                            data: { id: rec.id, data: { project_id: project?.id ?? null } },
                           },
                           () => {
                             refetchRecordings();
                           }
                       );
                     }}
+                    mode="single"
+                    size="compact"
                     portalContainer={getPortalContainer()}
+                    stopPropagation
                   />
                   </div>
                   )}
