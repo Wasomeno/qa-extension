@@ -248,7 +248,7 @@ class BackgroundService {
       if (port.name === 'agent-chat-sse') {
         port.onMessage.addListener(async msg => {
           if (msg.type !== MessageType.AGENT_CHAT_SSE) return;
-          const { input, session_id } = msg.data;
+          const { input, session_id, attachments } = msg.data;
 
           try {
             const response = await fetch(
@@ -261,6 +261,7 @@ class BackgroundService {
                 body: JSON.stringify({
                   input,
                   session_id,
+                  attachments: attachments || [],
                 }),
               }
             );

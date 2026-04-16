@@ -59,11 +59,35 @@ export const useAgent = (options?: UseAgentOptions) => {
 
   const sendMessage = useCallback(
     async (content: string, files: File[] = []) => {
-      // Create attachment entries for files
-      const attachments = files.map(file => ({
+      // Convert files to base64 for sending to background script and backend
+      const base64Attachments: Array<{ name: string; mimeType: string; data: string }> = [];
+      for (const file of files) {
+        const base64 = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => {
+            const result = reader.result as string;
+            // Strip data URL prefix: "data:<mime>;base64,<data>"
+            const base64Data = result.split(',')[1];
+            resolve(base64Data);
+          };
+          reader.onerror = reject;
+          reader.readAsDataURL(file);
+        });
+        base64Attachments.push({
+          name: file.name,
+          mimeType: file.type,
+          data: base64,
+        });
+      }
+
+      // Create attachment entries for message display
+      // Use a small data URL for display so images persist after File/blob revocation
+      const attachments = files.map((file, i) => ({
         name: file.name,
         type: file.type,
-        url: URL.createObjectURL(file),
+        url: base64Attachments[i]
+          ? `data:${file.type};base64,${base64Attachments[i].data}`
+          : URL.createObjectURL(file),
       }));
 
       const userMsg: Message = {
@@ -176,7 +200,11 @@ export const useAgent = (options?: UseAgentOptions) => {
 
         port.postMessage({
           type: MessageType.AGENT_CHAT_SSE,
-          data: { input: content, session_id: sessionId },
+          data: {
+            input: content,
+            session_id: sessionId,
+            attachments: base64Attachments.length > 0 ? base64Attachments : undefined,
+          },
         });
       } catch (error: any) {
         setMessages(prev => [
