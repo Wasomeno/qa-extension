@@ -76,6 +76,11 @@ export const ProjectBoardView: React.FC<ProjectBoardViewProps> = ({
   const [activeIssue, setActiveIssue] = useState<BoardIssue | null>(null);
   const [startColumnId, setStartColumnId] = useState<string | null>(null);
 
+  // Sync columns when initialProject changes (e.g., after data refetch)
+  React.useEffect(() => {
+    setColumns(initialProject.columns);
+  }, [initialProject.columns]);
+
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: {
@@ -109,19 +114,27 @@ export const ProjectBoardView: React.FC<ProjectBoardViewProps> = ({
     const activeId = active.id;
     const overId = over.id;
 
-    const activeColumn = findColumn(activeId as string);
-    const overColumn = findColumn(overId as string);
-
-    if (!activeColumn || !overColumn || activeColumn === overColumn) return;
-
     setColumns(prev => {
-      const activeColIdx = prev.findIndex(c => c.id === activeColumn.id);
-      const overColIdx = prev.findIndex(c => c.id === overColumn.id);
+      // Find columns from the latest state to avoid stale closure issues
+      const activeColIdx = prev.findIndex(
+        col => col.id === activeId || col.issues.some(i => i.id === activeId)
+      );
+      const overColIdx = prev.findIndex(
+        col => col.id === overId || col.issues.some(i => i.id === overId)
+      );
 
-      const activeItems = prev[activeColIdx].issues;
-      const overItems = prev[overColIdx].issues;
+      if (activeColIdx === -1 || overColIdx === -1) return prev;
+      if (activeColIdx === overColIdx) return prev;
+
+      const activeColumn = prev[activeColIdx];
+      const overColumn = prev[overColIdx];
+
+      const activeItems = activeColumn.issues;
+      const overItems = overColumn.issues;
       const activeIndex = activeItems.findIndex(i => i.id === activeId);
       const overIndex = overItems.findIndex(i => i.id === overId);
+
+      if (activeIndex === -1) return prev;
 
       let newIndex;
       if (over.data.current?.type === 'Column') {
