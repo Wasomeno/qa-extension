@@ -17,38 +17,20 @@ export const BoardColumn: React.FC<BoardColumnProps> = ({
       className={`w-[280px] flex flex-col flex-1 max-h-full bg-gray-50/50 rounded-lg border border-[${column.color}35] overflow-hidden`}
     >
       {/* Column Header */}
-      <div
-        className="px-3 py-3 border-b flex items-center justify-between overflow-hidden"
-        style={
-          column.color
-            ? {
-                backgroundColor: `${column.color}20`,
-                borderColor: `${column.color}35`,
-              }
-            : {
-                borderColor: 'rgba(229, 231, 235, 0.6)',
-              }
-        }
-      >
-        <h3
-          className="text-sm font-semibold"
-          style={{ color: column.color || '#374151' }}
-        >
-          {column.title}
-        </h3>
+      <div className="px-3 py-2.5 flex items-center justify-between overflow-hidden">
+        <div className="flex items-center gap-2">
+          <h3 className="text-sm font-medium text-gray-700">
+            {column.title}
+          </h3>
+          {column.color && (
+            <span
+              className="w-2 h-2 rounded-full"
+              style={{ backgroundColor: column.color }}
+            />
+          )}
+        </div>
         <span
-          className="px-2 py-0.5 rounded-full text-xs font-medium"
-          style={
-            column.color
-              ? {
-                  backgroundColor: `${column.color}20`,
-                  color: column.color,
-                }
-              : {
-                  backgroundColor: '#e5e7eb',
-                  color: '#4b5563',
-                }
-          }
+          className="px-2 py-0.5 rounded-md text-xs font-medium bg-gray-100 text-gray-600"
         >
           {issueCount ?? column.issues.length}
         </span>
