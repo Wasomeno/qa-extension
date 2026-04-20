@@ -93,6 +93,11 @@ export const BoardsPage: React.FC<BoardsPageProps> = ({
             title: list.label?.name || `List ${list.position}`,
             color: list.label?.color,
             textColor: list.label?.text_color,
+            label: list.label ? {
+              name: list.label.name,
+              color: list.label.color,
+              text_color: list.label.text_color,
+            } : undefined,
             issues: (list.issues ?? []).map(issue => ({
               id: issue.id.toString(),
               iid: issue.iid,
@@ -162,7 +167,7 @@ export const BoardsPage: React.FC<BoardsPageProps> = ({
                 <ProjectBoardView
                   key={mappedBoard.id}
                   project={mappedBoard}
-                  onMoveIssue={handleMoveIssue}
+                  projectId={activeProjectId ? Number(activeProjectId) : undefined}
                   onOpenIssue={issue => {
                     // Map BoardIssue to structure expected by IssueDetail
                     onNavigateToIssue?.({
