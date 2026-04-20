@@ -20,6 +20,7 @@ import { useDebounce } from '@/utils/useDebounce';
 import { GitLabProject } from '@/types/project';
 import { formatProjectName } from '@/utils/project-formatter';
 import { getProjectById } from '@/api/project';
+import { ProjectDetails } from '@/types/recording';
 
 export interface ProjectSelectProps {
   /** Current selected ID(s). Use `null` for "Unassigned", `[]` for nothing selected (or "All" in multi). */
@@ -55,6 +56,11 @@ export interface ProjectSelectProps {
    * Use this when you have a project_id and project_name but not the full project object.
    */
   projectName?: string;
+  /**
+   * Full project details object to use directly instead of fetching from the projects list.
+   * This is useful when you have the complete project data from an API response.
+   */
+  projectDetails?: ProjectDetails | GitLabProject | null;
 }
 
 const isMultiValue = (v: unknown): v is (number | string)[] =>
@@ -72,6 +78,7 @@ export const ProjectSelect: React.FC<ProjectSelectProps> = ({
   placeholder = 'Select a project...',
   stopPropagation,
   projectName,
+  projectDetails,
 }) => {
   const [open, setOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -93,9 +100,9 @@ export const ProjectSelect: React.FC<ProjectSelectProps> = ({
   const selectedIds = useMemo((): (number | string)[] => {
     if (mode === 'single') {
       if (value === null || value === undefined) return [];
-      // Handle GitLabProject object or numeric/string ID
+      // Handle GitLabProject, ProjectDetails object or numeric/string ID
       if (typeof value === 'object' && 'id' in value) {
-        return [String((value as GitLabProject).id)];
+        return [String((value as { id: number | string }).id)];
       }
       return [value as number | string];
     }
@@ -106,6 +113,12 @@ export const ProjectSelect: React.FC<ProjectSelectProps> = ({
   // Fetch selected project by ID if not in the loaded list
   useEffect(() => {
     if (mode !== 'single' || selectedIds.length === 0) {
+      setFetchedSelectedProject(null);
+      return;
+    }
+
+    // Skip fetching if projectDetails is provided
+    if (projectDetails && projectDetails.id.toString() === String(selectedIds[0])) {
       setFetchedSelectedProject(null);
       return;
     }
@@ -149,7 +162,7 @@ export const ProjectSelect: React.FC<ProjectSelectProps> = ({
     return () => {
       cancelled = true;
     };
-  }, [mode, selectedIds, projects, fetchedSelectedProject?.id]);
+  }, [mode, selectedIds, projects, fetchedSelectedProject?.id, projectDetails]);
 
   // Reset highlight when filtered list changes
   useEffect(() => {
@@ -157,8 +170,13 @@ export const ProjectSelect: React.FC<ProjectSelectProps> = ({
   }, [projects, searchQuery]);
 
   // Find selected project(s) for display (single mode)
-  const selectedProject = useMemo((): GitLabProject | null => {
+  const selectedProject = useMemo((): GitLabProject | ProjectDetails | null => {
     if (mode !== 'single' || selectedIds.length === 0) return null;
+    
+    // First, check if projectDetails is provided and matches the selected ID
+    if (projectDetails && projectDetails.id.toString() === String(selectedIds[0])) {
+      return projectDetails;
+    }
     
     // If projects are loaded, find the matching project
     if (projects.length > 0) {
@@ -172,7 +190,7 @@ export const ProjectSelect: React.FC<ProjectSelectProps> = ({
     }
     
     return null;
-  }, [mode, selectedIds, projects, fetchedSelectedProject]);
+  }, [mode, selectedIds, projects, fetchedSelectedProject, projectDetails]);
 
   // For external display: allow a displayName prop to be passed when selectedProject
   // couldn't be resolved from the projects list. This handles persisted selections.
@@ -275,17 +293,20 @@ export const ProjectSelect: React.FC<ProjectSelectProps> = ({
 
   // Compute trigger label
   const triggerLabel = useMemo(() => {
-    if (isFetching && selectedIds.length === 0) {
+    // Skip loading state when projectDetails is provided
+    const hasProjectDetails = projectDetails && selectedIds.length > 0 && projectDetails.id.toString() === String(selectedIds[0]);
+    
+    if (!hasProjectDetails && isFetching && selectedIds.length === 0) {
       return size === 'compact' ? null : 'Loading...';
     }
 
     // Show loading while fetching the selected project by ID
-    if (isFetchingSelected && selectedIds.length > 0 && !selectedProject) {
+    if (!hasProjectDetails && isFetchingSelected && selectedIds.length > 0 && !selectedProject) {
       return size === 'compact' ? null : 'Loading...';
     }
 
     // Selected ID exists but project not yet found in internal list (still fetching)
-    if (isFetching && selectedIds.length > 0 && !selectedProject) {
+    if (!hasProjectDetails && isFetching && selectedIds.length > 0 && !selectedProject) {
       return size === 'compact' ? null : 'Loading...';
     }
 
@@ -301,7 +322,7 @@ export const ProjectSelect: React.FC<ProjectSelectProps> = ({
       const valueAsObj = value as unknown as { id?: number | string; name?: string; path_with_namespace?: string } | null;
       if (valueAsObj && typeof valueAsObj === 'object' && 'name' in valueAsObj && valueAsObj.name) {
         // Format using formatProjectName to show "GROUP / ProjectName"
-        return formatProjectName(valueAsObj);
+        return formatProjectName({ name: valueAsObj.name, path_with_namespace: valueAsObj.path_with_namespace });
       }
       
       // Use projectName prop if provided (for cases where we have id + name but not full project)
@@ -335,6 +356,7 @@ export const ProjectSelect: React.FC<ProjectSelectProps> = ({
     extraOptions,
     placeholder,
     projectName,
+    projectDetails,
   ]);
 
   // Open popover focus management
@@ -359,11 +381,11 @@ export const ProjectSelect: React.FC<ProjectSelectProps> = ({
             type="button"
             className={cn(
               'h-6 text-[10px] font-bold uppercase px-1.5 py-0.5 rounded bg-zinc-100 text-zinc-600 hover:bg-zinc-200 transition-colors flex items-center gap-1',
-              (isFetching || isFetchingSelected) && 'opacity-60',
+              !projectDetails && (isFetching || isFetchingSelected) && 'opacity-60',
               className
             )}
           >
-            {(isFetching || isFetchingSelected) ? (
+            {!projectDetails && (isFetching || isFetchingSelected) ? (
               <Loader2 className="w-3 h-3 animate-spin" />
             ) : (
               <>
@@ -377,11 +399,11 @@ export const ProjectSelect: React.FC<ProjectSelectProps> = ({
             variant="outline"
             role="combobox"
             aria-expanded={open}
-            disabled={isFetching || isFetchingSelected}
+            disabled={!projectDetails && (isFetching || isFetchingSelected)}
             className={cn(
               'w-full justify-between text-left font-normal bg-white border-theme-border rounded-xl',
               'focus:ring-blue-500/20 focus:border-blue-500 hover:bg-gray-50 hover:text-gray-900 transition-all',
-              (isFetching || isFetchingSelected) && 'opacity-60',
+              !projectDetails && (isFetching || isFetchingSelected) && 'opacity-60',
               className
             )}
           >
