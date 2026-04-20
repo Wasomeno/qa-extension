@@ -8,6 +8,8 @@ export type ViewType =
   | 'agent'
   | 'chat-sessions'
   | 'chat-view'
+  | 'fix-sessions'
+  | 'fix-session-detail'
   | 'recordings'
   | 'test-scenarios'
   | 'test-scenario-detail'
