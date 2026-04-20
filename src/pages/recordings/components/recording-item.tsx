@@ -390,6 +390,7 @@ export const RecordingItem: React.FC<RecordingItemProps> = ({
             <ProjectSelect
               value={recording.project_id ?? null}
               projectName={recording.project_name}
+              projectDetails={recording.projectDetails ?? null}
               onSelect={project => {
                 const newProjectId = project?.id ?? null;
                 handleUpdateProject({ id: recording.id, project_id: newProjectId });
