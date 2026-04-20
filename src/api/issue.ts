@@ -316,7 +316,7 @@ export async function createIssue(
   request: CreateIssueRequest
 ) {
   return api.post<Issue>(`/projects/${projectId}/issues`, {
-    body: JSON.stringify(request),
+    body: request,
   });
 }
 
@@ -326,7 +326,7 @@ export async function updateIssue(
   request: UpdateIssueRequest
 ) {
   return api.put<Issue>(`/projects/${projectId}/issues/${id}`, {
-    body: JSON.stringify(request),
+    body: request,
   });
 }
 
@@ -353,7 +353,7 @@ export async function createIssueComment(
   return api.post<IssueComment>(
     `/projects/${projectId}/issues/${issueIid}/comments`,
     {
-      body: JSON.stringify(request),
+      body: request,
     }
   );
 }
@@ -367,7 +367,7 @@ export async function updateIssueComment(
   return api.put<IssueComment>(
     `/projects/${projectId}/issues/${issueIid}/comments/${commentId}`,
     {
-      body: JSON.stringify(request),
+      body: request,
     }
   );
 }
@@ -390,7 +390,7 @@ export async function createIssueWithChild(
   request: CreateIssueWithChildRequest
 ) {
   return api.post<void>(`/projects/${projectId}/issues-with-child`, {
-    body: JSON.stringify(request),
+    body: request,
   });
 }
 
@@ -425,10 +425,10 @@ export async function createIssueLink(
   return api.post<IssueLink>(
     `/projects/${projectId}/issues/${issueIid}/links`,
     {
-      body: JSON.stringify({
+      body: {
         target_project_id: projectId.toString(),
         target_issue_iid: targetIssueIid,
-      }),
+      },
     }
   );
 }
@@ -453,7 +453,7 @@ export async function createChildIssue(
   request: CreateChildIssueRequest
 ) {
   return api.post<Issue>(`/projects/${projectId}/issues/${issueIid}/children`, {
-    body: JSON.stringify(request),
+    body: request,
   });
 }
 
