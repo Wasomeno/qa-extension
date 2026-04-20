@@ -44,7 +44,6 @@ export const AddChildModal: React.FC<AddChildModalProps> = ({
     selectedProject: { id: parentIssue.project_id },
     selectedLabels: [],
     selectedAssignee: null,
-    selectedRecording: null,
   });
   const [status, setStatus] = useState<
     'idle' | 'submitting' | 'success' | 'error'
@@ -60,7 +59,6 @@ export const AddChildModal: React.FC<AddChildModalProps> = ({
         selectedProject: { id: parentIssue.project_id },
         selectedLabels: [],
         selectedAssignee: null,
-        selectedRecording: null,
       });
     }
   }, [isOpen, parentIssue.project_id]);
@@ -125,15 +123,17 @@ export const AddChildModal: React.FC<AddChildModalProps> = ({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
+            transition={{ type: 'spring', stiffness: 400, damping: 30 }}
             onClick={onClose}
             className="absolute inset-0 bg-black/40 backdrop-blur-[2px]"
           />
 
           {/* Modal */}
           <motion.div
-            initial={{ opacity: 0, scale: 0.95, y: 10 }}
+            initial={{ opacity: 0, scale: 0.96, y: 8 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.95, y: 10 }}
+            exit={{ opacity: 0, scale: 0.96, y: 8 }}
+            transition={{ type: 'spring', stiffness: 400, damping: 30 }}
             className="relative w-full flex flex-col min-h-[60%] max-h-[85vh] max-w-2xl bg-white rounded-2xl shadow-2xl overflow-hidden"
           >
             {/* Header */}

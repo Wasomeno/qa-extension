@@ -169,7 +169,7 @@ export const UploadWizard: React.FC<UploadWizardProps> = ({
           y: isOpen ? 0 : 8,
         }}
         initial={{ opacity: 0, scale: 0.95, y: 8 }}
-        transition={{ duration: 0.2, ease: 'easeOut' }}
+        transition={{ type: 'spring', stiffness: 400, damping: 30 }}
         className="bg-white rounded-xl shadow-xl w-full max-w-lg flex flex-col overflow-hidden max-h-[90vh]"
         style={{ pointerEvents: isOpen ? 'auto' : 'none' }}
       >

@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
 import { Pin } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { AnimatePresence, motion } from 'framer-motion';
+import { motion as fm } from 'framer-motion';
 import { IssueCard } from '@/pages/issues/components/issue-card';
 import { IssueCardSkeleton } from '@/pages/issues/components/issue-card-skeleton';
 import { PinColorPicker } from './components/pin-color-picker';

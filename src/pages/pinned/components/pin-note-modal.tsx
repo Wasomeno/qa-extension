@@ -34,14 +34,16 @@ export const PinNoteModal: React.FC<PinNoteModalProps> = ({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
+            transition={{ type: 'spring', stiffness: 400, damping: 30 }}
             onClick={onClose}
             className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[1000000]"
           />
           <div className="fixed inset-0 flex items-center justify-center z-[1000001] pointer-events-none">
             <motion.div
-              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              initial={{ opacity: 0, scale: 0.96, y: 8 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              exit={{ opacity: 0, scale: 0.96, y: 8 }}
+              transition={{ type: 'spring', stiffness: 400, damping: 30 }}
               className="bg-white rounded-2xl shadow-2xl border border-gray-200 w-full max-w-md overflow-hidden pointer-events-auto mx-4"
             >
               <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between bg-gray-50/50">
