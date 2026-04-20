@@ -8,6 +8,7 @@ import {
   Home,
   FileText as FileIcon,
   RefreshCw,
+  Wrench,
 } from 'lucide-react';
 import { useQueryClient, useIsFetching } from '@tanstack/react-query';
 import { cn } from '@/lib/utils';
@@ -32,6 +33,7 @@ import { CreateIssuePage } from '@/pages/issues/create';
 import { ProfilePage } from '@/pages/profile';
 import { AgentPage } from '@/pages/agent';
 import { SessionsListPage } from '@/pages/agent/sessions-list';
+import { FixSessionsListPage } from '@/pages/agent/fix-sessions-list';
 import { ChatViewPage } from '@/pages/agent/chat-view-page';
 import { RecordingsPage } from '@/pages/recordings';
 import { TestScenariosPage } from '@/pages/test-scenarios';
@@ -72,6 +74,7 @@ const MENU_ITEMS: MenuItem[] = [
   { id: 'issues', label: 'Issues', icon: List },
   { id: 'boards', label: 'Issue Boards', icon: SquareKanban },
   { id: 'pinned', label: 'Pinned Issues', icon: Pin },
+  { id: 'fix-sessions', label: 'Fix Sessions', icon: Wrench },
   { id: 'recordings', label: 'Recordings', icon: FileIcon },
   { id: 'test-scenarios', label: 'Test Scenarios', icon: FileIcon },
   { id: 'create-issue', label: 'Create Issue', icon: PlusCircle },
@@ -182,6 +185,8 @@ const MainMenuInner: React.FC<MainMenuModalProps> = ({
         return <SessionsListPage />;
       case 'chat-view':
         return <ChatViewPage sessionId={current.params?.sessionId} />;
+      case 'fix-sessions':
+        return <FixSessionsListPage portalContainer={container} />;
       case 'recordings':
         return <RecordingsPage portalContainer={container} />;
       case 'test-scenarios':

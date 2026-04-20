@@ -12,8 +12,6 @@ import { ChatInput } from './components/chat-input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import {
   Bot,
-  Sparkles,
-  MessageSquare,
   ArrowLeft,
   Trash2,
   Clock,
@@ -70,7 +68,7 @@ export const AgentPage: React.FC<{ portalContainer?: HTMLElement | null }> = ({
   const [pendingInitialMessage, setPendingInitialMessage] = useState<
     string | null
   >(null);
-  
+
   // Track pending initial files
   const [pendingInitialFiles, setPendingInitialFiles] = useState<File[]>([]);
 
@@ -137,7 +135,10 @@ export const AgentPage: React.FC<{ portalContainer?: HTMLElement | null }> = ({
   const startNewChat = (initialMessage?: string, initialFiles?: File[]) => {
     createSession();
     setView('chat');
-    if (initialMessage !== undefined || (initialFiles && initialFiles.length > 0)) {
+    if (
+      initialMessage !== undefined ||
+      (initialFiles && initialFiles.length > 0)
+    ) {
       // Store the initial message to be sent after ChatView mounts
       setPendingInitialMessage(initialMessage || null);
       setPendingInitialFiles(initialFiles || []);
@@ -454,7 +455,10 @@ const ChatView: React.FC<ChatViewProps> = ({
 
   // Handle initial message from parent - send when component mounts and sendMessage is ready
   useEffect(() => {
-    if ((initialMessage || (initialFiles && initialFiles.length > 0)) && sendMessage) {
+    if (
+      (initialMessage || (initialFiles && initialFiles.length > 0)) &&
+      sendMessage
+    ) {
       // Small delay to ensure component is fully rendered
       const timer = setTimeout(() => {
         sendMessage(initialMessage || '', initialFiles || []);
