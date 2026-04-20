@@ -363,6 +363,127 @@ class BackgroundService {
         return;
       }
 
+      if (port.name === 'agent-fix-sse') {
+        port.onMessage.addListener(async msg => {
+          if (msg.type !== MessageType.AGENT_FIX_ISSUE_SSE) return;
+          const { project_id, issue_iid, repo_project_id, target_branch, runner } = msg.data;
+
+          try {
+            const response = await fetch(
+              'https://playground-qa-extension.online/api/agent/fix-issue',
+              {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                },
+                credentials: 'include',
+                body: JSON.stringify({
+                  project_id,
+                  issue_iid,
+                  repo_project_id,
+                  target_branch,
+                  runner,
+                }),
+              }
+            );
+
+            if (!response.ok) {
+              port.postMessage({
+                event: 'error',
+                data: `HTTP error! status: ${response.status}`,
+              });
+              return;
+            }
+
+            const reader = response.body?.getReader();
+            if (!reader) {
+              port.postMessage({
+                event: 'error',
+                data: 'Failed to get reader from response body',
+              });
+              return;
+            }
+
+            const decoder = new TextDecoder();
+            let buffer = '';
+
+            const processBuffer = (text: string, isFinal: boolean = false) => {
+              buffer += text;
+
+              // Handle both \n\n and \r\n\r\n as event separators
+              const blocks = buffer.split(/\r?\n\r?\n/);
+
+              // If not final, the last block might be incomplete, keep it in buffer
+              if (!isFinal) {
+                buffer = blocks.pop() || '';
+              } else {
+                // If it is final, everything in buffer should be processed
+                buffer = '';
+              }
+
+              for (const eventBlock of blocks) {
+                const trimmedBlock = eventBlock.trim();
+                if (!trimmedBlock) continue;
+
+                const lines = trimmedBlock.split(/\r?\n/);
+                let eventType = 'message';
+                let dataString = '';
+
+                for (const line of lines) {
+                  const trimmedLine = line.trim();
+                  if (trimmedLine.startsWith('event:')) {
+                    eventType = trimmedLine.substring(6).trim();
+                  } else if (trimmedLine.startsWith('data:')) {
+                    dataString = trimmedLine.substring(5).trim();
+                  }
+                }
+
+                if (!dataString) {
+                  console.log(
+                    `[Background] SSE Block with no data:`,
+                    trimmedBlock
+                  );
+                  continue;
+                }
+
+                let data = null;
+                try {
+                  data = JSON.parse(dataString);
+                } catch (e) {
+                  data = dataString;
+                }
+
+                console.log(
+                  `[Background] SSE Forwarding - Event: ${eventType}`,
+                  data
+                );
+                port.postMessage({ event: eventType, data });
+              }
+            };
+
+            while (true) {
+              const { value, done } = await reader.read();
+              if (done) {
+                console.log(
+                  '[Background] SSE Stream Done. Finalizing buffer:',
+                  buffer
+                );
+                processBuffer('', true);
+                break;
+              }
+
+              processBuffer(decoder.decode(value, { stream: true }));
+            }
+          } catch (error: any) {
+            port.postMessage({
+              event: 'error',
+              data: error.message || 'Unknown stream error',
+            });
+          }
+        });
+        return;
+      }
+
       if (port.name !== 'bridge') return;
       port.onMessage.addListener(async msg => {
         let _reqId: string | undefined;
