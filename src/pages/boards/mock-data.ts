@@ -18,6 +18,11 @@ export interface BoardColumn {
   issues: BoardIssue[];
   color?: string;
   textColor?: string;
+  label?: {
+    name: string;
+    color: string;
+    text_color?: string;
+  };
 }
 
 export interface ProjectBoard {

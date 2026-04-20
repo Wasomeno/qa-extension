@@ -118,6 +118,25 @@ export interface TestResult {
   log?: string;
 }
 
+export interface ProjectDetails {
+  id: number;
+  name: string;
+  nameWithNamespace: string;
+  path: string;
+  pathWithNamespace: string;
+  description?: string;
+  webUrl: string;
+  defaultBranch?: string;
+  visibility?: string;
+  namespace?: {
+    id: number;
+    name: string;
+    path: string;
+    kind: string;
+    webUrl: string;
+  };
+}
+
 export interface TestBlueprint {
   id: string;
   name: string;
@@ -125,6 +144,7 @@ export interface TestBlueprint {
   baseUrl?: string;
   project_id?: number;
   project_name?: string;
+  projectDetails?: ProjectDetails;
   issue_id?: string;
   created_at?: string | number;
   auth?: {
