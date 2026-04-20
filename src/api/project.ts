@@ -66,3 +66,29 @@ export async function uploadProjectFile(
     }
   );
 }
+
+export interface GitLabBranch {
+  name: string;
+  merged: boolean;
+  protected: boolean;
+  default: boolean;
+  developers_can_push: boolean;
+  developers_can_merge: boolean;
+  can_push: boolean;
+  web_url: string;
+  commit: {
+    id: string;
+    short_id: string;
+    title: string;
+    author_name: string;
+    author_email: string;
+    authored_date: string;
+  };
+}
+
+export async function getProjectBranches(projectId: number | string) {
+  const response = await api.get<{ branches: GitLabBranch[] }>(
+    `/projects/${projectId}/branches`
+  );
+  return response;
+}

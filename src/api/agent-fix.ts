@@ -1,4 +1,4 @@
-import { FixIssueRequest, FixSession, FixEvent } from '@/types/agent-fix';
+import { FixIssueRequest, FixSession, FixEvent, FixStep } from '@/types/agent-fix';
 import { MessageType } from '@/types/messages';
 import { api } from '@/services/api';
 
@@ -21,6 +21,7 @@ export async function startFixIssue(
   const payload: FixIssueRequest = {
     project_id: projectId,
     issue_iid: issueIid,
+    runner: 'pi',
   };
 
   if (options?.repoProjectId !== undefined) {
@@ -52,6 +53,17 @@ export async function getFixSessionStatus(sessionId: string): Promise<FixSession
   
   if (!response.success || !response.data) {
     throw new Error(response.error || 'Failed to get fix session status');
+  }
+
+  return response.data;
+}
+
+// GET /agent/fix-sessions/:session_id/details - Get detailed session info with steps and events
+export async function getFixSessionDetails(sessionId: string): Promise<FixSession> {
+  const response = await api.get<FixSession>(`/agent/fix-sessions/${sessionId}/details`);
+  
+  if (!response.success || !response.data) {
+    throw new Error(response.error || 'Failed to get fix session details');
   }
 
   return response.data;
@@ -115,6 +127,7 @@ export function fixIssueWithAgent(
       issue_iid: issueIid,
       repo_project_id: repoProjectId,
       target_branch: targetBranch,
+      runner: 'pi',
     },
   });
 
