@@ -7,6 +7,7 @@ import {
   Palette,
   MessageSquare,
   Link2,
+  Sparkles,
 } from 'lucide-react';
 import { IssueStatus, PinColor, PinnedIssueMeta } from '@/types/issues';
 import { Issue } from '@/api/issue';
@@ -184,6 +185,7 @@ interface IssueCardProps {
   onUnpin?: (issue: IssueWithPin) => void;
   onSetPinColor?: (issue: IssueWithPin) => void;
   onAddNote?: (issue: IssueWithPin) => void;
+  onFixIssue?: (issue: IssueWithPin) => void;
   variant?: 'default' | 'pinned';
   className?: string;
 }
@@ -193,7 +195,7 @@ interface IssueCardProps {
  */
 const withIssueActions = (variant: 'default' | 'pinned') => {
   return (props: IssueCardProps) => {
-    const { issue, onPin, onUnpin, onSetPinColor, onAddNote, className } = props;
+    const { issue, onPin, onUnpin, onSetPinColor, onAddNote, onFixIssue, className } = props;
     const isPinned = variant === 'pinned';
 
     const handleOpenGitlab = (e: React.MouseEvent) => {
@@ -266,6 +268,18 @@ const withIssueActions = (variant: 'default' | 'pinned') => {
           title="Copy Link"
         >
           <Link2 className="w-3.5 h-3.5" />
+        </button>
+        <div className="w-px h-3 bg-gray-200 mx-0.5" />
+        <button
+          onClick={e => {
+            e.stopPropagation();
+            onFixIssue?.(issue);
+          }}
+          className="p-1 hover:bg-purple-100 rounded text-gray-400 hover:text-purple-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          title="Fix with Agent"
+          disabled={issue.state === 'closed'}
+        >
+          <Sparkles className="w-3.5 h-3.5" />
         </button>
       </>
     );
