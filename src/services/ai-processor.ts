@@ -1,5 +1,6 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { RawEvent, TestBlueprint } from '@/types/recording';
+import { SessionTelemetry } from '@/types/telemetry';
 
 export class AIProcessor {
   private genAI: GoogleGenerativeAI;
@@ -13,7 +14,8 @@ export class AIProcessor {
 
   public async generateBlueprint(
     events: RawEvent[],
-    startUrl?: string
+    startUrl?: string,
+    telemetry?: SessionTelemetry
   ): Promise<TestBlueprint> {
     const model = this.genAI.getGenerativeModel({
       model: 'gemini-3-flash-preview',
@@ -22,7 +24,7 @@ export class AIProcessor {
       },
     });
 
-    const prompt = this.constructPrompt(events, startUrl);
+    const prompt = this.constructPrompt(events, startUrl, telemetry);
 
     try {
       const result = await model.generateContent(prompt);
@@ -40,7 +42,7 @@ export class AIProcessor {
     }
   }
 
-  private constructPrompt(events: RawEvent[], startUrl?: string): string {
+  private constructPrompt(events: RawEvent[], startUrl?: string, telemetry?: SessionTelemetry): string {
     const eventsSummary = events.map(e => ({
       type: e.type,
       tagName: e.element.tagName,
@@ -116,6 +118,8 @@ Analyze the events and follow these STRICT guidelines for selector selection:
    - For 'has-text' filters, use the most unique part of the text
    - Prefer XPath with normalize-space() for text matching (handles whitespace variations)
 
+${telemetry ? this.buildTelemetrySummary(telemetry) : ''}
+
 Input Events:
 ${JSON.stringify(eventsSummary, null, 2)}
 
@@ -167,5 +171,49 @@ FINAL RULES:
 9. Always return "parameters": []
 10. Prefer XPath with normalize-space() for text-based matching (most robust)
 `;
+  }
+
+  private buildTelemetrySummary(telemetry: SessionTelemetry): string {
+    const errorCount = telemetry.jsErrors.length;
+    const failedRequests = telemetry.networkRequests.filter(
+      r => r.status && r.status >= 400
+    ).length;
+
+    let summary = `\n## Session Telemetry Summary\n`;
+    summary += `- Console Logs: ${telemetry.consoleLogs.length}\n`;
+    summary += `- JS Errors: ${errorCount}${errorCount > 0 ? ' (PAY ATTENTION TO THESE)' : ''}\n`;
+    summary += `- Network Requests: ${telemetry.networkRequests.length}\n`;
+    summary += `- Failed Requests: ${failedRequests}${failedRequests > 0 ? ' (PAY ATTENTION TO THESE)' : ''}\n`;
+    summary += `- DOM Mutations: ${telemetry.domMutations.length}\n\n`;
+
+    if (telemetry.jsErrors.length > 0) {
+      summary += `### JavaScript Errors\n`;
+      for (const err of telemetry.jsErrors.slice(0, 5)) {
+        summary += `- \`${err.message}\`${err.source ? ` at ${err.source}` : ''}\n`;
+      }
+      summary += `\n`;
+    }
+
+    const failedReqs = telemetry.networkRequests.filter(r => r.status && r.status >= 400);
+    if (failedReqs.length > 0) {
+      summary += `### Failed Network Requests\n`;
+      for (const req of failedReqs.slice(0, 5)) {
+        summary += `- \`${req.method}\` ${req.url} → ${req.status} ${req.statusText}\n`;
+      }
+      summary += `\n`;
+    }
+
+    if (telemetry.consoleLogs.length > 0) {
+      const logs = telemetry.consoleLogs.filter(l => l.level === 'error' || l.level === 'warn');
+      if (logs.length > 0) {
+        summary += `### Notable Console Messages\n`;
+        for (const log of logs.slice(0, 5)) {
+          summary += `- [${log.level}] \`${log.message}\`\n`;
+        }
+        summary += `\n`;
+      }
+    }
+
+    return summary;
   }
 }

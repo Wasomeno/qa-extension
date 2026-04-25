@@ -1,4 +1,5 @@
 import { InteractionEvent } from './messages';
+import { SessionTelemetry } from './telemetry';
 
 export interface RawEvent extends InteractionEvent {
   // Add any additional raw event properties here if needed
@@ -86,19 +87,25 @@ export interface TestRecording {
   name: string;
   description?: string;
   status: string;
+  source_type?: 'manual' | 'test_scenario'; // "manual" | "test_scenario"
+  source_id?: string; // Links to test_scenario ID if source_type is "test_scenario"
   project_id?: string;
   project_name?: string;
+  projectDetails?: ProjectDetails;
   issue_id?: string;
+  creator_id?: number;
   steps: RecordingStep[];
   parameters: any[];
   created_at?: string | number;
   videoUrl?: string;
   video_url?: string;
+  telemetry?: SessionTelemetry;
 }
 
 export interface ListRecordingsParams {
   project_id?: string;
   issue_id?: string;
+  source_type?: 'manual' | 'test_scenario';
   sort_by?: 'created_at' | 'name';
   order?: 'desc' | 'asc';
 }
@@ -141,11 +148,14 @@ export interface TestBlueprint {
   id: string;
   name: string;
   description: string;
+  source_type?: 'manual' | 'test_scenario'; // "manual" | "test_scenario"
+  source_id?: string; // Links to test_scenario ID if source_type is "test_scenario"
   baseUrl?: string;
   project_id?: number;
   project_name?: string;
   projectDetails?: ProjectDetails;
   issue_id?: string;
+  creator_id?: number;
   created_at?: string | number;
   auth?: {
     type: 'sessionState';
@@ -159,4 +169,5 @@ export interface TestBlueprint {
   status?: 'processing' | 'ready' | 'failed';
   error?: string;
   video_url?: string;
+  telemetry?: import('./telemetry').SessionTelemetry;
 }

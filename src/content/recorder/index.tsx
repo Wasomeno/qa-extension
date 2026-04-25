@@ -1,4 +1,5 @@
 import { EventLogger } from './event-logger';
+import { TelemetryCapture } from './telemetry-capture';
 import { MessageType } from '@/types/messages';
 
 const IFRAME_ID = 'qa-recorder-iframe';
@@ -15,6 +16,7 @@ interface BridgeMessage {
 
 let iframe: HTMLIFrameElement | null = null;
 let logger: EventLogger | null = null;
+let telemetryCapture: TelemetryCapture | null = null;
 let isRecording = false;
 let initializationPromise: Promise<void> | null = null;
 
@@ -59,8 +61,8 @@ function setIframeStyles(state: 'hidden' | 'overlay' | 'recording') {
     iframe.style.pointerEvents = 'auto';
     iframe.style.opacity = '1';
   } else if (state === 'recording') {
-    iframe.style.width = '340px';
-    iframe.style.height = '430px';
+    iframe.style.width = '200px';
+    iframe.style.height = '100px';
     iframe.style.top = 'auto';
     iframe.style.left = 'auto';
     iframe.style.bottom = '0';
@@ -147,6 +149,15 @@ async function doInitialize() {
         data: event,
       });
     });
+
+    // Initialize TelemetryCapture (inactive until recording starts)
+    telemetryCapture = new TelemetryCapture('', telemetry => {
+      // Send telemetry updates to background for buffering
+      chrome.runtime.sendMessage({
+        type: MessageType.TELEMETRY_UPDATE,
+        data: telemetry,
+      }).catch(() => {});
+    });
     
     console.log('[Recorder] EventLogger initialized');
 
@@ -178,6 +189,7 @@ async function doInitialize() {
           console.log('[Recorder] Starting recording...');
           isRecording = true;
           logger?.start();
+          telemetryCapture?.start();
           setIframeStyles('recording');
           console.log('[Recorder] Recording started, logger active:', logger?.isActive());
           
@@ -194,7 +206,15 @@ async function doInitialize() {
           isRecording = false;
           const eventCount = logger?.getEventCount() || 0;
           logger?.stop();
+          const telemetry = telemetryCapture?.stop();
           console.log(`[Recorder] Recording stopped. Total events captured: ${eventCount}`);
+          // Send final telemetry to background
+          if (telemetry) {
+            chrome.runtime.sendMessage({
+              type: MessageType.GET_TELEMETRY,
+              data: telemetry,
+            }).catch(() => {});
+          }
         }
         setIframeStyles('hidden');
         sendToBackground({ type: MessageType.STOP_RECORDING });
@@ -232,6 +252,7 @@ async function doInitialize() {
             console.log('[Recorder] Starting recording...');
             isRecording = true;
             logger?.start();
+            telemetryCapture?.start();
             setIframeStyles('recording');
             console.log('[Recorder] Recording started, logger active:', logger?.isActive());
           } else {
@@ -255,7 +276,15 @@ async function doInitialize() {
             isRecording = false;
             const eventCount = logger?.getEventCount() || 0;
             logger?.stop();
+            const telemetry = telemetryCapture?.stop();
             console.log(`[Recorder] Recording stopped. Total events captured: ${eventCount}`);
+            // Return telemetry and events to background
+            sendResponse({
+              success: true,
+              events: logger ? [] : [], // events are already streamed
+              telemetry,
+            });
+            return true;
           }
           setIframeStyles('hidden');
           // Notify iframe

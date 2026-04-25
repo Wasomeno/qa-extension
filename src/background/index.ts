@@ -5,6 +5,13 @@ import {
 } from '../types/messages';
 import { AIProcessor } from '../services/ai-processor';
 import { RawEvent, TestRecording, TestStep } from '../types/recording';
+import {
+  SessionTelemetry,
+  ConsoleLogEntry,
+  NetworkRequestEntry,
+  JSErrorEntry,
+  StepContext,
+} from '../types/telemetry';
 import { api } from '../services/api';
 import { SAMPLE_BLUEPRINT } from '../lib/seed-data';
 import { isRestrictedUrl } from '../utils/domain-matcher';
@@ -95,18 +102,68 @@ export class CDPHandler {
   }
 
   public static async type(tabId: number, text: string): Promise<void> {
-    for (const char of text) {
-      await this.sendCommand(tabId, 'Input.dispatchKeyEvent', {
-        type: 'keyDown',
-        text: char,
-        unmodifiedText: char,
-      });
-      await this.sendCommand(tabId, 'Input.dispatchKeyEvent', {
-        type: 'keyUp',
-        text: char,
-        unmodifiedText: char,
-      });
-    }
+    if (!text) return;
+
+    console.log(`[CDPHandler.type] Using Input.insertText for: "${text}"`);
+    
+    // Use Input.insertText which handles all characters correctly
+    // This is more reliable than individual key events for special characters
+    await this.sendCommand(tabId, 'Input.insertText', {
+      text: text,
+    });
+    
+    console.log(`[CDPHandler.type] Input.insertText completed`);
+  }
+
+  public static async clearInput(tabId: number): Promise<void> {
+    // Use JavaScript to clear the focused element's value
+    // This is more reliable than keyboard shortcuts for handling autofill
+    await this.sendCommand(tabId, 'Runtime.evaluate', {
+      expression: `
+        (function() {
+          const el = document.activeElement;
+          if (!el) return false;
+          
+          // Check if it's an input-like element
+          if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') {
+            // Store the old value to check if change occurred
+            const oldValue = el.value;
+            
+            // Clear the value
+            el.value = '';
+            
+            // Dispatch events that frameworks listen to (React, Vue, etc.)
+            el.dispatchEvent(new Event('input', { bubbles: true }));
+            el.dispatchEvent(new Event('change', { bubbles: true }));
+            
+            // Also try to clear any framework-specific state
+            // React 16+
+            const reactKey = Object.keys(el).find(key => 
+              key.startsWith('__reactProps') || key.startsWith('__reactFiber')
+            );
+            if (reactKey) {
+              const props = el[reactKey];
+              if (props && typeof props.onChange === 'function') {
+                props.onChange({ target: el });
+              }
+            }
+            
+            return oldValue !== '';
+          }
+          
+          // For contenteditable elements
+          if (el.isContentEditable) {
+            const oldValue = el.textContent;
+            el.textContent = '';
+            el.dispatchEvent(new Event('input', { bubbles: true }));
+            return oldValue !== '';
+          }
+          
+          return false;
+        })()
+      `,
+      returnByValue: true,
+    });
   }
 
   public static async scroll(
@@ -129,6 +186,10 @@ export class CDPHandler {
 class BackgroundService {
   private aiProcessor: AIProcessor;
   private recordingEvents: RawEvent[] = [];
+  private telemetry: Partial<SessionTelemetry> = {};
+  private networkRequests: NetworkRequestEntry[] = [];
+  private consoleLogs: ConsoleLogEntry[] = [];
+  private jsErrors: JSErrorEntry[] = [];
   private pendingPlaybacks: Map<string, (result: any) => void> = new Map();
   private isStartingRecording = false;
   private thumbnailCache: Map<string, string> = new Map();
@@ -142,6 +203,7 @@ class BackgroundService {
       resolve: (url: string | undefined) => void;
     }
   > = new Map();
+  private cdpNetworkEnabled = false;
 
   constructor() {
     this.aiProcessor = new AIProcessor(__GOOGLE_API_KEY__);
@@ -988,6 +1050,7 @@ class BackgroundService {
             })),
             parameters: blueprint.parameters || [],
             video_url: blueprint.video_url || blueprint.videoUrl,
+            telemetry: blueprint.telemetry,
           };
 
           console.log('[Background] Saving recording payload:', recording);
@@ -1080,6 +1143,23 @@ class BackgroundService {
             return;
           }
           chrome.tabs.create({ url, active: active ?? true });
+          sendResponse({ success: true });
+        } catch (e: any) {
+          sendResponse({ success: false, error: e?.message });
+        }
+        break;
+
+      case MessageType.OPEN_MAIN_MENU_PAGE:
+        try {
+          const { initialView, initialIssue } = message.data || {};
+          const url = new URL(chrome.runtime.getURL('main-menu.html'));
+          if (initialView) {
+            url.searchParams.set('initialView', initialView);
+          }
+          if (initialIssue) {
+            url.searchParams.set('initialIssue', JSON.stringify(initialIssue));
+          }
+          chrome.tabs.create({ url: url.toString(), active: true });
           sendResponse({ success: true });
         } catch (e: any) {
           sendResponse({ success: false, error: e?.message });
@@ -1303,7 +1383,19 @@ class BackgroundService {
 
       case MessageType.CDP_TYPE:
         try {
+          console.log(`[CDPHandler] Typing "${message.data.text}" on tab ${message.data.tabId}`);
           await CDPHandler.type(message.data.tabId, message.data.text);
+          console.log(`[CDPHandler] Type completed successfully`);
+          sendResponse({ success: true });
+        } catch (e: any) {
+          console.error(`[CDPHandler] Type failed:`, e);
+          sendResponse({ success: false, error: e.message });
+        }
+        break;
+
+      case MessageType.CDP_CLEAR_INPUT:
+        try {
+          await CDPHandler.clearInput(message.data.tabId);
           sendResponse({ success: true });
         } catch (e: any) {
           sendResponse({ success: false, error: e.message });
@@ -1336,6 +1428,27 @@ class BackgroundService {
           });
         }
         sendResponse({ success: true });
+        break;
+
+      case MessageType.TELEMETRY_UPDATE:
+        if (message.data) {
+          const data = message.data as Partial<SessionTelemetry>;
+          if (data.consoleLogs) this.consoleLogs = data.consoleLogs;
+          if (data.jsErrors) this.jsErrors = data.jsErrors;
+          if (data.storageSnapshots) this.telemetry.storageSnapshots = data.storageSnapshots;
+          if (data.domMutations) this.telemetry.domMutations = data.domMutations;
+        }
+        sendResponse({ success: true });
+        break;
+
+      case MessageType.GET_TELEMETRY:
+        if (message.data) {
+          const data = message.data as Partial<SessionTelemetry>;
+          this.telemetry = { ...this.telemetry, ...data };
+          if (data.consoleLogs) this.consoleLogs = data.consoleLogs;
+          if (data.jsErrors) this.jsErrors = data.jsErrors;
+        }
+        sendResponse({ success: true, telemetry: this.telemetry });
         break;
 
       case MessageType.IFRAME_CLOSED_OVERLAY:
@@ -1476,6 +1589,11 @@ class BackgroundService {
 
       // 1. Immediate State
       this.recordingEvents = [];
+      this.telemetry = {};
+      this.networkRequests = [];
+      this.consoleLogs = [];
+      this.jsErrors = [];
+
       const [tab] = await chrome.tabs.query({
         active: true,
         currentWindow: true,
@@ -1492,6 +1610,17 @@ class BackgroundService {
 
       chrome.action.setBadgeText({ text: 'REC' });
       chrome.action.setBadgeBackgroundColor({ color: '#ef4444' });
+
+      // Enable CDP Network domain for network capture
+      try {
+        await CDPHandler.attach(targetTabId);
+        await CDPHandler.sendCommand(targetTabId, 'Network.enable', {});
+        this.cdpNetworkEnabled = true;
+        this.setupCDPNetworkListener(targetTabId);
+        console.log('[Background] CDP Network domain enabled');
+      } catch (e) {
+        console.warn('[Background] Failed to enable CDP Network:', e);
+      }
 
       // 2. Start Video Capture in Offscreen Document
       // Creating the offscreen document with reason DISPLAY_MEDIA.
@@ -1535,6 +1664,11 @@ class BackgroundService {
       active: true,
       currentWindow: true,
     });
+
+    // Disable CDP Network capture
+    if (tab?.id) {
+      await this.disableCDPNetwork(tab.id);
+    }
 
     // Get the pre-generated ID and start URL
     const { currentRecordingId, currentRecordingStartUrl } =
@@ -1728,10 +1862,11 @@ class BackgroundService {
 
         console.log('[Background] Running AI processing...');
 
-        // Generate blueprint
+        // Generate blueprint (with telemetry for better context)
         const blueprint = await this.aiProcessor.generateBlueprint(
           allEvents,
-          startUrl
+          startUrl,
+          this.telemetry as any
         );
         console.log(
           '[Background] AI processing complete, generating enriched steps...'
@@ -2211,6 +2346,10 @@ class BackgroundService {
           ];
         }
 
+        // Build correlated telemetry
+        const sessionTelemetry = this.buildCorrelatedTelemetry(finalSteps, allEvents, startUrl);
+        this.telemetry = sessionTelemetry;
+
         const finalBlueprint = {
           ...blueprint,
           steps: finalSteps,
@@ -2228,6 +2367,7 @@ class BackgroundService {
             this.pendingVideoUrls.get(tempId) ||
             currentLast?.video_url ||
             currentLast?.videoUrl,
+          telemetry: sessionTelemetry,
         };
         
         // DEBUG: Check if finalBlueprint has xpath before storing
@@ -2254,6 +2394,22 @@ class BackgroundService {
         const result = await chrome.storage.local.get(['currentRecordingId']);
         const currentId = result.currentRecordingId || tempId;
 
+        const failedTelemetry = this.buildCorrelatedTelemetry(
+          [
+            navigateStep,
+            ...allEvents.map((e, i) => ({
+              id: (i + 1).toString(),
+              action: e.type,
+              selector: e.element.selector,
+              value: e.value,
+              description: `${e.type} on ${e.element.tagName}`,
+            })),
+          ] as any,
+          allEvents,
+          startUrl
+        );
+        this.telemetry = failedTelemetry;
+
         const failedBlueprint = {
           id: currentId,
           name: `Recording ${new Date().toLocaleTimeString()}`,
@@ -2277,6 +2433,7 @@ class BackgroundService {
           ],
           status: 'failed' as const,
           error: e.message,
+          telemetry: failedTelemetry,
         };
         await chrome.storage.local.set({ lastBlueprint: failedBlueprint });
         this.broadcast({
@@ -2291,6 +2448,9 @@ class BackgroundService {
     } else {
       console.warn('[Background] No events captured, but showing navigate step');
       // Even with no events, show a blueprint with just the navigate step
+      const emptyTelemetry = this.buildCorrelatedTelemetry([navigateStep], allEvents, startUrl);
+      this.telemetry = emptyTelemetry;
+
       const emptyBlueprint = {
         id: tempId,
         name: `Recording ${new Date().toLocaleTimeString()}`,
@@ -2298,6 +2458,7 @@ class BackgroundService {
         status: 'ready' as const,
         baseUrl: startUrl,
         description: 'Recording with no interactions captured',
+        telemetry: emptyTelemetry,
       };
       
       await chrome.storage.local.set({ lastBlueprint: emptyBlueprint });
@@ -2314,6 +2475,140 @@ class BackgroundService {
     this.recordingEvents = [];
     await chrome.storage.session.remove('currentRecording');
     await chrome.storage.local.remove(['currentRecordingId']);
+  }
+
+  private setupCDPNetworkListener(tabId: number) {
+    // Listen for CDP events via chrome.debugger.onEvent
+    const listener = (source: any, method: string, params: any) => {
+      if (source.tabId !== tabId) return;
+
+      if (method === 'Network.requestWillBeSent') {
+        const entry: NetworkRequestEntry = {
+          requestId: params.requestId,
+          url: params.request.url,
+          method: params.request.method,
+          timestamp: Date.now(),
+          requestHeaders: params.request.headers || {},
+        };
+        // Store temporarily to pair with response
+        (this as any).__pendingNetworkRequests = (this as any).__pendingNetworkRequests || new Map();
+        (this as any).__pendingNetworkRequests.set(params.requestId, { entry, startTime: Date.now() });
+      } else if (method === 'Network.responseReceived') {
+        const pending = (this as any).__pendingNetworkRequests?.get(params.requestId);
+        if (pending) {
+          pending.entry.status = params.response.status;
+          pending.entry.statusText = params.response.statusText;
+          pending.entry.responseHeaders = params.response.headers || {};
+        }
+      } else if (method === 'Network.loadingFinished') {
+        const pending = (this as any).__pendingNetworkRequests?.get(params.requestId);
+        if (pending) {
+          pending.entry.durationMs = Date.now() - pending.startTime;
+          this.networkRequests.push(pending.entry);
+          (this as any).__pendingNetworkRequests.delete(params.requestId);
+          // Flush every 20 requests
+          if (this.networkRequests.length % 20 === 0) {
+            this.flushNetworkBuffer();
+          }
+        }
+      } else if (method === 'Network.loadingFailed') {
+        const pending = (this as any).__pendingNetworkRequests?.get(params.requestId);
+        if (pending) {
+          pending.entry.error = params.errorText || params.type || 'Network error';
+          pending.entry.durationMs = Date.now() - pending.startTime;
+          this.networkRequests.push(pending.entry);
+          (this as any).__pendingNetworkRequests.delete(params.requestId);
+        }
+      }
+    };
+
+    chrome.debugger.onEvent.addListener(listener);
+
+    // Store reference so we can remove it later
+    (this as any).__cdpNetworkListener = listener;
+  }
+
+  private flushNetworkBuffer() {
+    // Network requests are kept in memory until stopRecording
+  }
+
+  private async disableCDPNetwork(tabId: number) {
+    if (!this.cdpNetworkEnabled) return;
+    try {
+      await CDPHandler.sendCommand(tabId, 'Network.disable', {});
+      this.cdpNetworkEnabled = false;
+      console.log('[Background] CDP Network domain disabled');
+    } catch (e) {
+      console.warn('[Background] Failed to disable CDP Network:', e);
+    }
+    // Remove listener
+    const listener = (this as any).__cdpNetworkListener;
+    if (listener) {
+      chrome.debugger.onEvent.removeListener(listener);
+      (this as any).__cdpNetworkListener = null;
+    }
+  }
+
+  private buildCorrelatedTelemetry(
+    steps: TestStep[],
+    allEvents: RawEvent[],
+    startUrl?: string
+  ): SessionTelemetry {
+    const stepContexts: StepContext[] = [];
+    const WINDOW_MS = 2000; // ±2 seconds around each step
+
+    for (let i = 0; i < steps.length; i++) {
+      const step = steps[i];
+      // Find the event timestamp that corresponds to this step
+      let stepTimestamp: number;
+      if (i === 0 && step.action === 'navigate') {
+        stepTimestamp = this.telemetry.startTime || Date.now();
+      } else {
+        const eventIndex = step.action === 'navigate' ? -1 : i - 1;
+        const event = eventIndex >= 0 ? allEvents[eventIndex] : null;
+        stepTimestamp = event?.timestamp || Date.now();
+      }
+
+      const surroundingLogs = this.consoleLogs.filter(
+        log => Math.abs(log.timestamp - stepTimestamp) <= WINDOW_MS
+      );
+      const surroundingRequests = this.networkRequests.filter(
+        req => Math.abs(req.timestamp - stepTimestamp) <= WINDOW_MS
+      );
+      const surroundingErrors = this.jsErrors.filter(
+        err => Math.abs(err.timestamp - stepTimestamp) <= WINDOW_MS
+      );
+      const domMutationCount = this.telemetry.domMutations?.filter(
+        m => Math.abs(m.timestamp - stepTimestamp) <= WINDOW_MS
+      ).length || 0;
+
+      stepContexts.push({
+        stepIndex: i,
+        timestamp: stepTimestamp,
+        surroundingLogs,
+        surroundingRequests,
+        surroundingErrors,
+        domMutationCount,
+      });
+    }
+
+    return {
+      recordingId: this.telemetry.recordingId || '',
+      startUrl: startUrl || this.telemetry.startUrl || '',
+      startTime: this.telemetry.startTime || Date.now(),
+      endTime: Date.now(),
+      browserContext: this.telemetry.browserContext || {
+        userAgent: 'Chrome Extension (Service Worker)',
+        viewport: { width: 1920, height: 1080 },
+        url: startUrl || '',
+      },
+      consoleLogs: this.consoleLogs,
+      networkRequests: this.networkRequests,
+      jsErrors: this.jsErrors,
+      storageSnapshots: this.telemetry.storageSnapshots || [],
+      domMutations: this.telemetry.domMutations || [],
+      stepsWithContext: stepContexts,
+    };
   }
 }
 
