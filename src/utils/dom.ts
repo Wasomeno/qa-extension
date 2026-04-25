@@ -1324,6 +1324,118 @@ export function simulateInput(element: Element, value: string): void {
 }
 
 /**
+ * Clears the value of an input/textarea element and dispatches proper events.
+ * This is useful for clearing autofilled values before typing.
+ * @param element - The element to clear
+ * @returns true if the element was cleared, false otherwise
+ */
+export function clearInputElement(element: Element): boolean {
+  // Use tagName check instead of instanceof for better iframe/shadow DOM support
+  const tagName = element.tagName.toUpperCase();
+  
+  if (tagName === 'INPUT' || tagName === 'TEXTAREA') {
+    const inputElement = element as HTMLInputElement | HTMLTextAreaElement;
+    const oldValue = inputElement.value;
+    
+    // Always clear, even if value appears empty (autofill might not be reflected yet)
+    inputElement.value = '';
+
+    // Dispatch events that frameworks listen to (React, Vue, Angular, etc.)
+    // Order matters: input before change
+    inputElement.dispatchEvent(
+      new Event('input', { bubbles: true, cancelable: true })
+    );
+    inputElement.dispatchEvent(
+      new Event('change', { bubbles: true, cancelable: true })
+    );
+
+    // Dispatch beforeinput for modern frameworks
+    inputElement.dispatchEvent(
+      new Event('beforeinput', { bubbles: true, cancelable: true })
+    );
+
+    // Simulate user pressing Ctrl/Cmd+A then Backspace
+    inputElement.dispatchEvent(
+      new KeyboardEvent('keydown', {
+        bubbles: true,
+        cancelable: true,
+        key: 'Backspace',
+        code: 'Backspace',
+        keyCode: 8,
+        which: 8,
+      })
+    );
+    inputElement.dispatchEvent(
+      new KeyboardEvent('keypress', {
+        bubbles: true,
+        cancelable: true,
+        key: 'Backspace',
+        code: 'Backspace',
+        keyCode: 8,
+        which: 8,
+      })
+    );
+    inputElement.dispatchEvent(
+      new KeyboardEvent('keyup', {
+        bubbles: true,
+        cancelable: true,
+        key: 'Backspace',
+        code: 'Backspace',
+        keyCode: 8,
+        which: 8,
+      })
+    );
+
+    // Handle React 16+ fiber props
+    const reactKeys = Object.keys(element).filter(
+      key =>
+        key.startsWith('__reactProps') || key.startsWith('__reactFiber')
+    );
+    for (const reactKey of reactKeys) {
+      const props = (element as any)[reactKey];
+      if (props && typeof props.onChange === 'function') {
+        try {
+          props.onChange({ target: element });
+        } catch (e) {
+          // Ignore React handler errors
+        }
+      }
+    }
+
+    // Handle Vue.js
+    if ((element as any)._vnode || (element as any).__vue__) {
+      try {
+        inputElement.dispatchEvent(
+          new CustomEvent('update', { 
+            bubbles: true, 
+            detail: { value: '' } 
+          })
+        );
+      } catch (e) {
+        // Ignore Vue handler errors
+      }
+    }
+
+    console.log(`[clearInputElement] Cleared ${tagName}, old value: "${oldValue}"`);
+    return oldValue !== '';
+  }
+
+  // Handle contenteditable elements
+  if (element.isContentEditable) {
+    const oldValue = element.textContent || '';
+    element.textContent = '';
+    element.dispatchEvent(
+      new Event('input', { bubbles: true, cancelable: true })
+    );
+    console.log(`[clearInputElement] Cleared contenteditable, old value: "${oldValue}"`);
+    return oldValue !== '';
+  }
+
+  console.log(`[clearInputElement] Element ${tagName} is not clearable`);
+  return false;
+}
+
+/**
  * Get the current value or text content of an element
  */
 export function getElementValue(element: Element): string {

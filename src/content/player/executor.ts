@@ -9,6 +9,7 @@ import {
   queryAllShadows,
   findElementByContext,
   ElementResolutionContext,
+  clearInputElement,
 } from '@/utils/dom';
 
 export class Executor {
@@ -19,11 +20,13 @@ export class Executor {
     type: MessageType,
     data: any
   ): Promise<void> {
+    console.log(`[Executor] Sending CDP message: ${type}`, data);
     const response = await new Promise<{ success: boolean; error?: string }>(
       resolve => {
         chrome.runtime.sendMessage({ type, data }, resolve);
       }
     );
+    console.log(`[Executor] CDP message ${type} response:`, response);
     if (!response?.success) {
       throw new Error(
         `CDP command failed: ${response?.error || 'Unknown error'}`
@@ -172,21 +175,95 @@ export class Executor {
     const tabId = await this.getTabId();
 
     console.log(`[Executor] Sending CDP click to focus element...`);
-    // Focus element via CDP click first
+    // Focus element via CDP click first - this triggers browser autofill
     await this.sendCDPMessage(MessageType.CDP_CLICK, {
       tabId,
       x: Math.round(rect.left + rect.width / 2),
       y: Math.round(rect.top + rect.height / 2),
     });
 
-    console.log(`[Executor] Sending CDP keystrokes...`);
-    // Send keystrokes
-    await this.sendCDPMessage(MessageType.CDP_TYPE, {
-      tabId,
-      text: step.value,
-    });
+    // Wait for browser autofill to populate the field
+    await new Promise(resolve => setTimeout(resolve, 200));
 
-    return getElementValue(element);
+    // NOW clear the input (after autofill has occurred)
+    // This is done directly in the content script where we have DOM access
+    console.log(`[Executor] Clearing existing input value (including autofill)...`);
+    const wasCleared = clearInputElement(element);
+    console.log(`[Executor] Input cleared: ${wasCleared}, previous value was: "${getElementValue(element)}"`);
+
+    // Small delay to ensure clear events are processed by frameworks
+    await new Promise(resolve => setTimeout(resolve, 100));
+
+    // TYPE THE VALUE - use JavaScript to set value directly (more reliable than CDP insertText)
+    // This ensures the text goes into the correct element regardless of focus state
+    console.log(`[Executor] Typing value via JavaScript...`);
+    const typedValue = this.setElementValue(element, step.value!);
+    console.log(`[Executor] Value set via JavaScript: "${typedValue}"`);
+
+    const finalValue = getElementValue(element);
+    console.log(`[Executor] Final element value: "${finalValue}"`);
+    return finalValue;
+  }
+
+  /**
+   * Sets the value of an input element using JavaScript.
+   * This is more reliable than CDP insertText which depends on focus state.
+   */
+  private static setElementValue(element: Element, value: string): string {
+    const tagName = element.tagName.toUpperCase();
+    
+    if (tagName === 'INPUT' || tagName === 'TEXTAREA') {
+      const inputElement = element as HTMLInputElement | HTMLTextAreaElement;
+      
+      // Set the value
+      inputElement.value = value;
+
+      // Dispatch events that frameworks listen to
+      // Order matters for some frameworks
+      inputElement.dispatchEvent(
+        new Event('focus', { bubbles: true, cancelable: true })
+      );
+      inputElement.dispatchEvent(
+        new Event('input', { bubbles: true, cancelable: true })
+      );
+      inputElement.dispatchEvent(
+        new Event('change', { bubbles: true, cancelable: true })
+      );
+      inputElement.dispatchEvent(
+        new Event('blur', { bubbles: true, cancelable: true })
+      );
+
+      // Handle React 16+ fiber props
+      const reactKeys = Object.keys(element).filter(
+        key =>
+          key.startsWith('__reactProps') || key.startsWith('__reactFiber')
+      );
+      for (const reactKey of reactKeys) {
+        const props = (element as any)[reactKey];
+        if (props && typeof props.onChange === 'function') {
+          try {
+            props.onChange({ target: element });
+          } catch (e) {
+            // Ignore React handler errors
+          }
+        }
+      }
+
+      console.log(`[setElementValue] Set ${tagName} value to: "${value}"`);
+      return value;
+    }
+
+    // Handle contenteditable elements
+    if (element.isContentEditable) {
+      element.textContent = value;
+      element.dispatchEvent(
+        new Event('input', { bubbles: true, cancelable: true })
+      );
+      return value;
+    }
+
+    console.log(`[setElementValue] Element ${tagName} is not an input`);
+    return '';
   }
 
   private static async ensureElementInViewport(

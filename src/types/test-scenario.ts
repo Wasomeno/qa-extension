@@ -13,6 +13,7 @@ export interface ParsedStep {
 
 export interface ParsedTestCase {
   id: string;
+  route?: string; // Route this test case targets (e.g., "/otc/invoice/create")
   userStory?: string;
   testType?: string;
   name: string;
@@ -37,5 +38,6 @@ export interface TestScenario {
   status: 'uploaded' | 'generating' | 'ready' | 'failed';
   error?: string;
   authConfig: AuthConfig;
+  creatorId?: number;
   createdAt: string;
 }

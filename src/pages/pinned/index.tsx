@@ -36,12 +36,12 @@ export const PinnedPage: React.FC<PinnedPageProps> = ({ portalContainer }) => {
   if (isLoading) {
     return (
       <ScrollArea className="h-full">
-        <div className="space-y-8 p-8">
-          <div className="flex items-center justify-between">
-            <div>
-              <div className="h-8 w-48 bg-gray-100 rounded animate-pulse" />
-              <div className="h-4 w-64 bg-gray-100 rounded mt-2 animate-pulse" />
-            </div>
+        <div className="flex flex-col h-full p-8 gap-8">
+          <div className="shrink-0">
+            <h1 className="text-2xl font-bold text-gray-900">Pinned Issues</h1>
+            <p className="text-sm text-gray-500 mt-1">
+              Quick access to your important issues
+            </p>
           </div>
           <div className="grid grid-cols-1 gap-1">
             {[...Array(3)].map((_, i) => (

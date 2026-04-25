@@ -967,7 +967,7 @@ export const IssueDetailPage: React.FC<IssueDetailPageProps> = ({
               </div>
             </div>
           )}
-          {currentIssue.merge_requests_count > 0 && (
+          {(currentIssue.merge_requests_count ?? 0) > 0 && (
             <div className="bg-white rounded-xl p-4 border border-gray-100">
               <span className="text-[10px] text-gray-500 font-medium uppercase tracking-wide">
                 Merge Requests

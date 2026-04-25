@@ -39,10 +39,11 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { TestBlueprint } from '@/types/recording';
 import { MessageType } from '@/types/messages';
 import { RecordingItem } from './components/recording-item';
-import { DetailsPanel } from './components/details-panel';
 import { ProjectSelect } from '@/components/project-select';
-import { StyledCheckbox, SelectAllCheckbox } from '@/components/ui/styled-checkbox';
-import { cn } from '@/lib/utils';
+import {
+  StyledCheckbox,
+  SelectAllCheckbox,
+} from '@/components/ui/styled-checkbox';
 
 const RecordingSkeleton = () => {
   return (
@@ -78,12 +79,13 @@ export const RecordingsPage: React.FC<{
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
   // Use local project state for this page
-  const [selectedProjectId, setSelectedProjectId] = useLocalStorage<string | null>(
-    'qa-extension-recordings-project-id',
-    null
-  );
+  const [selectedProjectId, setSelectedProjectId] = useLocalStorage<
+    string | null
+  >('qa-extension-recordings-project-id', null);
 
-  const handleProjectSelect = (project: { id: number; name: string } | null) => {
+  const handleProjectSelect = (
+    project: { id: number; name: string } | null
+  ) => {
     setSelectedProjectId(project?.id.toString() ?? null);
   };
 
@@ -106,14 +108,17 @@ export const RecordingsPage: React.FC<{
       const result = await listRecordings(params);
       console.log('API Response for recordings:', result);
       // Handle both array response and paginated response { data: [...] }
-      if (result && typeof result === 'object' && !Array.isArray(result) && 'data' in result) {
+      if (
+        result &&
+        typeof result === 'object' &&
+        !Array.isArray(result) &&
+        'data' in result
+      ) {
         return (result as any).data || [];
       }
       return Array.isArray(result) ? result : [];
     },
   });
-
-  console.log('blueprints', blueprints);
 
   const { data: lastBlueprint, refetch: refetchLastBlueprint } = useQuery({
     queryKey: ['last-blueprint'],
@@ -164,7 +169,7 @@ export const RecordingsPage: React.FC<{
   const handleDelete = async (id: string) => {
     setDeletingId(id);
     setDeleteError(null);
-    
+
     try {
       // Using chrome runtime message for deletion
       await new Promise<void>((resolve, reject) => {
@@ -173,7 +178,7 @@ export const RecordingsPage: React.FC<{
             type: MessageType.DELETE_BLUEPRINT,
             data: { id },
           },
-          (response) => {
+          response => {
             if (chrome.runtime.lastError) {
               reject(new Error(chrome.runtime.lastError.message));
             } else {
@@ -197,10 +202,12 @@ export const RecordingsPage: React.FC<{
   const handleBulkDelete = async () => {
     if (selectedIds.size === 0) return;
     setIsDeleting(true);
-    
+
     try {
       await bulkDeleteRecordings(Array.from(selectedIds));
-      toast.success(`${selectedIds.size} test recording(s) deleted successfully`);
+      toast.success(
+        `${selectedIds.size} test recording(s) deleted successfully`
+      );
       setSelectedIds(new Set());
       refetchBlueprints();
     } catch (e: any) {
@@ -313,10 +320,9 @@ export const RecordingsPage: React.FC<{
       chrome.runtime.sendMessage({
         type: MessageType.START_RECORDING,
         data: {
-          projectId:
-            selectedProjectId
-              ? parseInt(selectedProjectId)
-              : undefined,
+          projectId: selectedProjectId
+            ? parseInt(selectedProjectId)
+            : undefined,
         },
       });
     }, 300);
@@ -328,14 +334,15 @@ export const RecordingsPage: React.FC<{
     return items.filter(b => {
       const matchesSearch = b.name.toLowerCase().includes(searchLower);
       const matchesProject =
-        !selectedProjectId ||
-        b.project_id?.toString() === selectedProjectId;
+        !selectedProjectId || b.project_id?.toString() === selectedProjectId;
       return matchesSearch && matchesProject;
     });
   }, [blueprints, selectedProjectId, searchQuery]);
 
-  const allSelected = filteredItems.length > 0 && selectedIds.size === filteredItems.length;
-  const someSelected = selectedIds.size > 0 && selectedIds.size < filteredItems.length;
+  const allSelected =
+    filteredItems.length > 0 && selectedIds.size === filteredItems.length;
+  const someSelected =
+    selectedIds.size > 0 && selectedIds.size < filteredItems.length;
 
   return (
     <div className="flex flex-col h-full bg-white overflow-hidden relative">
@@ -344,16 +351,29 @@ export const RecordingsPage: React.FC<{
         <div className="flex items-center justify-between">
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="text-2xl font-bold text-gray-900">Test Recordings</h1>
+              <h1 className="text-2xl font-bold text-gray-900">
+                Test Recordings
+              </h1>
               <TooltipProvider>
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <Button variant="ghost" size="icon" className="h-6 w-6 rounded-full p-0 text-gray-400 hover:text-gray-600">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-6 w-6 rounded-full p-0 text-gray-400 hover:text-gray-600"
+                    >
                       <Info className="h-4 w-4" />
                     </Button>
                   </TooltipTrigger>
-                  <TooltipContent side="right" className="max-w-xs" container={portalContainer}>
-                    <p>Capture and manage browser interactions. AI generates test steps from your recordings for automated playback.</p>
+                  <TooltipContent
+                    side="right"
+                    className="max-w-xs"
+                    container={portalContainer}
+                  >
+                    <p>
+                      Capture and manage browser interactions. AI generates test
+                      steps from your recordings for automated playback.
+                    </p>
                   </TooltipContent>
                 </Tooltip>
               </TooltipProvider>
@@ -376,13 +396,13 @@ export const RecordingsPage: React.FC<{
               />
             </div>
             <ProjectSelect
-            value={selectedProjectId}
-            onSelect={handleProjectSelect}
-            mode="single"
-            portalContainer={portalContainer}
-            placeholder="All Projects"
-            extraOptions={{ allProjects: true }}
-          />
+              value={selectedProjectId}
+              onSelect={handleProjectSelect}
+              mode="single"
+              portalContainer={portalContainer}
+              placeholder="All Projects"
+              extraOptions={{ allProjects: true }}
+            />
           </div>
 
           <AnimatePresence mode="wait">
@@ -432,7 +452,11 @@ export const RecordingsPage: React.FC<{
                     {isDeleting ? (
                       <motion.div
                         animate={{ rotate: 360 }}
-                        transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
+                        transition={{
+                          duration: 1,
+                          repeat: Infinity,
+                          ease: 'linear',
+                        }}
                       >
                         <Loader2 className="w-4 h-4" />
                       </motion.div>
@@ -659,7 +683,9 @@ export const RecordingsPage: React.FC<{
                           }}
                           portalContainer={portalContainer}
                           isDeleting={deletingId === item.id}
-                          deleteError={deletingId === item.id ? deleteError : null}
+                          deleteError={
+                            deletingId === item.id ? deleteError : null
+                          }
                         />
                       </motion.div>
                     ))}
@@ -680,4 +706,3 @@ export const RecordingsPage: React.FC<{
     </div>
   );
 };
-

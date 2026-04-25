@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Square, Play } from 'lucide-react';
 import { MessageType } from '@/types/messages';
-import { RawEvent } from '@/types/recording';
 
 // Bridge messages between content script and iframe using postMessage
 const CONTENT_SCRIPT_MESSAGE_TYPE = '__QA_EXTENSION_MESSAGE__';
@@ -18,9 +17,7 @@ interface BridgeMessage {
 const App = () => {
   const [targetRecordingId, setTargetRecordingId] = useState<string | null>(null);
   const [isRecording, setIsRecording] = useState(false);
-  const [events, setEvents] = useState<RawEvent[]>([]);
   const [error, setError] = useState<string | null>(null);
-  const scrollRef = useRef<HTMLDivElement>(null);
 
   // Guard against multiple clicks
   const isStartingRef = useRef(false);
@@ -37,12 +34,6 @@ const App = () => {
   useEffect(() => {
     targetRecordingIdRef.current = targetRecordingId;
   }, [targetRecordingId]);
-
-  useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-    }
-  }, [events]);
 
   // Listen for messages from parent page (content script) via postMessage
   useEffect(() => {
@@ -73,12 +64,7 @@ const App = () => {
         console.log('[Recorder Iframe] IFRAME_STOP_RECORDING received');
         setIsRecording(false);
         setTargetRecordingId(null);
-        setEvents([]);
         chrome.storage.local.set({ isRecording: false });
-      } else if (type === MessageType.IFRAME_LOG_EVENT) {
-        if (isRecordingRef.current) {
-          setEvents(prev => [...prev, data]);
-        }
       } else if (type === 'RECORDING_CONFIRMED') {
         // Recording has been confirmed by content script, ensure state is correct
         console.log('[Recorder Iframe] Recording confirmed by content script, current isRecordingRef:', isRecordingRef.current);
@@ -131,7 +117,6 @@ const App = () => {
     console.log('[Recorder Iframe] Starting DOM recording with id:', id);
 
     // Don't set isRecording yet - wait for confirmation from content script
-    setEvents([]);
     setError(null);
     console.log('[Recorder Iframe] State updated, waiting for confirmation');
 
@@ -204,7 +189,6 @@ const App = () => {
     console.log('[Recorder Iframe] User clicked Stop Recording');
     setIsRecording(false);
     setTargetRecordingId(null);
-    setEvents([]);
     sendToParent({
       type: MessageType.STOP_RECORDING,
     });
@@ -215,7 +199,6 @@ const App = () => {
     isStartingRef.current = false;
     setTargetRecordingId(null);
     setIsRecording(false);
-    setEvents([]);
     setError(null);
     chrome.storage.local.remove(['isRecording', 'currentRecordingId']);
     chrome.action.setBadgeText({ text: '' });
@@ -341,122 +324,17 @@ const App = () => {
       {isRecording && (
         <div
           style={{
-            pointerEvents: 'none',
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'flex-end',
-            gap: '8px',
-            marginBottom: '14px',
-            marginRight: '10px',
-            maxWidth: '300px',
+            pointerEvents: 'auto',
+            padding: '10px',
           }}
         >
-          <div
-            style={{
-              pointerEvents: 'auto',
-              backgroundColor: 'rgba(255, 255, 255, 0.95)',
-              backdropFilter: 'blur(12px)',
-              border: '1px solid #fee2e2',
-              borderRadius: '12px',
-              padding: '12px',
-              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
-              marginBottom: '8px',
-              minWidth: '220px',
-              maxWidth: '280px',
-              width: '280px',
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-              <div
-                style={{
-                  width: '8px',
-                  height: '8px',
-                  borderRadius: '50%',
-                  backgroundColor: '#ef4444',
-                  animation: 'pulse 1s infinite',
-                }}
-              />
-              <span
-                style={{
-                  fontSize: '10px',
-                  fontWeight: 'bold',
-                  color: '#dc2626',
-                  textTransform: 'uppercase',
-                }}
-              >
-                Recording
-              </span>
-            </div>
-            <div
-              ref={scrollRef}
-              style={{
-                maxHeight: '160px',
-                overflowY: 'auto',
-                overflowX: 'hidden',
-                width: '100%',
-              }}
-            >
-              {events.length === 0 ? (
-                <p
-                  style={{
-                    fontSize: '10px',
-                    color: '#9ca3af',
-                    fontStyle: 'italic',
-                  }}
-                >
-                  Waiting for clicks...
-                </p>
-              ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', width: '100%' }}>
-                  {events.map((e, i) => (
-                    <div
-                      key={i}
-                      style={{
-                        fontSize: '10px',
-                        borderBottom: '1px solid #f9fafb',
-                        paddingBottom: '4px',
-                        width: '100%',
-                        overflow: 'hidden',
-                      }}
-                    >
-                      <div
-                        style={{
-                          fontWeight: 'bold',
-                          color: '#111827',
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                          whiteSpace: 'nowrap',
-                        }}
-                      >
-                        {e.type}
-                      </div>
-                      <div
-                        style={{
-                          color: '#6b7280',
-                          wordBreak: 'break-word',
-                          display: '-webkit-box',
-                          WebkitLineClamp: 2,
-                          WebkitBoxOrient: 'vertical',
-                          lineHeight: '1.25',
-                        }}
-                      >
-                        {e.element?.selector || 'No selector'}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-
           <button
             onClick={requestStopRecording}
             style={{
-              pointerEvents: 'auto',
               display: 'flex',
               alignItems: 'center',
               gap: '8px',
-              padding: '8px 16px',
+              padding: '10px 20px',
               borderRadius: '9999px',
               cursor: 'pointer',
               backgroundColor: '#dc2626',

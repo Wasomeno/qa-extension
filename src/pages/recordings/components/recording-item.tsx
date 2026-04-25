@@ -16,12 +16,15 @@ import {
   Loader2,
   AlertCircle,
   Link,
+  FileText,
+  User,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
 import { TestBlueprint } from '@/types/recording';
 import {
   DropdownMenu,
@@ -348,6 +351,23 @@ export const RecordingItem: React.FC<RecordingItemProps> = ({
           </div>
           <Actions />
         </div>
+
+        {/* Source Type Indicator */}
+        {recording.source_type && (
+          <div className="mb-3">
+            {recording.source_type === 'test_scenario' ? (
+              <Badge variant="secondary" className="gap-1 bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-50">
+                <FileText className="w-3 h-3" />
+                From Test Scenario
+              </Badge>
+            ) : (
+              <Badge variant="secondary" className="gap-1 bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-50">
+                <User className="w-3 h-3" />
+                Manual Recording
+              </Badge>
+            )}
+          </div>
+        )}
 
         {/* Steps Snippet */}
         <div className="flex-1 min-h-[80px] bg-zinc-50/50 rounded-xl p-4 border border-zinc-50 mb-4 group-hover:bg-zinc-100/50 transition-colors">

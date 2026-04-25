@@ -5,6 +5,7 @@ import { FixSession } from '@/types/agent-fix';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Skeleton } from '@/components/ui/skeleton';
+import { EmptyState } from '@/components/ui/empty-state';
 import {
   Clock,
   Trash2,
@@ -167,8 +168,8 @@ export const FixSessionsListPage: React.FC<FixSessionsListPageProps> = ({ portal
       <div className="flex flex-1 min-h-0">
         {/* Sessions List */}
         <div className="flex-1 flex flex-col min-w-0">
-          <ScrollArea className="flex-1">
-            <div className="px-8 pb-8">
+          <ScrollArea className="flex-1 [&>div>div[style]]:!block [&>div>div[style]]:h-full">
+            <div className="flex flex-col h-full px-8 pb-8">
               {isLoading ? (
                 <div className="space-y-3">
                   {Array.from({ length: 4 }).map((_, i) => (
@@ -176,15 +177,11 @@ export const FixSessionsListPage: React.FC<FixSessionsListPageProps> = ({ portal
                   ))}
                 </div>
               ) : sessions.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-16 text-center">
-                  <div className="h-14 w-14 rounded-2xl bg-gray-100 flex items-center justify-center mb-4">
-                    <Wrench className="h-6 w-6 text-gray-400" />
-                  </div>
-                  <h3 className="text-base font-medium mb-1">No fix sessions yet</h3>
-                  <p className="text-sm text-gray-400 max-w-xs">
-                    Start a fix agent from an issue to see it listed here.
-                  </p>
-                </div>
+                <EmptyState
+                  icon={Wrench}
+                  title="No fix sessions yet"
+                  description="Start a fix agent from an issue to see it listed here."
+                />
               ) : (
                 <div className="space-y-3">
                   <AnimatePresence>

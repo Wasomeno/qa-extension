@@ -521,6 +521,11 @@ html[dir='rtl'],
   color: var(--success-text);
 }
 
+[data-rich-colors='true'][data-sonner-toast][data-type='success'] [data-icon] svg {
+  fill: var(--success-text);
+  stroke: var(--success-text);
+}
+
 [data-rich-colors='true'][data-sonner-toast][data-type='info'] {
   background: var(--info-bg);
   border-color: var(--info-border);
@@ -531,6 +536,11 @@ html[dir='rtl'],
   background: var(--info-bg);
   border-color: var(--info-border);
   color: var(--info-text);
+}
+
+[data-rich-colors='true'][data-sonner-toast][data-type='info'] [data-icon] svg {
+  fill: var(--info-text);
+  stroke: var(--info-text);
 }
 
 [data-rich-colors='true'][data-sonner-toast][data-type='warning'] {
@@ -545,6 +555,11 @@ html[dir='rtl'],
   color: var(--warning-text);
 }
 
+[data-rich-colors='true'][data-sonner-toast][data-type='warning'] [data-icon] svg {
+  fill: var(--warning-text);
+  stroke: var(--warning-text);
+}
+
 [data-rich-colors='true'][data-sonner-toast][data-type='error'] {
   background: var(--error-bg);
   border-color: var(--error-border);
@@ -555,6 +570,11 @@ html[dir='rtl'],
   background: var(--error-bg);
   border-color: var(--error-border);
   color: var(--error-text);
+}
+
+[data-rich-colors='true'][data-sonner-toast][data-type='error'] [data-icon] svg {
+  fill: var(--error-text);
+  stroke: var(--error-text);
 }
 
 /* End Sonner Toast Styles */

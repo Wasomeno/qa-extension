@@ -19,6 +19,8 @@ export const listRecordings = async (
     if (params.project_id)
       url.searchParams.append('project_id', params.project_id);
     if (params.issue_id) url.searchParams.append('issue_id', params.issue_id);
+    if (params.source_type)
+      url.searchParams.append('source_type', params.source_type);
     if (params.sort_by) url.searchParams.append('sort_by', params.sort_by);
     if (params.order) url.searchParams.append('order', params.order);
   }

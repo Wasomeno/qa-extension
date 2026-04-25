@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   QueryClient,
   QueryClientProvider,
@@ -6,7 +6,6 @@ import {
 } from '@tanstack/react-query';
 import FloatingTriggerButton from './components/floating-trigger-button';
 import PopupWrapper from './components/popup-wrapper';
-import MainMenuModal from './components/main-menu-modal';
 import LoginPopup from './components/login-popup';
 
 // Updated imports from new page structure
@@ -17,7 +16,6 @@ import { CompactRecordingsList } from '@/pages/recordings/components/compact-lis
 import { getGitlabLoginSession } from '@/api/auth';
 import { MessageType } from '@/types/messages';
 import { useSessionUser } from '@/hooks/use-session-user';
-import { ViewType } from '@/types/navigation';
 import { SessionProvider, useSession } from '@/contexts/session-context';
 import { SelectedProjectProvider } from '@/contexts/selected-project-context';
 
@@ -42,7 +40,7 @@ const FloatingTriggerInner: React.FC<FloatingTriggerProps> = ({ onClose }) => {
   const sessionUser = useSession();
   // Fallback to hook if provider is missing (though it shouldn't be here)
   const hookUser = useSessionUser();
-  const { user, clearUser, syncUser } = sessionUser || hookUser;
+  const { user, clearUser } = sessionUser || hookUser;
   const isLoading = sessionUser?.loading || hookUser?.loading || false;
 
   const [activeFeature, setActiveFeature] = useState<
@@ -52,12 +50,10 @@ const FloatingTriggerInner: React.FC<FloatingTriggerProps> = ({ onClose }) => {
     x: number;
     y: number;
   } | null>(null);
-  const [selectedIssue, setSelectedIssue] = useState<any | null>(null);
-  const [initialView, setInitialView] = useState<ViewType>('agent');
+
   const [hiddenReason, setHiddenReason] = useState<'auto' | 'manual' | null>(
     null
   );
-  const [isHovered, setIsHovered] = useState<boolean>(false);
   const [popupContainer, setPopupContainer] = useState<HTMLDivElement | null>(
     null
   );
@@ -65,7 +61,7 @@ const FloatingTriggerInner: React.FC<FloatingTriggerProps> = ({ onClose }) => {
     null
   );
 
-  const opacity = activeFeature === 'menu' && !isHovered ? 0.3 : 1;
+  const opacity = 1;
 
   const session = useQuery({
     queryKey: ['session'],
@@ -167,29 +163,27 @@ const FloatingTriggerInner: React.FC<FloatingTriggerProps> = ({ onClose }) => {
       return;
     }
 
-    // Menu modal is wider than other popups
-    const popupWidth = action === 'menu' ? 600 : 360;
-    const arrowHeight = 8; // Height of the tooltip arrow
-    const gap = 8; // Gap between popup and capsule
+    if (action === 'menu') {
+      chrome.runtime.sendMessage({
+        type: MessageType.OPEN_MAIN_MENU_PAGE,
+      });
+      return;
+    }
 
-    // Center popup horizontally relative to the clicked icon
+    const popupWidth = 360;
+    const arrowHeight = 8;
+    const gap = 8;
+
     const popupX = iconRect.left + iconRect.width / 2 - popupWidth / 2;
-    // Position popup with bottom edge just above the capsule
     const popupY = capsuleRect.top - arrowHeight - gap;
 
     setPopupPosition({ x: popupX, y: popupY });
     setActiveFeature(action);
-    if (action === 'menu') {
-      // When opening the menu via the main menu icon,
-      // preserve the last state by not resetting.
-      // setInitialView('agent');
-    }
   };
 
   const handleClose = () => {
     setActiveFeature(null);
     setPopupPosition(null);
-    setSelectedIssue(null);
   };
 
   const handleLoginSuccess = () => {
@@ -199,35 +193,35 @@ const FloatingTriggerInner: React.FC<FloatingTriggerProps> = ({ onClose }) => {
     handleClose();
   };
 
+  const handleOpenMainMenu = (data?: { initialView?: string; initialIssue?: any }) => {
+    chrome.runtime.sendMessage({
+      type: MessageType.OPEN_MAIN_MENU_PAGE,
+      data,
+    });
+  };
+
   const handleIssueSelect = (issue: any) => {
-    setSelectedIssue(issue);
-    setInitialView('issues');
-    setActiveFeature('menu');
+    handleOpenMainMenu({ initialView: 'issues', initialIssue: issue });
   };
 
   const handleGoToCreateIssue = () => {
-    setActiveFeature('menu');
-    setInitialView('create-issue');
+    handleOpenMainMenu({ initialView: 'create-issue' });
   };
 
   const handleGoToIssues = () => {
-    setActiveFeature('menu');
-    setInitialView('issues');
+    handleOpenMainMenu({ initialView: 'issues' });
   };
 
   const handleGoToPinned = () => {
-    setActiveFeature('menu');
-    setInitialView('pinned');
+    handleOpenMainMenu({ initialView: 'pinned' });
   };
 
   const handleGoToRecordings = () => {
-    setActiveFeature('menu');
-    setInitialView('recordings');
+    handleOpenMainMenu({ initialView: 'recordings' });
   };
 
   const handleViewAllRecordings = () => {
-    setInitialView('recordings');
-    setActiveFeature('menu');
+    handleOpenMainMenu({ initialView: 'recordings' });
   };
 
   const renderPopupContent = () => {
@@ -285,7 +279,6 @@ const FloatingTriggerInner: React.FC<FloatingTriggerProps> = ({ onClose }) => {
         position={getCapsulePosition()}
         hidden={!!hiddenReason}
         opacity={opacity}
-        onHoverChange={setIsHovered}
         onActionClick={handleActionClick}
         hasActivePopup={!!activeFeature}
         isLoggedIn={isSessionExists}
@@ -306,13 +299,6 @@ const FloatingTriggerInner: React.FC<FloatingTriggerProps> = ({ onClose }) => {
         </PopupWrapper>
       )}
 
-      {/* Main Menu Modal - rendered separately with its own backdrop */}
-      <MainMenuModal
-        isOpen={activeFeature === 'menu'}
-        onClose={handleClose}
-        initialIssue={selectedIssue}
-        initialView={initialView}
-      />
     </>
   );
 };

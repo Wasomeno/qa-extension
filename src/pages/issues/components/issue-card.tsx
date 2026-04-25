@@ -8,6 +8,7 @@ import {
   MessageSquare,
   Link2,
   Sparkles,
+  ClipboardList,
 } from 'lucide-react';
 import { IssueStatus, PinColor, PinnedIssueMeta } from '@/types/issues';
 import { Issue } from '@/api/issue';
@@ -59,6 +60,8 @@ export const BaseIssueCard: React.FC<BaseIssueCardProps> = ({
   className = '',
 }) => {
   const assignee = issue.assignees?.[0];
+  const author = issue.author;
+  const hasChildIssues = issue.child && issue.child.amount > 0;
 
   return (
     <div
@@ -91,9 +94,11 @@ export const BaseIssueCard: React.FC<BaseIssueCardProps> = ({
           </div>
 
           <div className="flex items-center flex-wrap gap-2">
-            <span className="text-[10px] text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded">
-              {issue.project_name}
-            </span>
+            {issue.project_name && (
+              <span className="text-[10px] text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded">
+                {issue.project_name}
+              </span>
+            )}
 
             {issue.label_details && issue.label_details.length > 0
               ? issue.label_details.slice(0, 3).map(label => (
@@ -118,7 +123,19 @@ export const BaseIssueCard: React.FC<BaseIssueCardProps> = ({
                   </span>
                 ))}
 
-            {issue.merge_requests_count > 0 && (
+            {hasChildIssues && (
+              <span
+                className={cn(
+                  'inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded font-medium',
+                  'bg-blue-100 text-blue-700'
+                )}
+              >
+                <ClipboardList className="w-3 h-3" />
+                {issue.child!.amount} child issues
+              </span>
+            )}
+
+            {(issue.merge_requests_count ?? 0) > 0 && (
               <span
                 className={cn(
                   'inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded font-medium',
@@ -130,6 +147,21 @@ export const BaseIssueCard: React.FC<BaseIssueCardProps> = ({
               </span>
             )}
           </div>
+
+          {/* Author info */}
+          {author && (
+            <div className="flex items-center gap-1.5 mt-2">
+              <img
+                src={author.avatar_url}
+                alt={author.name}
+                title={`Opened by ${author.name}`}
+                className="w-4 h-4 rounded-full border border-gray-200"
+              />
+              <span className="text-[10px] text-gray-500 truncate max-w-[150px]">
+                {author.name}
+              </span>
+            </div>
+          )}
         </div>
 
         {/* Right Content / Assignee */}

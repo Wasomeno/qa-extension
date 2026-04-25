@@ -288,7 +288,28 @@ const MainMenuInner: React.FC<MainMenuModalProps> = ({
                         className="h-6 object-cover"
                       />
                     </div>
-                    <SidebarTrigger className="ml-auto" />
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={() => {
+                          chrome.runtime.sendMessage({
+                            type: MessageType.OPEN_MAIN_MENU_PAGE,
+                            data: {
+                              initialView: current.view !== 'agent' ? current.view : undefined,
+                              initialIssue: current.params || undefined,
+                            },
+                          });
+                        }}
+                        className="p-1.5 hover:bg-gray-100 rounded-md transition-colors text-gray-500"
+                        title="Open in new tab"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+                          <polyline points="15 3 21 3 21 9"/>
+                          <line x1="10" y1="14" x2="21" y2="3"/>
+                        </svg>
+                      </button>
+                      <SidebarTrigger className="ml-0" />
+                    </div>
                   </div>
                 </SidebarHeader>
                 <SidebarContent>

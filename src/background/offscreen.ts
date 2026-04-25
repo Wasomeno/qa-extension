@@ -143,8 +143,12 @@ async function generateThumbnail(
       reject(new Error('Thumbnail generation timed out'));
     }, 15000);
 
-    video.addEventListener('loadeddata', () => {
-      video.currentTime = Math.min(time, video.duration || time);
+    // Wait for metadata to load so we know the duration
+    video.addEventListener('loadedmetadata', () => {
+      // Seek to the requested time, or 3 seconds into the video, whichever is smaller
+      const seekTime = Math.min(time, video.duration || time);
+      console.log(`[Thumbnail] Seeking to ${seekTime}s (requested: ${time}s, duration: ${video.duration}s)`);
+      video.currentTime = seekTime;
     });
 
     video.addEventListener('seeked', () => {
@@ -156,6 +160,7 @@ async function generateThumbnail(
         if (ctx) {
           ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
           const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+          console.log(`[Thumbnail] Generated at ${video.currentTime}s`);
           resolve(dataUrl);
         } else {
           reject(new Error('Canvas context not available'));

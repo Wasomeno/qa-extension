@@ -55,6 +55,8 @@
         "recording-detail.js",
         "generated-test-detail.html",
         "generated-test-detail.js",
+        "main-menu.html",
+        "main-menu.js",
         "recorder-iframe.html",
         "*.js",
         "*.css"

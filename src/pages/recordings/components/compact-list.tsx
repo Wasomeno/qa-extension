@@ -99,6 +99,7 @@ export const CompactRecordingsList: React.FC<CompactRecordingsListProps> = ({
       const params: any = {
         sort_by: 'created_at',
         order: 'desc',
+        source_type: 'manual', // Filter to show only manual recordings in compact list
       };
 
       if (selectedProjectId) {
@@ -656,6 +657,7 @@ export const CompactRecordingsList: React.FC<CompactRecordingsListProps> = ({
                     <ProjectSelect
                     value={rec.project_id ?? null}
                     projectName={rec.project_name}
+                    projectDetails={rec.projectDetails ?? null}
                     onSelect={(project) => {
                       chrome.runtime.sendMessage(
                           {

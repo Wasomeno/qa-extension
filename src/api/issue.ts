@@ -4,68 +4,68 @@ import { UserBasic } from '@/api/user';
 export type Issue = {
   id: number;
   iid: number;
-  external_id: string;
+  external_id?: string;
   state: string;
-  description: string;
-  health_status: string;
+  description?: string;
+  health_status?: string;
   author: UserBasic;
-  milestone: null;
+  milestone?: null;
   project_id: number;
   project_name: string;
   assignees: UserBasic[];
   updated_at: string;
-  closed_at: null;
-  closed_by: null;
+  closed_at?: null;
+  closed_by?: null;
   title: string;
   created_at: string;
-  moved_to_id: 0;
+  moved_to_id?: number;
   labels: string[] | any[];
-  label_details: Array<{
+  label_details?: Array<{
     id: number;
     name: string;
     color: string;
-    description: string;
-    description_html: string;
+    description?: string;
+    description_html?: string;
     text_color: string;
   }> | null;
-  upvotes: 0;
-  downvotes: 0;
-  due_date: null;
+  upvotes?: number;
+  downvotes?: number;
+  due_date?: string | null;
   web_url: string;
-  references: {
+  references?: {
     short: string;
     relative: string;
     full: string;
   };
-  time_stats: {
-    human_time_estimate: string;
-    human_total_time_spent: string;
-    time_estimate: number;
-    total_time_spent: number;
+  time_stats?: {
+    human_time_estimate?: string;
+    human_total_time_spent?: string;
+    time_estimate?: number;
+    total_time_spent?: number;
   };
   confidential: boolean;
   weight: number;
-  discussion_locked: boolean;
-  issue_type: string;
-  subscribed: boolean;
-  user_notes_count: number;
-  _links: {
+  discussion_locked?: boolean;
+  issue_type?: string;
+  subscribed?: boolean;
+  user_notes_count?: number;
+  _links?: {
     self: string;
     notes: string;
     award_emoji: string;
     project: string;
   };
-  issue_link_id: number;
-  merge_requests_count: number;
-  epic_issue_id: number;
-  epic: null;
-  iteration: null;
-  task_completion_status: {
+  issue_link_id?: number;
+  merge_requests_count?: number;
+  epic_issue_id?: number;
+  epic?: null;
+  iteration?: null;
+  task_completion_status?: {
     count: number;
     completed_count: number;
   };
-  service_desk_reply_to: string;
-  assignee: null | any;
+  service_desk_reply_to?: string;
+  assignee?: null | UserBasic;
   child?: {
     amount: number;
     items: {
