@@ -22,6 +22,7 @@ module.exports = (env, argv) => {
       'recording-detail': './src/pages/recordings/standalone.tsx',
       'generated-test-detail': './src/pages/test-scenarios/generated-standalone.tsx',
       'main-menu': './src/pages/main-menu/standalone.tsx',
+      'video-editor': './src/pages/video-editor/standalone.tsx',
       offscreen: './src/background/offscreen.ts',
       'shadow-dom-styles': './src/styles/shadow-dom.css',
     },
@@ -165,6 +166,11 @@ module.exports = (env, argv) => {
         template: './src/pages/main-menu/standalone.html',
         filename: 'main-menu.html',
         chunks: ['main-menu', 'vendor'],
+      }),
+      new rspack.HtmlRspackPlugin({
+        template: './src/pages/video-editor/standalone.html',
+        filename: 'video-editor.html',
+        chunks: ['video-editor', 'vendor'],
       }),
       new rspack.HtmlRspackPlugin({
         template: './src/background/offscreen.html',
