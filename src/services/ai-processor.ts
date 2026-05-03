@@ -174,27 +174,27 @@ FINAL RULES:
   }
 
   private buildTelemetrySummary(telemetry: SessionTelemetry): string {
-    const errorCount = telemetry.jsErrors.length;
-    const failedRequests = telemetry.networkRequests.filter(
+    const errorCount = telemetry.jsErrors?.length || 0;
+    const failedRequests = (telemetry.networkRequests || []).filter(
       r => r.status && r.status >= 400
     ).length;
 
     let summary = `\n## Session Telemetry Summary\n`;
-    summary += `- Console Logs: ${telemetry.consoleLogs.length}\n`;
+    summary += `- Console Logs: ${(telemetry.consoleLogs || []).length}\n`;
     summary += `- JS Errors: ${errorCount}${errorCount > 0 ? ' (PAY ATTENTION TO THESE)' : ''}\n`;
-    summary += `- Network Requests: ${telemetry.networkRequests.length}\n`;
+    summary += `- Network Requests: ${(telemetry.networkRequests || []).length}\n`;
     summary += `- Failed Requests: ${failedRequests}${failedRequests > 0 ? ' (PAY ATTENTION TO THESE)' : ''}\n`;
-    summary += `- DOM Mutations: ${telemetry.domMutations.length}\n\n`;
+    summary += `- DOM Mutations: ${(telemetry.domMutations || []).length}\n\n`;
 
-    if (telemetry.jsErrors.length > 0) {
+    if ((telemetry.jsErrors || []).length > 0) {
       summary += `### JavaScript Errors\n`;
-      for (const err of telemetry.jsErrors.slice(0, 5)) {
+      for (const err of telemetry.jsErrors!.slice(0, 5)) {
         summary += `- \`${err.message}\`${err.source ? ` at ${err.source}` : ''}\n`;
       }
       summary += `\n`;
     }
 
-    const failedReqs = telemetry.networkRequests.filter(r => r.status && r.status >= 400);
+    const failedReqs = (telemetry.networkRequests || []).filter(r => r.status && r.status >= 400);
     if (failedReqs.length > 0) {
       summary += `### Failed Network Requests\n`;
       for (const req of failedReqs.slice(0, 5)) {
@@ -203,8 +203,8 @@ FINAL RULES:
       summary += `\n`;
     }
 
-    if (telemetry.consoleLogs.length > 0) {
-      const logs = telemetry.consoleLogs.filter(l => l.level === 'error' || l.level === 'warn');
+    if ((telemetry.consoleLogs || []).length > 0) {
+      const logs = (telemetry.consoleLogs || []).filter(l => l.level === 'error' || l.level === 'warn');
       if (logs.length > 0) {
         summary += `### Notable Console Messages\n`;
         for (const log of logs.slice(0, 5)) {

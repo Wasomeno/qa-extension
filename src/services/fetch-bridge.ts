@@ -95,7 +95,25 @@ export async function bridgeFetch<T = any>(
 
   // No client-side timeout: never abort requests here.
   try {
-    const resp = await fetch(req.url, { ...(req.init as RequestInit) });
+    const init = { ...(req.init as RequestInit) };
+    
+    // Automatically add auth headers if in extension context
+    if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.session) {
+      try {
+        const session = await chrome.storage.session.get('session_id');
+        if (session.session_id) {
+          const headers = new Headers(init.headers || {});
+          if (!headers.has('X-Session-ID') && !headers.has('Authorization')) {
+            headers.set('X-Session-ID', session.session_id);
+            init.headers = Object.fromEntries(headers.entries());
+          }
+        }
+      } catch (e) {
+        console.warn('[bridgeFetch] Failed to get session_id from storage', e);
+      }
+    }
+
+    const resp = await fetch(req.url, init);
 
     const ct = resp.headers.get('content-type') || '';
     const want =

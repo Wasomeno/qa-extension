@@ -204,6 +204,15 @@ class BackgroundService {
     }
   > = new Map();
   private cdpNetworkEnabled = false;
+  // Video Editor Flow - stores pending recording data for editing
+  private pendingEditRecordings: Map<string, {
+    events: RawEvent[];
+    videoBlobKey: string;
+    startUrl: string;
+    startTime: number;
+    endTime: number;
+    telemetry: any;
+  }> = new Map();
 
   constructor() {
     this.aiProcessor = new AIProcessor(__GOOGLE_API_KEY__);
@@ -215,6 +224,7 @@ class BackgroundService {
     fileName: string,
     contentType: string
   ): Promise<string> {
+    console.log(`[Background] PutObjectCommand for ${fileName}, body size: ${body.length} bytes`);
     const command = new PutObjectCommand({
       Bucket: bucketName,
       Key: fileName,
@@ -270,8 +280,14 @@ class BackgroundService {
     init?: RequestInit | null
   ): Promise<RequestInit> {
     const headers = { ...(init?.headers as Record<string, string>) };
-    if (!headers['Authorization']) {
+    if (!headers['Authorization'] && !headers['X-Session-ID']) {
       try {
+        if (chrome.storage && chrome.storage.session) {
+          const result = await chrome.storage.session.get('session_id');
+          if (result.session_id) {
+            headers['X-Session-ID'] = result.session_id;
+          }
+        }
       } catch {}
     }
     return { ...(init || {}), headers } as RequestInit;
@@ -705,6 +721,84 @@ class BackgroundService {
             const pending = this.pendingVideoUpload.get(rId as string);
             if (pending) pending.resolve(undefined);
           }
+        }
+        break;
+
+      // Video Editor Flow - Jam.dev style
+      case MessageType.VIDEO_CAPTURE_READY:
+        try {
+          const { recordingId, videoBlobKey, duration, size } = message.data || {};
+          console.log(`[Background] Video capture ready for editing: ${recordingId}, duration: ${duration}s, size: ${size}`);
+          
+          // Update the pending edit recording with video metadata if it exists
+          const existing = this.pendingEditRecordings.get(recordingId);
+          if (existing) {
+            // Events already stored, just update with video info
+            this.pendingEditRecordings.set(recordingId, {
+              ...existing,
+              videoBlobKey,
+              endTime: Date.now(),
+            });
+            console.log(`[Background] Updated pending recording ${recordingId} with video blob key`);
+          }
+          // If not exists, the video is ready before stopRecording finished
+          // stopRecording will store the events and use this videoBlobKey
+          
+          sendResponse({ success: true });
+        } catch (e) {
+          console.error(`[Background] Failed to handle VIDEO_CAPTURE_READY:`, e);
+          sendResponse({ success: false, error: (e as Error).message });
+        }
+        break;
+
+      case MessageType.GET_PENDING_EDIT_RECORDING:
+        try {
+          const { recordingId } = message.data || {};
+          const pending = this.pendingEditRecordings.get(recordingId);
+          
+          if (!pending) {
+            sendResponse({ success: false, error: 'No pending recording found' });
+            return;
+          }
+          
+          sendResponse({
+            success: true,
+            data: {
+              recordingId,
+              events: pending.events,
+              videoBlobKey: pending.videoBlobKey,
+              startUrl: pending.startUrl,
+              startTime: pending.startTime,
+              endTime: pending.endTime,
+              telemetry: pending.telemetry,
+            }
+          });
+        } catch (e) {
+          console.error(`[Background] Failed to get pending recording:`, e);
+          sendResponse({ success: false, error: (e as Error).message });
+        }
+        break;
+
+      case MessageType.FINALIZE_EDITED_RECORDING:
+        try {
+          const { recordingId, trimStart, trimEnd, title, description } = message.data || {};
+          console.log(`[Background] Finalizing edited recording: ${recordingId}, trim: ${trimStart}s - ${trimEnd}s`);
+          
+          const pending = this.pendingEditRecordings.get(recordingId);
+          if (!pending) {
+            sendResponse({ success: false, error: 'No pending recording found' });
+            return;
+          }
+          
+          // Start finalization process (this will take time)
+          sendResponse({ success: true, data: { status: 'processing' } });
+          
+          // Process the finalized recording
+          await this.finalizeEditedRecording(recordingId, pending, trimStart, trimEnd, title, description);
+          
+        } catch (e) {
+          console.error(`[Background] Failed to finalize recording:`, e);
+          sendResponse({ success: false, error: (e as Error).message });
         }
         break;
 
@@ -1305,13 +1399,19 @@ class BackgroundService {
           }
 
           if (targetTabId) {
-            chrome.tabs
-              .sendMessage(targetTabId, {
+            try {
+              const response = await chrome.tabs.sendMessage(targetTabId, {
                 type: 'OPEN_RECORDING_OVERLAY',
                 data: { projectId },
-              })
-              .catch(() => {});
-            sendResponse({ success: true });
+              });
+              sendResponse({ success: true, data: response });
+            } catch {
+              sendResponse({
+                success: false,
+                error:
+                  'Failed to open recording overlay. The recorder content script may not be loaded on this page.',
+              });
+            }
           } else {
             sendResponse({ success: false, error: 'No active tab found' });
           }
@@ -1589,10 +1689,15 @@ class BackgroundService {
 
       // 1. Immediate State
       this.recordingEvents = [];
-      this.telemetry = {};
       this.networkRequests = [];
       this.consoleLogs = [];
       this.jsErrors = [];
+      (this as any).__pendingNetworkRequests = new Map();
+      this.telemetry = {
+        recordingId: currentRecordingId,
+        startTime: Date.now(),
+        startUrl: startUrl || '',
+      };
 
       const [tab] = await chrome.tabs.query({
         active: true,
@@ -1602,11 +1707,12 @@ class BackgroundService {
 
       await chrome.storage.session.remove('currentRecording');
       await chrome.storage.local.set({
-        isRecording: true,
         currentRecordingProjectId: projectId,
         currentRecordingId,
         currentRecordingStartUrl: startUrl,
       });
+
+      // CDP is enabled, but we don't set isRecording: true yet
 
       chrome.action.setBadgeText({ text: 'REC' });
       chrome.action.setBadgeBackgroundColor({ color: '#ef4444' });
@@ -1651,6 +1757,11 @@ class BackgroundService {
         });
         return;
       }
+
+      // 3. Update global recording state ONLY AFTER success
+      await chrome.storage.local.set({ isRecording: true });
+      chrome.action.setBadgeText({ text: 'REC' });
+      chrome.action.setBadgeBackgroundColor({ color: '#ef4444' });
     } catch (e) {
       this.isStartingRecording = false;
       throw e;
@@ -1682,56 +1793,8 @@ class BackgroundService {
       `[Background] Stopping recording session: ${tempId} (Started at: ${startUrl})`
     );
 
-    // Create a promise that resolves when video upload completes
-    const videoPromise = new Promise<string | undefined>(resolve => {
-      const timeout = setTimeout(() => {
-        console.warn(`[Background] Video upload timed out for ${tempId} - continuing without video`);
-        this.pendingVideoUpload.delete(tempId);
-        resolve(undefined);
-      }, 60_000); // 60 seconds for video upload
-
-      this.pendingVideoUpload.set(tempId, {
-        promise: Promise.resolve(undefined), // placeholder
-        resolve: (url: string | undefined) => {
-          clearTimeout(timeout);
-          this.pendingVideoUpload.delete(tempId);
-          resolve(url);
-        },
-      });
-    });
-
-    // Stop Video Capture
+    // Stop Video Capture (offscreen will store blob in IndexedDB and send VIDEO_CAPTURE_READY)
     chrome.runtime.sendMessage({ type: MessageType.STOP_VIDEO_CAPTURE });
-
-    // Set immediate processing state to update UI instantly
-    const initialSteps = [];
-    if (startUrl) {
-      initialSteps.push({
-        id: 'start-nav',
-        action: 'navigate',
-        value: startUrl,
-        description: `Navigate to ${startUrl}`,
-        selector: 'body',
-        selectorCandidates: ['body'],
-      });
-    }
-
-    const processingBlueprint = {
-      id: tempId,
-      name: `Recording ${new Date().toLocaleTimeString()}`,
-      steps: initialSteps,
-      status: 'processing',
-    };
-    await chrome.storage.local.set({ lastBlueprint: processingBlueprint });
-    this.broadcast({
-      type: MessageType.BLUEPRINT_PROCESSING,
-      data: { blueprint: processingBlueprint },
-    });
-    // Explicitly notify the active tab so content scripts (compact-list) update immediately
-    await this.notifyTab(tab?.id, {
-      type: MessageType.BLUEPRINT_PROCESSING,
-      data: { blueprint: processingBlueprint },
-    });
 
     await chrome.storage.local.set({ isRecording: false });
     chrome.action.setBadgeText({ text: '' });
@@ -1805,690 +1868,473 @@ class BackgroundService {
     // Sort by timestamp
     allEvents.sort((a, b) => a.timestamp - b.timestamp);
 
-    // ALWAYS add the navigate step as the first step
-    const navigateStep: TestStep = {
-      id: '0-nav',
-      action: 'navigate' as const,
-      value: startUrl,
-      description: `Navigate to ${startUrl || 'page'}`,
-      selector: 'body',
-      selectorCandidates: ['body'],
-      elementHints: {
-        tagName: 'body',
-      },
-      expectedValue: undefined,
-    };
-
-    // 3. Generate blueprint if we have events
-    if (allEvents.length > 0) {
+    // Generate a default title based on the start URL or action
+    let defaultTitle = `Recording ${new Date().toLocaleTimeString()}`;
+    if (startUrl) {
       try {
-        // Save raw events as a temporary blueprint so it shows up immediately
-        // ALWAYS include the navigate step first
-        const tempBlueprint = {
-          id: tempId,
-          name: `Recording ${new Date().toLocaleTimeString()}`,
-          steps: [
-            navigateStep,
-            ...allEvents.map((e, i) => ({
-              id: (i + 1).toString(),
-              action: e.type,
-              selector: e.element.selector,
-              selectorCandidates: e.element.selectorCandidates || [
-                e.element.selector,
-              ],
-              xpath: e.element.xpath,
-              xpathCandidates: e.element.xpathCandidates || [],
-              elementHints: {
-                tagName: e.element.tagName,
-                textContent: e.element.textContent,
-                attributes: e.element.attributes,
-                parentInfo: e.element.parentInfo,
-                structuralInfo: e.element.structuralInfo,
-              },
-            })),
-          ],
-          status: 'processing',
-        } as any;
-
-        await chrome.storage.local.set({ lastBlueprint: tempBlueprint });
-        this.broadcast({
-          type: MessageType.BLUEPRINT_PROCESSING,
-          data: { blueprint: tempBlueprint },
-        });
-        await this.notifyTab(tab?.id, {
-          type: MessageType.BLUEPRINT_PROCESSING,
-          data: { blueprint: tempBlueprint },
-        });
-
-        console.log('[Background] Running AI processing...');
-
-        // Generate blueprint (with telemetry for better context)
-        const blueprint = await this.aiProcessor.generateBlueprint(
-          allEvents,
-          startUrl,
-          this.telemetry as any
-        );
-        console.log(
-          '[Background] AI processing complete, generating enriched steps...'
-        );
-
-        // Wait for video upload to complete (runs in parallel with AI)
-        const resolvedVideoUrl = await videoPromise;
-
-        const enrichedSteps = (blueprint.steps || []).map((step, index): TestStep => {
-          // Find the corresponding event. Note that AI might group events, so this is heuristic.
-          // If the first step is navigate and we prepended it, we need to adjust indexing
-          const isPrependedNav =
-            index === 0 &&
-            step.action === 'navigate' &&
-            step.value === startUrl;
-          const eventIndex = isPrependedNav
-            ? -1
-            : index - (blueprint.steps[0]?.action === 'navigate' ? 1 : 0);
-
-          const fallbackEvent = eventIndex >= 0 ? allEvents[eventIndex] : null;
-          const isPlaceholder = (value?: string) =>
-            typeof value === 'string' && /\$\{[^}]+\}/.test(value);
-
-          const fallbackValue =
-            step.action === 'navigate'
-              ? fallbackEvent?.url
-              : step.action === 'type' || step.action === 'select'
-                ? fallbackEvent?.value
-                : undefined;
-
-          const fallbackExpectedValue =
-            step.action === 'assert'
-              ? fallbackEvent?.value || fallbackEvent?.element?.textContent
-              : undefined;
-
-          const resolvedValue = isPlaceholder(step.value)
-            ? fallbackValue || undefined
-            : step.value;
-
-          const resolvedExpectedValue = isPlaceholder(step.expectedValue)
-            ? fallbackExpectedValue || undefined
-            : step.expectedValue;
-
-          const fallbackSelector = fallbackEvent?.element?.selector;
-          
-          // FIX: Use elementHints.attributes as source of truth for THIS element's identity
-          // Do NOT rely on fallbackEvent index matching which can be wrong when AI groups/reorders events
-          const thisElementAttrs = step.elementHints?.attributes || fallbackEvent?.element?.attributes || {};
-          
-          const thisElementUniqueValues = {
-            name: thisElementAttrs['name'],
-            id: thisElementAttrs['id'],
-            placeholder: thisElementAttrs['placeholder'],
-            type: thisElementAttrs['type'],
-            role: thisElementAttrs['role'],
-          };
-          
-          // Generate selectorCandidates from the AI's primary selector + hints
-          // This ensures they match the actual element, not a misaligned fallback event
-          const aiCandidates = step.selectorCandidates || [];
-          
-          // Simple CSS selector escape function (background script doesn't have CSS API)
-          const escapeCssSelector = (value: string): string => {
-            // Escape special CSS selector characters
-            return value.replace(/[!#"$%&'()*+,.\/:;<=>?@\[\\\]^`{|}~]/g, '\\\\$&');
-          };
-          
-          // Helper to generate a specific selector for an attribute
-          const generateAttrSelector = (attr: string, value: string, tagName?: string): string | null => {
-            if (!value) return null;
-            const escapedValue = value.replace(/'/g, "\\'");
-            if (attr === 'id') {
-              const escapedId = escapeCssSelector(value);
-              return tagName ? `${tagName}#${escapedId}` : `#${escapedId}`;
-            }
-            return tagName ? `${tagName}[${attr}='${escapedValue}']` : `[${attr}='${escapedValue}']`;
-          };
-          
-          const tagName = step.elementHints?.tagName || fallbackEvent?.element?.tagName;
-          
-          // Generate candidates from element hints attributes (GUARANTEED to be for THIS element)
-          const generatedFromHints: string[] = [];
-          const generatedXPathFromHints: string[] = [];
-          const singleAttrXPaths: string[] = [];
-          
-          // Collect single-attribute XPaths (order: id > name > type > placeholder > role)
-          // Most specific attributes first
-          if (thisElementAttrs['id']) {
-            const sel = generateAttrSelector('id', thisElementAttrs['id'], tagName);
-            if (sel) generatedFromHints.unshift(sel); // unshift to put first
-            singleAttrXPaths.push(`//*[@id='${thisElementAttrs['id'].replace(/'/g, "&apos;")}']`);
-          }
-          if (thisElementAttrs['name']) {
-            const sel = generateAttrSelector('name', thisElementAttrs['name'], tagName);
-            if (sel) generatedFromHints.push(sel);
-            singleAttrXPaths.push(`//${tagName}[@name='${thisElementAttrs['name'].replace(/'/g, "&apos;")}']`);
-          }
-          if (thisElementAttrs['placeholder']) {
-            const sel = generateAttrSelector('placeholder', thisElementAttrs['placeholder'], tagName);
-            if (sel) generatedFromHints.push(sel);
-            singleAttrXPaths.push(`//${tagName}[@placeholder='${thisElementAttrs['placeholder'].replace(/'/g, "&apos;")}']`);
-          }
-          if (thisElementAttrs['type'] && tagName === 'input') {
-            const sel = generateAttrSelector('type', thisElementAttrs['type'], tagName);
-            if (sel) generatedFromHints.push(sel);
-            singleAttrXPaths.push(`//${tagName}[@type='${thisElementAttrs['type'].replace(/'/g, "&apos;")}']`);
-          }
-          if (thisElementAttrs['role']) {
-            singleAttrXPaths.push(`//${tagName}[@role='${thisElementAttrs['role'].replace(/'/g, "&apos;")}']`);
-          }
-          
-          // Generate combined attribute xpath (most specific) - ADD FIRST
-          const combinedAttrs: string[] = [];
-          // Order: id > name > type > role (most specific first)
-          if (thisElementAttrs['id']) {
-            combinedAttrs.push(`@id='${thisElementAttrs['id'].replace(/'/g, "&apos;")}'`);
-          }
-          if (thisElementAttrs['name']) {
-            combinedAttrs.push(`@name='${thisElementAttrs['name'].replace(/'/g, "&apos;")}'`);
-          }
-          if (thisElementAttrs['type']) {
-            combinedAttrs.push(`@type='${thisElementAttrs['type'].replace(/'/g, "&apos;")}'`);
-          }
-          if (thisElementAttrs['role']) {
-            combinedAttrs.push(`@role='${thisElementAttrs['role'].replace(/'/g, "&apos;")}'`);
-          }
-          if (combinedAttrs.length > 0) {
-            generatedXPathFromHints.push(`//${tagName}[${combinedAttrs.join(' and ')}]`);
-          }
-          
-          // Add single-attribute XPaths (less specific) - ADD AFTER combined
-          generatedXPathFromHints.push(...singleAttrXPaths);
-          
-          // Filter AI candidates: only keep selectors that match THIS element's attributes
-          const isValidForThisElement = (selector: string): boolean => {
-            // If selector references an attribute, it must match THIS element's value
-            
-            // Check name attribute - selector with [name='X'] must have X = this element's name
-            if (thisElementUniqueValues.name) {
-              const nameMatch = selector.match(/\[name=['"]([^'"]*)['"]/);
-              if (nameMatch && nameMatch[1] !== thisElementUniqueValues.name) {
-                return false; // Selector says name=X but this element has name=Y
-              }
-            } else if (/\[name=['"][^'"]*['"]\]/.test(selector)) {
-              // Element has no name, but selector requires one - reject if selector is specific about name
-              return false;
-            }
-            
-            // Check id attribute
-            if (thisElementUniqueValues.id) {
-              const idMatch = selector.match(/#([^[\s,]+)/);
-              if (idMatch && idMatch[1] !== thisElementUniqueValues.id) {
-                return false;
-              }
-            } else if (/#([^[\s,]+)/.test(selector)) {
-              // Element has no id, but selector specifies one
-              return false;
-            }
-            
-            // Check placeholder
-            if (thisElementUniqueValues.placeholder) {
-              const phMatch = selector.match(/\[placeholder=['"]([^'"]*)['"]/);
-              if (phMatch && phMatch[1] !== thisElementUniqueValues.placeholder) {
-                return false;
-              }
-            }
-            
-            // Check type (only for inputs)
-            if (thisElementUniqueValues.type) {
-              const typeMatch = selector.match(/\[type=['"]([^'"]*)['"]/);
-              if (typeMatch && typeMatch[1] !== thisElementUniqueValues.type) {
-                return false;
-              }
-            }
-            
-            return true;
-          };
-          
-          // Combine: generated from hints (most reliable) + filtered AI candidates
-          const filteredAiCandidates = aiCandidates
-            .filter(isValidForThisElement)
-            .filter(c => !generatedFromHints.includes(c)); // Avoid duplicates
-          
-          const allCandidates = [...generatedFromHints, ...filteredAiCandidates];
-          
-          // Deduplicate
-          const seen = new Set<string>();
-          const uniqueCandidates: string[] = [];
-          for (const candidate of allCandidates) {
-            if (candidate && !seen.has(candidate)) {
-              seen.add(candidate);
-              uniqueCandidates.push(candidate);
-            }
-          }
-          
-          // Reorder: specific selectors first (match this element's attrs)
-          const uniqueAttrs = ['name', 'id', 'placeholder', 'type', 'role'];
-          const isSpecific = (selector: string): boolean => {
-            for (const attr of uniqueAttrs) {
-              const value = thisElementUniqueValues[attr as keyof typeof thisElementUniqueValues];
-              if (value) {
-                if (selector.includes(`[${attr}='${value}']`) || 
-                    selector.includes(`[${attr}="${value}"]`) || 
-                    selector.includes(`#${value}`)) {
-                  return true;
-                }
-              }
-            }
-            return false;
-          };
-          
-          // CONVERT :has-text() to XPath normalize-space() and move to xpathCandidates
-          const xpathCandidates: string[] = [];
-          
-          // Helper: extract text and escape it for XPath from :has-text() selector
-          const extractTextFromHasText = (selector: string): string | null => {
-            const match = selector.match(/:has-text\(['"](.+)['"]\)/);
-            if (!match) return null;
-            return match[1].replace(/'/g, '&apos;');
-          };
-          
-          // Helper: convert CSS :has-text() to XPath normalize-space()
-          const convertHasTextToXPath = (selector: string, tag?: string, text?: string): string | null => {
-            if (!text) return null;
-            const elementTag = tag || '*';
-            // Build XPath with normalize-space() - handles whitespace variations
-            return `//${elementTag}[normalize-space(.)='${text}']`;
-          };
-          
-          // Reorder: specific selectors first (match this element's attrs)
-          const specificFirst = uniqueCandidates.filter(isSpecific);
-          const genericLast = uniqueCandidates.filter(s => !isSpecific(s));
-          
-          // Combine and reorder before converting :has-text()
-          const combinedCandidates = [...specificFirst, ...genericLast];
-          
-          // Separate :has-text() selectors from regular ones
-          const cssOnlyCandidates: string[] = [];
-          for (const candidate of combinedCandidates) {
-            if (candidate.includes(':has-text(')) {
-              const escapedText = extractTextFromHasText(candidate);
-              // Convert to XPath and add to xpathCandidates
-              const xpath = convertHasTextToXPath(candidate, tagName, escapedText || undefined);
-              if (xpath) {
-                xpathCandidates.push(xpath);
-              }
-              // Also add role+text combination if role is available
-              if (thisElementAttrs['role'] && escapedText) {
-                const roleXPath = `//*[@role='${thisElementAttrs['role']}' and normalize-space(.)='${escapedText}']`;
-                xpathCandidates.push(roleXPath);
-              }
-            } else {
-              cssOnlyCandidates.push(candidate);
-            }
-          }
-          
-          // CRITICAL: Also convert the PRIMARY selector if it contains :has-text()
-          const primarySelector = step.selector || fallbackSelector || 'body';
-          let finalPrimarySelector = primarySelector;
-          
-          if (primarySelector.includes(':has-text(')) {
-            const escapedText = extractTextFromHasText(primarySelector);
-            const primaryXPath = convertHasTextToXPath(primarySelector, tagName, escapedText || undefined);
-            if (primaryXPath) {
-              xpathCandidates.unshift(primaryXPath); // Add as first priority
-            }
-            // Try to find a fallback CSS selector from the candidates
-            const fallbackCSS = cssOnlyCandidates[0] || generatedFromHints[0];
-            if (fallbackCSS) {
-              finalPrimarySelector = fallbackCSS;
-            } else {
-              // Generate a selector from attributes
-              if (thisElementAttrs['role']) {
-                finalPrimarySelector = `[role='${thisElementAttrs['role']}']`;
-              } else if (thisElementAttrs['id']) {
-                finalPrimarySelector = tagName ? `${tagName}#${thisElementAttrs['id']}` : `#${thisElementAttrs['id']}`;
-              } else if (thisElementAttrs['name']) {
-                finalPrimarySelector = tagName ? `${tagName}[name='${thisElementAttrs['name']}']` : `[name='${thisElementAttrs['name']}']`;
-              }
-            }
-          }
-          
-          // Add AI's existing xpathCandidates and filter out invalid ones
-          const aiXPathCandidates = step.xpathCandidates || [];
-          
-          // Filter AI xpathCandidates - reject any that reference DIFFERENT elements' attributes
-          // Also reject GENERIC xpaths (like @role='textbox') when we have more specific attributes
-          const validAiXPath = aiXPathCandidates.filter(xpath => {
-            // Check if xpath references this element's attributes - reject if different
-            if (thisElementUniqueValues.name) {
-              const nameMatch = xpath.match(/@name=['"]([^'"]*)['"]/);
-              if (nameMatch && nameMatch[1] !== thisElementUniqueValues.name) return false;
-            }
-            if (thisElementUniqueValues.id) {
-              const idMatch = xpath.match(/@id=['"]([^'"]*)['"]/);
-              if (idMatch && idMatch[1] !== thisElementUniqueValues.id) return false;
-            }
-            if (thisElementUniqueValues.placeholder) {
-              const phMatch = xpath.match(/@placeholder=['"]([^'"]*)['"]/);
-              if (phMatch && phMatch[1] !== thisElementUniqueValues.placeholder) return false;
-            }
-            
-            // If element has id, name, or placeholder, REJECT generic role-only xpaths
-            // UNLESS it's a combined xpath with more attributes
-            if ((thisElementUniqueValues.id || thisElementUniqueValues.name || thisElementUniqueValues.placeholder)) {
-              // Check if this is a generic single-attribute xpath (role only)
-              const isGenericRoleOnly = 
-                /^\/\/[a-z\*]+\[@role=['"][^'"]*['"]\]$/.test(xpath) &&
-                !xpath.includes('@name=') && 
-                !xpath.includes('@id=') &&
-                !xpath.includes('@placeholder=') &&
-                !xpath.includes('@type=');
-              
-              if (isGenericRoleOnly && thisElementUniqueValues.name) {
-                return false; // Reject generic role xpath when we have name
-              }
-              if (isGenericRoleOnly && thisElementUniqueValues.id) {
-                return false; // Reject generic role xpath when we have id
-              }
-            }
-            
-            return true;
-          });
-          
-          // Merge xpathCandidates: generated hints FIRST (most specific), then filtered AI xpaths
-          // Generated hints use name/id/placeholder/type - most specific attributes
-          // Then AI's valid xpaths (may have text-based xpaths)
-          const allXPathCandidates = [...new Set([...generatedXPathFromHints, ...xpathCandidates, ...validAiXPath])];
-          
-          // Reorder xpathCandidates by specificity:
-          // 1. Combined attributes (id+name+type+role) - MOST specific
-          // 2. Text-based (normalize-space) - MORE specific (identifies specific element)
-          // 3. Text + role combined - specific
-          // 4. ID/name/type/placeholder - specific
-          // 5. Role-only - LEAST specific (matches many elements)
-          const reorderBySpecificity = (xpaths: string[]): string[] => {
-            const hasText = (x: string) => x.includes('normalize-space(.)') || x.includes('[.=');
-            const hasRole = (x: string) => x.includes('@role=');
-            const hasCombinedAttrs = (x: string) => {
-              const attrCount = (x.match(/\[/g) || []).length;
-              return attrCount >= 3; // 3+ attributes = combined
-            };
-            
-            const grouped: { priority: number; xpath: string }[] = xpaths.map((x, i) => {
-              let priority = 10; // default lowest priority
-              
-              if (hasCombinedAttrs(x)) {
-                priority = 1; // Combined attrs = most specific
-              } else if (hasText(x) && hasRole(x)) {
-                priority = 2; // Text + role = very specific
-              } else if (hasText(x)) {
-                priority = 3; // Text only = more specific (identifies element)
-              } else if (x.includes('@id=') || x.includes('@name=') || x.includes('@placeholder=') || x.includes('@type=')) {
-                priority = 4; // ID/name/type/placeholder = specific
-              } else if (hasRole(x)) {
-                priority = 5; // Role only = generic
-              } else {
-                priority = 6; // Other/fallback
-              }
-              
-              return { priority, xpath: x, originalIndex: i };
-            });
-            
-            // Sort by priority (ascending), then by original index (stable sort)
-            grouped.sort((a, b) => {
-              if (a.priority !== b.priority) return a.priority - b.priority;
-              return a.originalIndex - b.originalIndex;
-            });
-            
-            return grouped.map(g => g.xpath);
-          };
-          
-          const reorderedXPathCandidates = reorderBySpecificity(allXPathCandidates);
-          
-          // CRITICAL: Always include xpath data - fall back to original event's xpath if empty
-          // Use the MOST SPECIFIC xpath as primary (first in array after reordering)
-          const finalXPath = reorderedXPathCandidates[0] || fallbackEvent?.element?.xpath;
-          const finalXPathCandidates = reorderedXPathCandidates.length > 0 
-            ? reorderedXPathCandidates 
-            : (fallbackEvent?.element?.xpathCandidates || []);
-          
-          // Final CSS candidates (without :has-text)
-          // Combine generated hints + AI's CSS candidates
-          let finalCssCandidates = [...generatedFromHints, ...cssOnlyCandidates];
-          
-          // If no CSS candidates and element has role, add role-based CSS
-          if (finalCssCandidates.length === 0 && thisElementAttrs['role']) {
-            finalCssCandidates.push(`[role='${thisElementAttrs['role']}']`);
-          }
-          
-          // Reorder CSS selectors by specificity (similar to XPath):
-          // 1. Combined attributes first (tag[name][type]) - MOST specific
-          // 2. ID-based: #id or tag#id
-          // 3. Name/Type/Placeholder-based: [name=X] or [type=X]
-          // 4. Role-based: [role=X] - LEAST specific
-          const hasId = (s: string) => /#[\w-]+/.test(s);
-          const hasName = (s: string) => s.includes("[name='") || s.includes('[name="');
-          const hasType = (s: string) => s.includes("[type='") || s.includes('[type="');
-          const hasPlaceholder = (s: string) => s.includes("[placeholder='") || s.includes('[placeholder="');
-          const hasRole = (s: string) => s.includes("[role='") || s.includes('[role="');
-          const hasCombinedAttrs = (s: string) => {
-            const match = s.match(/\[/g);
-            return match && match.length >= 2; // 2+ attributes = combined
-          };
-          
-          const cssReorderFn = (cssList: string[]): string[] => {
-            const tagged: { priority: number; css: string }[] = cssList.map((c, i) => {
-              let priority = 10;
-              
-              if (hasCombinedAttrs(c)) {
-                priority = 1; // Combined = most specific
-              } else if (hasId(c)) {
-                priority = 2; // ID-based
-              } else if (hasName(c)) {
-                priority = 3; // Name-based
-              } else if (hasType(c)) {
-                priority = 4; // Type-based
-              } else if (hasPlaceholder(c)) {
-                priority = 5; // Placeholder-based
-              } else if (hasRole(c)) {
-                priority = 6; // Role-based = generic
-              } else {
-                priority = 7; // Other/fallback
-              }
-              
-              return { priority, css: c, index: i };
-            });
-            
-            tagged.sort((a, b) => {
-              if (a.priority !== b.priority) return a.priority - b.priority;
-              return a.index - b.index; // Stable sort
-            });
-            
-            return tagged.map(t => t.css);
-          };
-          
-          const finalSelectorCandidates = cssReorderFn(finalCssCandidates);
-          
-          return {
-            ...step,
-            value: resolvedValue,
-            expectedValue: resolvedExpectedValue,
-            selector: finalPrimarySelector,
-            selectorCandidates: finalSelectorCandidates,
-            xpath: finalXPath,
-            xpathCandidates: finalXPathCandidates,
-            elementHints:
-              step.elementHints ||
-              (fallbackEvent
-                ? {
-                    tagName: fallbackEvent.element.tagName,
-                    textContent: fallbackEvent.element.textContent,
-                    attributes: fallbackEvent.element.attributes,
-                  }
-                : undefined),
-          };
-        });
-
-        const { lastBlueprint: currentLast } = await chrome.storage.local.get([
-          'lastBlueprint',
-        ]);
-
-        // ENSURE NAVIGATE STEP IS ALWAYS FIRST
-        // The AI might not include it, so we need to check and prepend if missing
-        let finalSteps = enrichedSteps;
-        const hasNavigateStep =
-          enrichedSteps.length > 0 &&
-          enrichedSteps[0].action === 'navigate' &&
-          (enrichedSteps[0].value === startUrl ||
-            enrichedSteps[0].value?.includes(startUrl || ''));
-
-        if (!hasNavigateStep && startUrl) {
-          console.log('[Background] AI did not include navigate step, prepending it');
-          finalSteps = [
-            navigateStep,
-            ...enrichedSteps,
-          ];
+        const url = new URL(startUrl);
+        const path = url.pathname.split('/').filter(Boolean).pop();
+        if (path) {
+          const capitalized = path.charAt(0).toUpperCase() + path.slice(1).replace(/[-_]/g, ' ');
+          defaultTitle = `${capitalized} Flow`;
+        } else {
+          defaultTitle = `${url.hostname.replace('www.', '')} Recording`;
         }
-
-        // Build correlated telemetry
-        const sessionTelemetry = this.buildCorrelatedTelemetry(finalSteps, allEvents, startUrl);
-        this.telemetry = sessionTelemetry;
-
-        const finalBlueprint = {
-          ...blueprint,
-          steps: finalSteps,
-          id: tempId,
-          status: 'ready' as const,
-          baseUrl: startUrl,
-          created_at: new Date().toISOString(),
-          video_url:
-            resolvedVideoUrl ||
-            this.pendingVideoUrls.get(tempId) ||
-            currentLast?.video_url ||
-            currentLast?.videoUrl,
-          videoUrl:
-            resolvedVideoUrl ||
-            this.pendingVideoUrls.get(tempId) ||
-            currentLast?.video_url ||
-            currentLast?.videoUrl,
-          telemetry: sessionTelemetry,
-        };
-        
-        // DEBUG: Check if finalBlueprint has xpath before storing
-        console.log('[Background] DEBUG BLUEPRINT_GENERATED: Checking xpath in finalBlueprint:');
-        if (finalBlueprint.steps && finalBlueprint.steps.length > 1) {
-          for (let i = 1; i < Math.min(finalBlueprint.steps.length, 4); i++) {
-            const step = finalBlueprint.steps[i];
-            console.log(`[Background] DEBUG: Step ${i} (${step.action}) xpath:`, step.xpath);
-          }
-        }
-        
-        await chrome.storage.local.set({ lastBlueprint: finalBlueprint });
-
-        this.broadcast({
-          type: MessageType.BLUEPRINT_GENERATED,
-          data: { blueprint: finalBlueprint },
-        });
-        await this.notifyTab(tab?.id, {
-          type: MessageType.BLUEPRINT_GENERATED,
-          data: { blueprint: finalBlueprint },
-        });
-      } catch (e: any) {
-        console.error('[Background] Final processing failed:', e);
-        const result = await chrome.storage.local.get(['currentRecordingId']);
-        const currentId = result.currentRecordingId || tempId;
-
-        const failedTelemetry = this.buildCorrelatedTelemetry(
-          [
-            navigateStep,
-            ...allEvents.map((e, i) => ({
-              id: (i + 1).toString(),
-              action: e.type,
-              selector: e.element.selector,
-              value: e.value,
-              description: `${e.type} on ${e.element.tagName}`,
-            })),
-          ] as any,
-          allEvents,
-          startUrl
-        );
-        this.telemetry = failedTelemetry;
-
-        const failedBlueprint = {
-          id: currentId,
-          name: `Recording ${new Date().toLocaleTimeString()}`,
-          steps: [
-            navigateStep,
-            ...allEvents.map((e, i) => ({
-              id: (i + 1).toString(),
-              action: e.type,
-              selector: e.element.selector,
-              selectorCandidates: e.element.selectorCandidates || [e.element.selector],
-              xpath: e.element.xpath,
-              xpathCandidates: e.element.xpathCandidates || [],
-              elementHints: {
-                tagName: e.element.tagName,
-                textContent: e.element.textContent,
-                attributes: e.element.attributes,
-                parentInfo: e.element.parentInfo,
-                structuralInfo: e.element.structuralInfo,
-              },
-            })),
-          ],
-          status: 'failed' as const,
-          error: e.message,
-          telemetry: failedTelemetry,
-        };
-        await chrome.storage.local.set({ lastBlueprint: failedBlueprint });
-        this.broadcast({
-          type: MessageType.BLUEPRINT_GENERATED,
-          data: { blueprint: failedBlueprint },
-        });
-        await this.notifyTab(tab?.id, {
-          type: MessageType.BLUEPRINT_GENERATED,
-          data: { blueprint: failedBlueprint },
-        });
-      }
-    } else {
-      console.warn('[Background] No events captured, but showing navigate step');
-      // Even with no events, show a blueprint with just the navigate step
-      const emptyTelemetry = this.buildCorrelatedTelemetry([navigateStep], allEvents, startUrl);
-      this.telemetry = emptyTelemetry;
-
-      const emptyBlueprint = {
-        id: tempId,
-        name: `Recording ${new Date().toLocaleTimeString()}`,
-        steps: [navigateStep],
-        status: 'ready' as const,
-        baseUrl: startUrl,
-        description: 'Recording with no interactions captured',
-        telemetry: emptyTelemetry,
-      };
-      
-      await chrome.storage.local.set({ lastBlueprint: emptyBlueprint });
-      this.broadcast({
-        type: MessageType.BLUEPRINT_GENERATED,
-        data: { blueprint: emptyBlueprint },
-      });
-      await this.notifyTab(tab?.id, {
-        type: MessageType.BLUEPRINT_GENERATED,
-        data: { blueprint: emptyBlueprint },
-      });
+      } catch (e) {}
     }
 
+    // ========================================
+    // VIDEO EDITOR FLOW (Jam.dev style)
+    // Instead of immediately running AI, we store the recording data
+    // and open the video editor for the user to trim/edit first
+    // ========================================
+
+    // Wait for video blob to be ready (from VIDEO_CAPTURE_READY message)
+    const videoBlobKey = `recording-${tempId}`;
+    const recordingStartTime = this.telemetry.startTime || Date.now();
+    
+    // Store pending recording data for the video editor
+    this.pendingEditRecordings.set(tempId, {
+      events: allEvents,
+      videoBlobKey,
+      startUrl: startUrl || '',
+      startTime: recordingStartTime,
+      endTime: Date.now(),
+      title: defaultTitle,
+      telemetry: { 
+        ...this.telemetry,
+        consoleLogs: this.consoleLogs,
+        networkRequests: this.networkRequests,
+        jsErrors: this.jsErrors,
+      },
+    });
+    
+    console.log(`[Background] Stored pending recording ${tempId} for video editor`);
+    
+    // Clear recording state
     this.recordingEvents = [];
     await chrome.storage.session.remove('currentRecording');
     await chrome.storage.local.remove(['currentRecordingId']);
+    
+    // Open video editor in a new tab
+    const videoEditorUrl = chrome.runtime.getURL(`video-editor.html?id=${tempId}`);
+    await chrome.tabs.create({ url: videoEditorUrl });
+    
+    console.log(`[Background] Opened video editor for recording ${tempId}`);
+  }
+
+  /**
+   * Finalize an edited recording after the user finishes trimming/editing in the video editor.
+   * This method:
+   * 1. Gets the video blob from IndexedDB
+   * 2. Uploads the (trimmed) video to R2
+   * 3. Filters events based on trim points
+   * 4. Runs AI blueprint generation
+   * 5. Saves the final blueprint
+   */
+  private async saveBlueprintToApi(blueprint: any): Promise<any> {
+    // Ensure blueprint has an ID
+    if (!blueprint.id) {
+      blueprint.id = `rec-${Date.now()}`;
+    }
+
+    // Ensure navigate step is always first if baseUrl is available
+    let finalSteps = blueprint.steps || [];
+    if (blueprint.baseUrl && finalSteps.length > 0) {
+      const hasNavigateStep =
+        finalSteps[0].action === 'navigate' &&
+        (finalSteps[0].value === blueprint.baseUrl ||
+          finalSteps[0].value?.includes(blueprint.baseUrl));
+
+      if (!hasNavigateStep) {
+        finalSteps = [
+          {
+            action: 'navigate',
+            selector: 'body',
+            selectorCandidates: ['body'],
+            value: blueprint.baseUrl,
+            description: `Navigate to ${blueprint.baseUrl}`,
+            elementHints: { tagName: 'body' },
+          },
+          ...finalSteps,
+        ];
+      }
+    }
+
+    // Map to API format
+    const recording: TestRecording = {
+      id: blueprint.id,
+      name: blueprint.name || 'Untitled Recording',
+      description: blueprint.description || '',
+      status: blueprint.status || 'ready',
+      project_id: blueprint.project_id || blueprint.projectId?.toString(),
+      issue_id: blueprint.issue_id || blueprint.issueId,
+      created_at: new Date(
+        blueprint.created_at || blueprint.createdAt || Date.now()
+      ).toISOString(),
+      steps: finalSteps.map((step: any) => ({
+        action: step.action,
+        description: step.description || '',
+        selector: step.selector,
+        selectorCandidates: step.selectorCandidates || [],
+        xpath: step.xpath,
+        xpathCandidates: step.xpathCandidates || [],
+        value: step.value,
+        assertionType: step.assertionType,
+        expectedValue: step.expectedValue,
+        elementHints: {
+          tagName: step.elementHints?.tagName || 'div',
+          attributes: step.elementHints?.attributes || {},
+        },
+      })),
+      parameters: blueprint.parameters || [],
+      video_url: blueprint.video_url || blueprint.videoUrl,
+      telemetry: blueprint.telemetry,
+    };
+
+    console.log(`[Background] Saving recording ${blueprint.id} to API...`);
+    const response = await api.post<any>('/recordings', {
+      body: recording as any,
+    });
+
+    if (!response.success) {
+      throw new Error(response.error || 'Failed to save recording to database');
+    }
+
+    return response.data;
+  }
+
+  private async finalizeEditedRecording(
+    recordingId: string,
+    pendingData: {
+      events: RawEvent[];
+      videoBlobKey: string;
+      startUrl: string;
+      startTime: number;
+      endTime: number;
+      telemetry: any;
+    },
+    trimStart: number,
+    trimEnd: number,
+    title?: string,
+    description?: string
+  ): Promise<void> {
+    console.log(`[Background] Finalizing recording ${recordingId}, trim: ${trimStart}s - ${trimEnd}s`);
+    
+    try {
+      // Broadcast processing status
+      const processingBlueprint = {
+        id: recordingId,
+        name: title || `Recording ${new Date().toLocaleTimeString()}`,
+        steps: [],
+        status: 'processing' as const,
+        description: description || '',
+      };
+      
+      await chrome.storage.local.set({ lastBlueprint: processingBlueprint });
+      this.broadcast({
+        type: MessageType.BLUEPRINT_PROCESSING,
+        data: { blueprint: processingBlueprint },
+      });
+
+      // 1. Get trimmed video blob from offscreen document
+      console.log(`[Background] Requesting trimmed video from offscreen: ${trimStart}s - ${trimEnd}s`);
+      const videoBlob = await new Promise<Blob | null>((resolve) => {
+        chrome.runtime.sendMessage(
+          { 
+            type: 'TRIM_VIDEO', 
+            data: { 
+              key: pendingData.videoBlobKey,
+              trimStart,
+              trimEnd
+            } 
+          },
+          (response) => {
+            if (response?.success && response.data?.videoData) {
+              let rawData = response.data.videoData;
+              
+              // Fix object serialization if needed
+              if (rawData && typeof rawData === 'object' && !Array.isArray(rawData) && !(rawData instanceof Uint8Array)) {
+                const keys = Object.keys(rawData).map(Number).sort((a, b) => a - b);
+                const arr = new Uint8Array(keys.length);
+                for (let i = 0; i < keys.length; i++) {
+                  arr[i] = rawData[keys[i]];
+                }
+                rawData = arr;
+              }
+              
+              resolve(new Blob([rawData instanceof Uint8Array ? rawData : new Uint8Array(rawData)], {
+                type: response.data.type || 'video/webm'
+              }));
+            } else {
+              console.error('[Background] Failed to trim video:', response?.error);
+              resolve(null);
+            }
+          }
+        );
+      });
+      
+      let videoUrl: string | undefined;
+      
+      // 2. Upload video to R2 if we have it
+      if (videoBlob) {
+        console.log(`[Background] Uploading trimmed video, size: ${videoBlob.size} bytes`);
+        const fileName = `recordings/${recordingId}.webm`;
+        const buffer = await videoBlob.arrayBuffer();
+        
+        videoUrl = await this.uploadToR2(
+          new Uint8Array(buffer),
+          fileName,
+          'video/webm'
+        );
+        console.log(`[Background] Trimmed video uploaded: ${videoUrl}`);
+        
+        // Clean up the original blob from IndexedDB
+        await this.deleteVideoBlobFromIndexedDB(pendingData.videoBlobKey);
+      } else {
+        console.warn(`[Background] Could not get trimmed video, falling back to original...`);
+        // Fallback to original if trim failed
+        const originalBlob = await this.getVideoBlobFromIndexedDB(pendingData.videoBlobKey);
+        if (originalBlob) {
+          const fileName = `recordings/${recordingId}.webm`;
+          videoUrl = await this.uploadToR2(
+            new Uint8Array(await originalBlob.arrayBuffer()),
+            fileName,
+            'video/webm'
+          );
+          await this.deleteVideoBlobFromIndexedDB(pendingData.videoBlobKey);
+        }
+      }
+      
+      // 3. Filter events based on trim points
+      const recordingStartTime = pendingData.startTime;
+      const trimStartMs = recordingStartTime + (trimStart * 1000);
+      const trimEndMs = recordingStartTime + (trimEnd * 1000);
+      
+      const filteredEvents = pendingData.events.filter(event => {
+        return event.timestamp >= trimStartMs && event.timestamp <= trimEndMs;
+      });
+      
+      console.log(`[Background] Filtered events: ${filteredEvents.length} of ${pendingData.events.length} within trim range`);
+      
+      // 4. Run AI blueprint generation
+      if (filteredEvents.length > 0) {
+        console.log(`[Background] Running AI processing on ${filteredEvents.length} events...`);
+        
+        const blueprint = await this.aiProcessor.generateBlueprint(
+          filteredEvents,
+          pendingData.startUrl,
+          pendingData.telemetry
+        );
+        
+        if (!blueprint || typeof blueprint !== 'object') {
+          throw new Error('AI generated an invalid blueprint');
+        }
+        
+        console.log(`[Background] AI processing complete, enriching steps...`);
+        
+        // Enrich steps with selectors and xpath
+        const enrichedSteps = this.enrichBlueprintSteps(blueprint.steps || [], filteredEvents, pendingData.startUrl);
+        
+        // Build final blueprint
+        const finalBlueprint = {
+          id: recordingId,
+          name: title || blueprint.name || `Recording ${new Date().toLocaleTimeString()}`,
+          description: description || blueprint.description || '',
+          steps: enrichedSteps,
+          status: 'ready' as const,
+          baseUrl: pendingData.startUrl,
+          video_url: videoUrl,
+          created_at: Date.now(),
+          telemetry: pendingData.telemetry,
+        };
+        
+        // --- AUTO-SAVE TO DATABASE ---
+        console.log(`[Background] Auto-saving recording to database...`);
+        try {
+          await this.saveBlueprintToApi(finalBlueprint);
+          console.log(`[Background] Successfully saved recording to database`);
+          
+          // Clear "Recent Recording" card from UI since it's now saved
+          await chrome.storage.local.remove('lastBlueprint');
+          
+          this.broadcast({
+            type: MessageType.BLUEPRINT_SAVED,
+            data: { blueprint: finalBlueprint },
+          });
+        } catch (apiError) {
+          console.error(`[Background] Failed to auto-save to database:`, apiError);
+          // Fallback: still show in "Recent Draft" if save failed
+          await chrome.storage.local.set({ lastBlueprint: finalBlueprint });
+        }
+        
+        this.broadcast({
+          type: MessageType.BLUEPRINT_GENERATED,
+          data: { blueprint: finalBlueprint },
+        });
+        
+        console.log(`[Background] Blueprint finalized for ${recordingId}`);
+      } else {
+        // No events after trimming - create empty blueprint
+        const emptyBlueprint = {
+          id: recordingId,
+          name: title || `Recording ${new Date().toLocaleTimeString()}`,
+          description: description || 'No events in trimmed range',
+          steps: [{
+            id: '0-nav',
+            action: 'navigate' as const,
+            value: pendingData.startUrl,
+            description: `Navigate to ${pendingData.startUrl}`,
+            selector: 'body',
+            selectorCandidates: ['body'],
+          }],
+          status: 'ready' as const,
+          baseUrl: pendingData.startUrl,
+          video_url: videoUrl,
+          created_at: Date.now(),
+        };
+        
+        // --- AUTO-SAVE TO DATABASE ---
+        try {
+          await this.saveBlueprintToApi(emptyBlueprint);
+          await chrome.storage.local.remove('lastBlueprint');
+          
+          this.broadcast({
+            type: MessageType.BLUEPRINT_SAVED,
+            data: { blueprint: emptyBlueprint },
+          });
+        } catch (e) {
+          await chrome.storage.local.set({ lastBlueprint: emptyBlueprint });
+        }
+
+        this.broadcast({
+          type: MessageType.BLUEPRINT_GENERATED,
+          data: { blueprint: emptyBlueprint },
+        });
+      }
+      
+      // Clean up pending recording
+      this.pendingEditRecordings.delete(recordingId);
+      
+    } catch (error) {
+      console.error(`[Background] Failed to finalize recording ${recordingId}:`, error);
+      
+      // Broadcast error
+      const failedBlueprint = {
+        id: recordingId,
+        name: title || `Recording ${new Date().toLocaleTimeString()}`,
+        status: 'error' as const,
+        error: (error as Error).message,
+      };
+      
+      await chrome.storage.local.set({ lastBlueprint: failedBlueprint });
+      
+      // Clear pending state even on error so user isn't stuck
+      await chrome.storage.local.remove('pendingRecording');
+
+      this.broadcast({
+        type: MessageType.BLUEPRINT_GENERATED,
+        data: { blueprint: failedBlueprint },
+      });
+    }
+  }
+
+  /**
+   * Get video blob from IndexedDB via offscreen document
+   */
+  private async getVideoBlobFromIndexedDB(key: string): Promise<Blob | null> {
+    return new Promise((resolve) => {
+      chrome.runtime.sendMessage(
+        { type: 'GET_VIDEO_BLOB', data: { key } },
+        (response) => {
+          if (response?.success && response.data?.videoData) {
+            let rawData = response.data.videoData;
+            
+            // Handle potentially mangled serialization
+            if (rawData && typeof rawData === 'object' && !Array.isArray(rawData) && !(rawData instanceof Uint8Array)) {
+              console.log('[Background] Fixing object-based Uint8Array from offscreen');
+              const keys = Object.keys(rawData).map(Number).sort((a, b) => a - b);
+              const arr = new Uint8Array(keys.length);
+              for (let i = 0; i < keys.length; i++) {
+                arr[i] = rawData[keys[i]];
+              }
+              rawData = arr;
+            }
+            
+            const blob = new Blob([rawData instanceof Uint8Array ? rawData : new Uint8Array(rawData)], {
+              type: response.data.type || 'video/webm'
+            });
+            resolve(blob);
+          } else {
+            resolve(null);
+          }
+        }
+      );
+    });
+  }
+
+  /**
+   * Delete video blob from IndexedDB via offscreen document
+   */
+  private async deleteVideoBlobFromIndexedDB(key: string): Promise<void> {
+    return new Promise((resolve) => {
+      chrome.runtime.sendMessage(
+        { type: 'DELETE_VIDEO_BLOB', data: { key } },
+        () => resolve()
+      );
+    });
+  }
+
+  /**
+   * Enrich blueprint steps with selector and xpath data from events
+   */
+  private enrichBlueprintSteps(steps: any[], events: RawEvent[], startUrl?: string): TestStep[] {
+    return steps.map((step, index): TestStep => {
+      const eventIndex = index - (steps[0]?.action === 'navigate' ? 1 : 0);
+      const event = eventIndex >= 0 ? events[eventIndex] : null;
+      
+      return {
+        id: index.toString(),
+        action: step.action,
+        value: step.value,
+        description: step.description,
+        selector: step.selector || event?.element?.selector || 'body',
+        selectorCandidates: step.selectorCandidates || event?.element?.selectorCandidates || [],
+        xpath: step.xpath || event?.element?.xpath,
+        xpathCandidates: step.xpathCandidates || event?.element?.xpathCandidates || [],
+        elementHints: step.elementHints || (event ? {
+          tagName: event.element.tagName,
+          textContent: event.element.textContent,
+          attributes: event.element.attributes,
+        } : undefined),
+        expectedValue: step.expectedValue,
+      };
+    });
+  }
+
+  // Legacy method - kept for reference
+  private async stopRecordingLegacy() {
+    console.log(`[Background] LEGACY STOP_RECORDING - THIS SHOULD NOT BE CALLED`);
+    // This method is no longer used. The new flow uses:
+    // 1. stopRecording() - collects events and opens video editor
+    // 2. finalizeEditedRecording() - processes after user edits video
   }
 
   private setupCDPNetworkListener(tabId: number) {
+    console.log(`[Background] Setting up CDP Network listener for tab ${tabId}`);
     // Listen for CDP events via chrome.debugger.onEvent
     const listener = (source: any, method: string, params: any) => {
       if (source.tabId !== tabId) return;
 
       if (method === 'Network.requestWillBeSent') {
+        console.log(`[Background] CDP Network: requestWillBeSent ${params.request.url}`);
         const entry: NetworkRequestEntry = {
           requestId: params.requestId,
           url: params.request.url,
           method: params.request.method,
           timestamp: Date.now(),
           requestHeaders: params.request.headers || {},
+          requestPayload: params.request.postData || undefined,
         };
         // Store temporarily to pair with response
         (this as any).__pendingNetworkRequests = (this as any).__pendingNetworkRequests || new Map();
@@ -2504,7 +2350,25 @@ class BackgroundService {
         const pending = (this as any).__pendingNetworkRequests?.get(params.requestId);
         if (pending) {
           pending.entry.durationMs = Date.now() - pending.startTime;
+
+          // Try to fetch response body for text-based content types
+          const ct = (pending.entry.responseHeaders?.['content-type'] || pending.entry.responseHeaders?.['Content-Type'] || '').toLowerCase();
+          const isTextBased = ct && (ct.includes('json') || ct.includes('text') || ct.includes('xml') || ct.includes('html') || ct.includes('form-urlencoded') || ct.includes('graphql') || ct.includes('javascript'));
+          if (isTextBased) {
+            CDPHandler.sendCommand(tabId, 'Network.getResponseBody', { requestId: params.requestId })
+              .then((result: { body: string; base64Encoded: boolean }) => {
+                if (result && result.body) {
+                  const body = result.base64Encoded ? atob(result.body) : result.body;
+                  pending.entry.responsePayload = body.length > 10240 ? body.slice(0, 10240) + '\n... [truncated]' : body;
+                }
+              })
+              .catch(() => {
+                // Response body not available (e.g., redirect, opaque)
+              });
+          }
+
           this.networkRequests.push(pending.entry);
+          console.log(`[Background] CDP Network: loadingFinished ${pending.entry.url} (${this.networkRequests.length} total)`);
           (this as any).__pendingNetworkRequests.delete(params.requestId);
           // Flush every 20 requests
           if (this.networkRequests.length % 20 === 0) {

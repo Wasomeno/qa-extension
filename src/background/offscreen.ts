@@ -1,9 +1,127 @@
+async function trimVideo(
+  key: string,
+  trimStart: number,
+  trimEnd: number
+): Promise<Blob> {
+  const sourceBlob = await getVideoBlob(key);
+  if (!sourceBlob) throw new Error('Source video not found');
+
+  return new Promise((resolve, reject) => {
+    const video = document.createElement('video');
+    video.src = URL.createObjectURL(sourceBlob);
+    video.muted = true;
+    video.preload = 'auto';
+
+    const chunks: BlobPart[] = [];
+    let recorder: MediaRecorder;
+
+    video.onloadedmetadata = () => {
+      const stream = (video as any).captureStream ? (video as any).captureStream() : (video as any).mozCaptureStream();
+      recorder = new MediaRecorder(stream, { mimeType: 'video/webm' });
+      
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) chunks.push(e.data);
+      };
+
+      recorder.onstop = () => {
+        URL.revokeObjectURL(video.src);
+        resolve(new Blob(chunks, { type: 'video/webm' }));
+      };
+
+      // Seek to start
+      video.currentTime = trimStart;
+    };
+
+    video.onseeked = () => {
+      if (recorder.state === 'inactive') {
+        recorder.start();
+        video.play();
+      }
+    };
+
+    video.ontimeupdate = () => {
+      if (video.currentTime >= trimEnd) {
+        video.pause();
+        if (recorder.state !== 'inactive') {
+          recorder.stop();
+        }
+      }
+    };
+
+    video.onerror = () => {
+      URL.revokeObjectURL(video.src);
+      reject(new Error('Video processing error'));
+    };
+
+    const timeout = setTimeout(() => {
+      if (recorder && recorder.state !== 'inactive') recorder.stop();
+      reject(new Error('Video trim timed out'));
+    }, (trimEnd - trimStart + 10) * 1000);
+  });
+}
 import { MessageType } from '../types/messages';
 
 let mediaRecorder: MediaRecorder | null = null;
 let recordedChunks: BlobPart[] = [];
 let currentRecordingId: string | null = null;
 let activeStream: MediaStream | null = null;
+
+// IndexedDB helper for storing video blobs
+const DB_NAME = 'flowg-video-storage';
+const DB_VERSION = 1;
+const STORE_NAME = 'video-blobs';
+
+function openDB(): Promise<IDBDatabase> {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(DB_NAME, DB_VERSION);
+    
+    request.onerror = () => reject(request.error);
+    request.onsuccess = () => resolve(request.result);
+    
+    request.onupgradeneeded = (event) => {
+      const db = (event.target as IDBOpenDBRequest).result;
+      if (!db.objectStoreNames.contains(STORE_NAME)) {
+        db.createObjectStore(STORE_NAME);
+      }
+    };
+  });
+}
+
+async function storeVideoBlob(key: string, blob: Blob): Promise<void> {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction(STORE_NAME, 'readwrite');
+    const store = transaction.objectStore(STORE_NAME);
+    const request = store.put(blob, key);
+    
+    request.onerror = () => reject(request.error);
+    request.onsuccess = () => resolve();
+  });
+}
+
+async function getVideoBlob(key: string): Promise<Blob | null> {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction(STORE_NAME, 'readonly');
+    const store = transaction.objectStore(STORE_NAME);
+    const request = store.get(key);
+    
+    request.onerror = () => reject(request.error);
+    request.onsuccess = () => resolve(request.result || null);
+  });
+}
+
+async function deleteVideoBlob(key: string): Promise<void> {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction(STORE_NAME, 'readwrite');
+    const store = transaction.objectStore(STORE_NAME);
+    const request = store.delete(key);
+    
+    request.onerror = () => reject(request.error);
+    request.onsuccess = () => resolve();
+  });
+}
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === 'GENERATE_THUMBNAIL_INTERNAL') {
@@ -44,6 +162,57 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
     sendResponse({ success: true });
     return false;
+  } else if (message.type === 'GET_VIDEO_BLOB') {
+    // Handler for the video editor to retrieve the blob
+    const { key } = message.data;
+    getVideoBlob(key)
+      .then(blob => {
+        if (blob) {
+          // Use a faster way to transfer data: Base64 string or Uint8Array
+          // Array.from() is extremely slow for large videos and crashes the browser
+          blob.arrayBuffer().then(buffer => {
+            const uint8Array = new Uint8Array(buffer);
+            
+            // We'll use a chunked approach or base64 if needed, 
+            // but standard Uint8Array is supported in modern Chrome message passing
+            sendResponse({
+              success: true,
+              data: {
+                videoData: uint8Array,
+                type: blob.type,
+                size: blob.size
+              }
+            });
+          });
+        } else {
+          sendResponse({ success: false, error: 'Video blob not found' });
+        }
+      })
+      .catch(err => sendResponse({ success: false, error: err.message }));
+    return true;
+  } else if (message.type === 'TRIM_VIDEO') {
+    const { key, trimStart, trimEnd } = message.data;
+    trimVideo(key, trimStart, trimEnd)
+      .then(blob => {
+        blob.arrayBuffer().then(buffer => {
+          sendResponse({
+            success: true,
+            data: {
+              videoData: new Uint8Array(buffer),
+              type: blob.type,
+              size: blob.size
+            }
+          });
+        });
+      })
+      .catch(err => sendResponse({ success: false, error: err.message }));
+    return true;
+  } else if (message.type === 'DELETE_VIDEO_BLOB') {
+    const { key } = message.data;
+    deleteVideoBlob(key)
+      .then(() => sendResponse({ success: true }))
+      .catch(err => sendResponse({ success: false, error: err.message }));
+    return true;
   }
 });
 
@@ -90,31 +259,34 @@ async function handleStartVideoCapture(recordingId: string) {
       }
 
       const blob = new Blob(recordedChunks, { type: 'video/webm' });
+      const duration = 0; // Duration will be calculated from video metadata
       console.log(`[Offscreen] Video blob size: ${blob.size} bytes`);
 
       try {
-        const arrayBuffer = await blob.arrayBuffer();
-        const videoData = Array.from(new Uint8Array(arrayBuffer));
-
-        console.log(
-          `[Offscreen] Sending VIDEO_CAPTURE_COMPLETE with ${videoData.length} bytes`
-        );
+        // Store blob in IndexedDB for the video editor (Jam.dev style)
+        const blobKey = `recording-${currentRecordingId}`;
+        await storeVideoBlob(blobKey, blob);
+        
+        console.log(`[Offscreen] Video stored in IndexedDB with key: ${blobKey}`);
+        
+        // Notify background that video is ready for editing
         chrome.runtime.sendMessage({
-          type: MessageType.VIDEO_CAPTURE_COMPLETE,
+          type: MessageType.VIDEO_CAPTURE_READY,
           data: {
             recordingId: currentRecordingId,
-            videoData,
-          },
+            videoBlobKey: blobKey,
+            duration,
+            size: blob.size,
+          }
         });
       } catch (e) {
-        console.error('[Offscreen] Failed to process video data:', e);
+        console.error('[Offscreen] Failed to store video blob:', e);
         chrome.runtime.sendMessage({
-          type: MessageType.VIDEO_CAPTURE_COMPLETE,
+          type: MessageType.RECORDING_ERROR,
           data: {
             recordingId: currentRecordingId,
-            success: false,
-            error: 'Failed to process video data',
-          },
+            error: 'Failed to store video: ' + (e as Error).message
+          }
         });
       }
     };
