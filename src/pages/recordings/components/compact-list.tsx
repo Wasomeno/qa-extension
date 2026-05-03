@@ -65,6 +65,7 @@ export const CompactRecordingsList: React.FC<CompactRecordingsListProps> = ({
   portalContainer,
 }) => {
   const [error, setError] = useState<string | null>(null);
+  const [saveState, setSaveState] = useState<'idle' | 'saving' | 'success' | 'error'>('idle');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [isDeletingId, setIsDeletingId] = useState<string | null>(null);
@@ -126,6 +127,13 @@ export const CompactRecordingsList: React.FC<CompactRecordingsListProps> = ({
   });
 
   React.useEffect(() => {
+    if (saveState === 'success' || saveState === 'error') {
+      const timer = setTimeout(() => setSaveState('idle'), 2000);
+      return () => clearTimeout(timer);
+    }
+  }, [saveState]);
+
+  React.useEffect(() => {
     refetchRecordings();
     refetchLastBlueprint();
   }, [refetchRecordings, refetchLastBlueprint]);
@@ -165,14 +173,12 @@ export const CompactRecordingsList: React.FC<CompactRecordingsListProps> = ({
 
   const handleSaveDraft = useCallback(async () => {
     try {
-      // CRITICAL: Fetch the LATEST blueprint from storage to ensure we have enriched xpath data
       const latestBlueprint = await storageService.get('lastBlueprint');
       if (!latestBlueprint) {
         setError('No recording to save. Please record a test first.');
         return;
       }
 
-      // Create a copy of the blueprint with the currently selected project if one is chosen
       const blueprintToSave = {
         ...latestBlueprint,
         projectId:
@@ -181,6 +187,9 @@ export const CompactRecordingsList: React.FC<CompactRecordingsListProps> = ({
             : latestBlueprint.projectId,
       };
 
+      setSaveState('saving');
+      setError(null);
+
       chrome.runtime.sendMessage(
         {
           type: MessageType.SAVE_BLUEPRINT,
@@ -188,18 +197,22 @@ export const CompactRecordingsList: React.FC<CompactRecordingsListProps> = ({
         },
         response => {
           if (chrome.runtime.lastError) {
+            setSaveState('error');
             setError('Failed to save draft. Connection lost.');
             return;
           }
           if (response?.success) {
+            setSaveState('success');
             queryClient.setQueryData(['last-blueprint'], null);
             refetchRecordings();
           } else {
+            setSaveState('error');
             setError(response?.error || 'Failed to save draft');
           }
         }
       );
     } catch (e: any) {
+      setSaveState('error');
       setError(e.message || 'Failed to save draft');
     }
   }, [selectedProjectId, refetchRecordings]);
@@ -404,7 +417,8 @@ export const CompactRecordingsList: React.FC<CompactRecordingsListProps> = ({
                     ? 'Processing Failed'
                     : 'Recent Draft'}
               </p>
-              <p className="text-xs font-medium text-gray-900 truncate">
+              <p className={`text-xs font-medium text-gray-900 ${lastBlueprint.status === 'failed' ? '' : 'truncate'}`}
+                 title={lastBlueprint.status === 'failed' ? (lastBlueprint.error || 'AI generation failed') : undefined}>
                 {lastBlueprint.status === 'failed'
                   ? lastBlueprint.error || 'AI generation failed'
                   : lastBlueprint.status === 'processing'
@@ -426,12 +440,27 @@ export const CompactRecordingsList: React.FC<CompactRecordingsListProps> = ({
                     Preview
                   </Button>
                   <Button
-                    variant="default"
+                    variant={saveState === 'success' ? 'outline' : 'default'}
                     size="sm"
-                    className="h-7 text-[10px] px-2 bg-blue-600 hover:bg-blue-700 text-white border-none"
+                    className={cn(
+                      "h-7 text-[10px] px-2 border-none transition-all duration-200",
+                      saveState === 'saving' && "bg-blue-400 text-white cursor-not-allowed",
+                      saveState === 'success' && "bg-green-600 text-white",
+                      saveState === 'error' && "bg-red-600 text-white",
+                      saveState === 'idle' && "bg-blue-600 hover:bg-blue-700 text-white"
+                    )}
                     onClick={handleSaveDraft}
+                    disabled={saveState === 'saving'}
                   >
-                    Save
+                    {saveState === 'saving' ? (
+                      <><Loader2 className="w-3 h-3 mr-1 animate-spin" /> Saving</>
+                    ) : saveState === 'success' ? (
+                      <><Check className="w-3 h-3 mr-1" /> Saved</>
+                    ) : saveState === 'error' ? (
+                      <><X className="w-3 h-3 mr-1" /> Retry</>
+                    ) : (
+                      'Save'
+                    )}
                   </Button>
                 </>
               )}

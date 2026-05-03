@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import {
   ChevronLeft,
+  ChevronDown,
+  ChevronRight,
   Play,
   Clock,
   Database,
@@ -34,6 +36,151 @@ import { Separator } from '@/components/ui/separator';
 import { MessageType } from '@/types/messages';
 
 type TabId = 'steps' | 'console' | 'network' | 'errors' | 'export';
+
+type NetSubTab = 'request-headers' | 'request-payload' | 'response-headers' | 'response-payload';
+
+interface ExpandableNetworkRequestProps {
+  req: import('@/types/telemetry').NetworkRequestEntry;
+}
+
+const ExpandableNetworkRequest: React.FC<ExpandableNetworkRequestProps> = ({ req }) => {
+  const [expanded, setExpanded] = useState(false);
+  const [subTab, setSubTab] = useState<NetSubTab>('request-headers');
+  const hasRequestPayload = !!req.requestPayload;
+  const hasResponsePayload = !!req.responsePayload;
+  const hasRequestHeaders = !!req.requestHeaders && Object.keys(req.requestHeaders).length > 0;
+  const hasResponseHeaders = !!req.responseHeaders && Object.keys(req.responseHeaders).length > 0;
+
+  const subTabs: { id: NetSubTab; label: string; count?: number }[] = [];
+  if (hasRequestHeaders || hasResponseHeaders) {
+    subTabs.push({ id: 'request-headers', label: 'Headers' });
+  }
+  if (hasRequestPayload) {
+    subTabs.push({ id: 'request-payload', label: 'Payload' });
+  }
+  if (hasResponsePayload) {
+    subTabs.push({ id: 'response-payload', label: 'Response' });
+  }
+
+  React.useEffect(() => {
+    if (!expanded) return;
+    const available: NetSubTab[] = [];
+    if (hasRequestHeaders || hasResponseHeaders) available.push('request-headers');
+    if (hasRequestPayload) available.push('request-payload');
+    if (hasResponsePayload) available.push('response-payload');
+    if (available.length > 0 && !available.includes(subTab)) {
+      setSubTab(available[0]);
+    }
+  }, [expanded]);
+
+  return (
+    <div className={`border rounded ${
+      req.status && req.status >= 400 ? 'bg-red-50 border-red-100' :
+      req.status && req.status >= 300 ? 'bg-amber-50 border-amber-100' :
+      'bg-gray-50 border-gray-100'
+    }`}>
+      <button
+        onClick={() => setExpanded(!expanded)}
+        className="flex items-center gap-2 text-xs p-2 w-full text-left"
+      >
+        <span className="shrink-0">
+          {expanded ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
+        </span>
+        <span className="font-mono text-[10px] opacity-50 whitespace-nowrap">
+          {new Date(req.timestamp).toISOString().split('T')[1].slice(0, -1)}
+        </span>
+        <span className={`font-bold w-12 shrink-0 ${
+          req.method === 'GET' ? 'text-blue-600' :
+          req.method === 'POST' ? 'text-emerald-600' :
+          req.method === 'DELETE' ? 'text-red-600' :
+          'text-gray-600'
+        }`}>{req.method}</span>
+        <span className="flex-1 truncate text-gray-700">{req.url}</span>
+        {req.status && (
+          <span className={`font-bold w-10 text-right ${
+            req.status >= 400 ? 'text-red-600' :
+            req.status >= 300 ? 'text-amber-600' :
+            'text-emerald-600'
+          }`}>{req.status}</span>
+        )}
+        {req.durationMs && (
+          <span className="text-[10px] text-gray-400 w-14 text-right shrink-0">{req.durationMs}ms</span>
+        )}
+        {(hasRequestPayload || hasResponsePayload) && (
+          <span className="text-[10px] text-gray-400 shrink-0">
+            <FileText className="w-3 h-3 inline" />
+          </span>
+        )}
+      </button>
+      {expanded && subTabs.length > 0 && (
+        <div className="px-3 pb-3 border-t border-gray-200 pt-2">
+          <div className="flex gap-0.5 mb-2 border-b border-gray-200">
+            {subTabs.map(tab => (
+              <button
+                key={tab.id}
+                onClick={() => setSubTab(tab.id)}
+                className={`text-[10px] font-medium px-2.5 py-1.5 rounded-t transition-colors ${
+                  subTab === tab.id
+                    ? 'text-blue-700 bg-white border-b-2 border-blue-600'
+                    : 'text-gray-500 hover:text-gray-700 bg-gray-50/50'
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+          {subTab === 'request-headers' && (
+            <div className="space-y-1.5">
+              {hasRequestHeaders && (
+                <div>
+                  <span className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">Request</span>
+                  <pre className="text-[10px] mt-0.5 bg-white p-2 rounded overflow-x-auto max-h-48 overflow-y-auto">
+                    {Object.entries(req.requestHeaders!).map(([k, v]) => `${k}: ${v}`).join('\n')}
+                  </pre>
+                </div>
+              )}
+              {hasResponseHeaders && (
+                <div className="mt-1.5">
+                  <span className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">Response</span>
+                  <pre className="text-[10px] mt-0.5 bg-white p-2 rounded overflow-x-auto max-h-48 overflow-y-auto">
+                    {Object.entries(req.responseHeaders!).map(([k, v]) => `${k}: ${v}`).join('\n')}
+                  </pre>
+                </div>
+              )}
+            </div>
+          )}
+          {subTab === 'request-payload' && hasRequestPayload && (
+            <pre className="text-[10px] bg-white p-2 rounded overflow-x-auto max-h-64 overflow-y-auto font-mono">
+              {formatPayload(req.requestPayload!)}
+            </pre>
+          )}
+          {subTab === 'response-payload' && hasResponsePayload && (
+            <pre className="text-[10px] bg-white p-2 rounded overflow-x-auto max-h-64 overflow-y-auto font-mono">
+              {formatPayload(req.responsePayload!)}
+            </pre>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
+
+function formatPayload(payload: string): string {
+  try {
+    const parsed = JSON.parse(payload);
+    return JSON.stringify(parsed, null, 2);
+  } catch {
+    return payload;
+  }
+}
+
+function formatDuration(ms: number): string {
+  const seconds = Math.floor(ms / 1000);
+  if (seconds < 60) return `${seconds}s`;
+  const minutes = Math.floor(seconds / 60);
+  const secs = seconds % 60;
+  return secs > 0 ? `${minutes}m ${secs}s` : `${minutes}m`;
+}
 
 interface RecordingDetailProps {
   blueprint: TestBlueprint;
@@ -132,8 +279,8 @@ export const RecordingDetailPage: React.FC<RecordingDetailProps> = ({
   ];
 
   return (
-    <div className="flex flex-col h-full bg-white">
-      <header className="px-4 py-3 border-b flex items-center gap-3 bg-white sticky top-0 z-10">
+    <div className="flex flex-col h-full bg-white overflow-hidden">
+      <header className="px-4 py-3 border-b flex items-center gap-3 bg-white shrink-0 z-10">
         <Button variant="ghost" size="icon" onClick={pop} className="h-8 w-8">
           <ChevronLeft className="w-5 h-5" />
         </Button>
@@ -160,43 +307,10 @@ export const RecordingDetailPage: React.FC<RecordingDetailProps> = ({
         </div>
       </header>
 
-      <ScrollArea className="flex-1">
-        <div className="p-4 space-y-6">
-          {/* Description */}
-          {blueprint.description && (
-            <section className="space-y-2">
-              <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider">
-                Description
-              </h2>
-              <p className="text-sm text-gray-700 bg-gray-50 p-3 rounded-md border border-gray-100">
-                {blueprint.description}
-              </p>
-            </section>
-          )}
-
-          {/* Source Type Indicator */}
-          {blueprint.source_type && (
-            <section className="space-y-2">
-              <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider">
-                Source
-              </h2>
-              {blueprint.source_type === 'test_scenario' ? (
-                <Badge variant="secondary" className="gap-1 bg-purple-50 text-purple-700 border-purple-200">
-                  <FileText className="w-3 h-3" />
-                  Generated from Test Scenario
-                  {blueprint.source_id && (
-                    <span className="text-[10px] opacity-70 ml-1">({blueprint.source_id.slice(0, 8)}...)</span>
-                  )}
-                </Badge>
-              ) : (
-                <Badge variant="secondary" className="gap-1 bg-blue-50 text-blue-700 border-blue-200">
-                  <User className="w-3 h-3" />
-                  Manual Recording
-                </Badge>
-              )}
-            </section>
-          )}
-
+      <div className="flex flex-1 overflow-hidden bg-zinc-50">
+        {/* Left Pane: Video and Meta */}
+        <div className="flex-1 flex flex-col min-w-0 overflow-y-auto p-6 relative">
+          <div className="max-w-6xl mx-auto w-full space-y-6">
           {/* Video Player Section */}
           {blueprint.video_url && (
             <section className="space-y-2">
@@ -242,6 +356,49 @@ export const RecordingDetailPage: React.FC<RecordingDetailProps> = ({
             </section>
           )}
 
+          
+          <div className="flex items-start justify-between gap-4">
+            <div className="space-y-4 flex-1">
+              {/* Description */}
+          {blueprint.description && (
+            <section className="space-y-2">
+              <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider">
+                Description
+              </h2>
+              <p className="text-sm text-gray-700 bg-gray-50 p-3 rounded-md border border-gray-100">
+                {blueprint.description}
+              </p>
+            </section>
+          )}
+
+          
+              {/* Source Type Indicator */}
+          {blueprint.source_type && (
+            <section className="space-y-2">
+              <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider">
+                Source
+              </h2>
+              {blueprint.source_type === 'test_scenario' ? (
+                <Badge variant="secondary" className="gap-1 bg-purple-50 text-purple-700 border-purple-200">
+                  <FileText className="w-3 h-3" />
+                  Generated from Test Scenario
+                  {blueprint.source_id && (
+                    <span className="text-[10px] opacity-70 ml-1">({blueprint.source_id.slice(0, 8)}...)</span>
+                  )}
+                </Badge>
+              ) : (
+                <Badge variant="secondary" className="gap-1 bg-blue-50 text-blue-700 border-blue-200">
+                  <User className="w-3 h-3" />
+                  Manual Recording
+                </Badge>
+              )}
+            </section>
+          )}
+
+          
+            </div>
+          </div>
+
           {/* Metadata */}
           <div className="flex gap-4">
             <div className="flex-1 p-3 bg-zinc-50 rounded-lg border border-zinc-100">
@@ -249,15 +406,17 @@ export const RecordingDetailPage: React.FC<RecordingDetailProps> = ({
                 <Clock className="w-3 h-3" /> Duration
               </div>
               <div className="text-sm font-semibold text-zinc-900">
-                {blueprint.steps.length} Steps
+                {telemetry?.endTime
+                  ? formatDuration(telemetry.endTime - telemetry.startTime)
+                  : `${blueprint.steps.length} Steps`}
               </div>
             </div>
             <div className="flex-1 p-3 bg-zinc-50 rounded-lg border border-zinc-100">
               <div className="text-xs text-zinc-500 font-medium mb-1 flex items-center gap-1">
                 <Database className="w-3 h-3" /> Project
               </div>
-              <div className="text-sm font-semibold text-zinc-900 truncate">
-                {blueprint.project_id || 'Unassigned'}
+              <div className="text-sm font-semibold text-zinc-900 truncate" title={blueprint.projectDetails?.nameWithNamespace || blueprint.project_name || ''}>
+                {blueprint.projectDetails?.nameWithNamespace || blueprint.project_name || blueprint.project_id?.toString() || 'Unassigned'}
               </div>
             </div>
           </div>
@@ -284,10 +443,13 @@ export const RecordingDetailPage: React.FC<RecordingDetailProps> = ({
             </div>
           )}
 
-          <Separator />
+          </div>
+        </div>
 
+        {/* Right Pane: Sidebar with Tabs */}
+        <div className="w-[450px] border-l bg-white flex flex-col shrink-0 z-10 shadow-[-4px_0_24px_-16px_rgba(0,0,0,0.05)]">
           {/* Tabs */}
-          <div className="flex gap-1 border-b border-gray-200 pb-0 overflow-x-auto">
+          <div className="flex gap-1 border-b border-gray-200 px-2 pt-2 pb-0 overflow-x-auto shrink-0 bg-gray-50/80">
             {tabs.map(tab => (
               <button
                 key={tab.id}
@@ -311,6 +473,8 @@ export const RecordingDetailPage: React.FC<RecordingDetailProps> = ({
             ))}
           </div>
 
+          <ScrollArea className="flex-1">
+            <div className="p-4">
           {/* Tab Content */}
           {activeTab === 'steps' && (
             <section className="space-y-4">
@@ -400,17 +564,17 @@ export const RecordingDetailPage: React.FC<RecordingDetailProps> = ({
                             const ctx = telemetry.stepsWithContext!.find(c => c.stepIndex === index)!;
                             return (
                               <>
-                                {ctx.surroundingErrors.length > 0 && (
+                                {(ctx.surroundingErrors?.length || 0) > 0 && (
                                   <div className="flex items-center gap-1.5">
                                     <Bug className="w-3 h-3 text-red-500" />
-                                    <span className="text-[10px] text-red-600 font-medium">{ctx.surroundingErrors.length} error(s) near this step</span>
+                                    <span className="text-[10px] text-red-600 font-medium">{ctx.surroundingErrors!.length} error(s) near this step</span>
                                   </div>
                                 )}
-                                {ctx.surroundingRequests.filter(r => r.status && r.status >= 400).length > 0 && (
+                                {(ctx.surroundingRequests?.filter(r => r.status && r.status >= 400).length || 0) > 0 && (
                                   <div className="flex items-center gap-1.5">
                                     <Globe className="w-3 h-3 text-amber-500" />
                                     <span className="text-[10px] text-amber-600 font-medium">
-                                      {ctx.surroundingRequests.filter(r => r.status && r.status >= 400).length} failed request(s)
+                                      {ctx.surroundingRequests?.filter(r => r.status && r.status >= 400).length || 0} failed request(s)
                                     </span>
                                   </div>
                                 )}
@@ -439,11 +603,11 @@ export const RecordingDetailPage: React.FC<RecordingDetailProps> = ({
                   <Terminal className="w-4 h-4" /> Console Logs
                 </h2>
               </div>
-              <div className="space-y-1 max-h-[500px] overflow-y-auto">
-                {telemetry.consoleLogs.length === 0 && (
+              <div className="space-y-1">
+                {(telemetry.consoleLogs || []).length === 0 && (
                   <p className="text-sm text-gray-400 italic">No console logs captured.</p>
                 )}
-                {telemetry.consoleLogs.map((log, i) => (
+                {(telemetry.consoleLogs || []).map((log, i) => (
                   <div key={i} className={`flex gap-2 text-xs p-2 rounded border ${
                     log.level === 'error' ? 'bg-red-50 border-red-100 text-red-800' :
                     log.level === 'warn' ? 'bg-amber-50 border-amber-100 text-amber-800' :
@@ -467,37 +631,12 @@ export const RecordingDetailPage: React.FC<RecordingDetailProps> = ({
                   <Globe className="w-4 h-4" /> Network Requests
                 </h2>
               </div>
-              <div className="space-y-1 max-h-[500px] overflow-y-auto">
-                {telemetry.networkRequests.length === 0 && (
+              <div className="space-y-1">
+                {(telemetry.networkRequests || []).length === 0 && (
                   <p className="text-sm text-gray-400 italic">No network requests captured.</p>
                 )}
-                {telemetry.networkRequests.map((req, i) => (
-                  <div key={i} className={`flex gap-2 text-xs p-2 rounded border ${
-                    req.status && req.status >= 400 ? 'bg-red-50 border-red-100' :
-                    req.status && req.status >= 300 ? 'bg-amber-50 border-amber-100' :
-                    'bg-gray-50 border-gray-100'
-                  }`}>
-                    <span className="font-mono text-[10px] opacity-50 whitespace-nowrap">
-                      {new Date(req.timestamp).toISOString().split('T')[1].slice(0, -1)}
-                    </span>
-                    <span className={`font-bold w-12 shrink-0 ${
-                      req.method === 'GET' ? 'text-blue-600' :
-                      req.method === 'POST' ? 'text-emerald-600' :
-                      req.method === 'DELETE' ? 'text-red-600' :
-                      'text-gray-600'
-                    }`}>{req.method}</span>
-                    <span className="flex-1 truncate text-gray-700">{req.url}</span>
-                    {req.status && (
-                      <span className={`font-bold w-10 text-right ${
-                        req.status >= 400 ? 'text-red-600' :
-                        req.status >= 300 ? 'text-amber-600' :
-                        'text-emerald-600'
-                      }`}>{req.status}</span>
-                    )}
-                    {req.durationMs && (
-                      <span className="text-[10px] text-gray-400 w-14 text-right">{req.durationMs}ms</span>
-                    )}
-                  </div>
+                {(telemetry.networkRequests || []).map((req, i) => (
+                  <ExpandableNetworkRequest key={i} req={req} />
                 ))}
               </div>
             </section>
@@ -510,11 +649,11 @@ export const RecordingDetailPage: React.FC<RecordingDetailProps> = ({
                   <Bug className="w-4 h-4" /> JavaScript Errors
                 </h2>
               </div>
-              <div className="space-y-2 max-h-[500px] overflow-y-auto">
-                {telemetry.jsErrors.length === 0 && (
+              <div className="space-y-2">
+                {(telemetry.jsErrors || []).length === 0 && (
                   <p className="text-sm text-gray-400 italic">No JavaScript errors captured.</p>
                 )}
-                {telemetry.jsErrors.map((err, i) => (
+                {(telemetry.jsErrors || []).map((err, i) => (
                   <div key={i} className="p-3 bg-red-50 rounded-lg border border-red-100">
                     <div className="flex items-center gap-2 mb-1">
                       <AlertCircle className="w-4 h-4 text-red-500" />
@@ -569,8 +708,10 @@ export const RecordingDetailPage: React.FC<RecordingDetailProps> = ({
               </div>
             </section>
           )}
+            </div>
+          </ScrollArea>
         </div>
-      </ScrollArea>
+      </div>
     </div>
   );
 };

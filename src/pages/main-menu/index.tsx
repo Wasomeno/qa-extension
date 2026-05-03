@@ -7,12 +7,8 @@ import {
   SquareKanban,
   Home,
   FileText as FileIcon,
-  RefreshCw,
   Wrench,
-  X,
 } from 'lucide-react';
-import { useQueryClient, useIsFetching } from '@tanstack/react-query';
-import { cn } from '@/lib/utils';
 import { useKeyboardIsolation } from '@/hooks/use-keyboard-isolation';
 import { useSessionUser } from '@/hooks/use-session-user';
 import { MessageType } from '@/types/messages';
@@ -75,38 +71,14 @@ const MENU_ITEMS: MenuItem[] = [
 
 const MainMenuPageInner: React.FC = () => {
   const { current, reset, push, pop } = useNavigation();
-  const queryClient = useQueryClient();
-  const isFetching = useIsFetching();
   const keyboardIsolation = useKeyboardIsolation();
   const [container, setContainer] = useState<HTMLDivElement | null>(null);
-  const [isRefreshing, setIsRefreshing] = useState(false);
   const session = useSession();
   const hookUser = useSessionUser();
   const { user } = session || hookUser;
 
-  const handleRefresh = async () => {
-    setIsRefreshing(true);
-    await queryClient.invalidateQueries();
-  };
-
-  useEffect(() => {
-    if (isFetching === 0 && isRefreshing) {
-      setIsRefreshing(false);
-    }
-  }, [isFetching, isRefreshing]);
-
   const handleNavigateToIssue = (issue: any) => {
     push('issue-detail', issue);
-  };
-
-  const handleClose = () => {
-    if (typeof chrome !== 'undefined' && chrome.tabs) {
-      chrome.tabs.getCurrent(tab => {
-        if (tab?.id) {
-          chrome.tabs.remove(tab.id);
-        }
-      });
-    }
   };
 
   const renderContent = () => {
@@ -189,27 +161,7 @@ const MainMenuPageInner: React.FC = () => {
           />
           <span className="text-sm font-semibold text-gray-700 tracking-tight">QA Command Center</span>
         </div>
-        <div className="flex items-center gap-1">
-          <button
-            onClick={handleRefresh}
-            className="p-2 hover:bg-gray-100 rounded-lg transition-colors text-gray-500 hover:text-gray-700"
-            title="Refresh"
-          >
-            <RefreshCw
-              className={cn(
-                'w-4 h-4',
-                isRefreshing && 'animate-spin'
-              )}
-            />
-          </button>
-          <button
-            onClick={handleClose}
-            className="p-2 hover:bg-red-50 rounded-lg transition-colors text-gray-400 hover:text-red-500"
-            title="Close"
-          >
-            <X className="w-4 h-4" />
-          </button>
-        </div>
+
       </div>
 
       {/* Main content area */}
