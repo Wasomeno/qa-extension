@@ -13,6 +13,8 @@ export interface NetworkRequestEntry {
   statusText?: string;
   requestHeaders?: Record<string, string>;
   responseHeaders?: Record<string, string>;
+  requestPayload?: string;
+  responsePayload?: string;
   timestamp: number;
   durationMs?: number;
   error?: string;
@@ -94,38 +96,47 @@ export function generateLLMTranscript(
     ? `${((telemetry.endTime - telemetry.startTime) / 1000).toFixed(1)}s`
     : 'N/A';
 
+  const bc = telemetry.browserContext;
+  const userAgent = bc?.userAgent || 'N/A';
+  const viewport = bc?.viewport ? `${bc.viewport.width}x${bc.viewport.height}` : 'N/A';
+
   let md = `# Test Session Transcript
 
-**URL:** ${telemetry.startUrl}  
+**URL:** ${telemetry.startUrl || 'N/A'}  
 **Duration:** ${duration}  
-**Browser:** ${telemetry.browserContext.userAgent}  
-**Viewport:** ${telemetry.browserContext.viewport.width}x${telemetry.browserContext.viewport.height}  
+**Browser:** ${userAgent}  
+**Viewport:** ${viewport}  
 
 ---
 
 `;
 
   // Summary stats
-  const errorCount = telemetry.jsErrors.length;
-  const failedRequests = telemetry.networkRequests.filter(r => r.status && r.status >= 400).length;
+  const consoleLogs = telemetry.consoleLogs || [];
+  const networkRequests = telemetry.networkRequests || [];
+  const jsErrors = telemetry.jsErrors || [];
+  const domMutations = telemetry.domMutations || [];
+
+  const errorCount = jsErrors.length;
+  const failedRequests = networkRequests.filter(r => r.status && r.status >= 400).length;
 
   md += `## Summary
 - **Steps:** ${steps.length}
-- **Console Logs:** ${telemetry.consoleLogs.length}
+- **Console Logs:** ${consoleLogs.length}
 - **JS Errors:** ${errorCount}${errorCount > 0 ? ' ⚠️' : ''}
-- **Network Requests:** ${telemetry.networkRequests.length}
+- **Network Requests:** ${networkRequests.length}
 - **Failed Requests:** ${failedRequests}${failedRequests > 0 ? ' ⚠️' : ''}
-- **DOM Mutations:** ${telemetry.domMutations.length}
+- **DOM Mutations:** ${domMutations.length}
 
 ---
 
 `;
 
   // Global console errors first (so LLM sees them upfront)
-  if (telemetry.jsErrors.length > 0) {
+  if (jsErrors.length > 0) {
     md += `## JavaScript Errors
 `;
-    for (const err of telemetry.jsErrors) {
+    for (const err of jsErrors) {
       const time = new Date(err.timestamp).toISOString().split('T')[1].slice(0, -1);
       md += `- **[${time}]** \`${err.message}\``;
       if (err.source) md += ` at ${err.source}:${err.line}`;
@@ -135,7 +146,7 @@ export function generateLLMTranscript(
   }
 
   // Failed network requests
-  const failedReqs = telemetry.networkRequests.filter(r => r.status && r.status >= 400);
+  const failedReqs = networkRequests.filter(r => r.status && r.status >= 400);
   if (failedReqs.length > 0) {
     md += `## Failed Network Requests
 `;
@@ -168,7 +179,8 @@ export function generateLLMTranscript(
 
     if (ctx) {
       // Surrounding logs
-      const logs = ctx.surroundingLogs.slice(0, maxLogsPerStep);
+      const rawLogs = ctx.surroundingLogs || [];
+      const logs = rawLogs.slice(0, maxLogsPerStep);
       if (logs.length > 0) {
         md += `- **Console:**\n`;
         for (const log of logs) {
@@ -178,7 +190,8 @@ export function generateLLMTranscript(
       }
 
       // Surrounding requests
-      const reqs = ctx.surroundingRequests.slice(0, maxRequestsPerStep);
+      const rawReqs = ctx.surroundingRequests || [];
+      const reqs = rawReqs.slice(0, maxRequestsPerStep);
       if (reqs.length > 0) {
         md += `- **Network:**\n`;
         for (const req of reqs) {
@@ -186,14 +199,20 @@ export function generateLLMTranscript(
           const statusEmoji = req.status && req.status >= 400 ? '❌' : '✅';
           md += `  ${statusEmoji} \`${req.method}\` ${req.url} → ${status}`;
           if (req.durationMs) md += ` (${req.durationMs}ms)`;
+          if (req.requestPayload) {
+            md += `\n    - Payload: \`${truncatePayload(req.requestPayload, 150)}\``;
+          }
+          if (req.responsePayload) {
+            md += `\n    - Response: \`${truncatePayload(req.responsePayload, 150)}\``;
+          }
           md += `\n`;
         }
       }
 
       // Surrounding errors
-      if (ctx.surroundingErrors.length > 0) {
+      if ((ctx.surroundingErrors || []).length > 0) {
         md += `- **Errors:**\n`;
-        for (const err of ctx.surroundingErrors) {
+        for (const err of (ctx.surroundingErrors || [])) {
           md += `  ❌ \`${err.message}\`\n`;
         }
       }
@@ -207,9 +226,9 @@ export function generateLLMTranscript(
   }
 
   // Full console log appendix (for deep debugging)
-  if (telemetry.consoleLogs.length > 0) {
+  if (consoleLogs.length > 0) {
     md += `---\n\n## Full Console Log\n\n`;
-    for (const log of telemetry.consoleLogs) {
+    for (const log of consoleLogs) {
       const time = new Date(log.timestamp).toISOString().split('T')[1].slice(0, -1);
       const icon = log.level === 'error' ? '❌' : log.level === 'warn' ? '⚠️' : '•';
       md += `- **[${time}]** ${icon} \`${log.message}\`\n`;
@@ -217,17 +236,29 @@ export function generateLLMTranscript(
   }
 
   // Full network log appendix
-  if (telemetry.networkRequests.length > 0) {
+  if (networkRequests.length > 0) {
     md += `\n---\n\n## Full Network Log\n\n`;
-    for (const req of telemetry.networkRequests) {
+    for (const req of networkRequests) {
       const time = new Date(req.timestamp).toISOString().split('T')[1].slice(0, -1);
       const statusEmoji = req.status && req.status >= 400 ? '❌' : req.status ? '✅' : '⏳';
       md += `- **[${time}]** ${statusEmoji} \`${req.method}\` ${req.url} → ${req.status || 'pending'} ${req.statusText || ''}`;
       if (req.durationMs) md += ` (${req.durationMs}ms)`;
       if (req.error) md += ` [Error: ${req.error}]`;
+      if (req.requestPayload) {
+        md += `\n  - Request Payload: \`${truncatePayload(req.requestPayload, 200)}\``;
+      }
+      if (req.responsePayload) {
+        md += `\n  - Response: \`${truncatePayload(req.responsePayload, 200)}\``;
+      }
       md += `\n`;
     }
   }
 
   return md;
+}
+
+function truncatePayload(payload: string, maxChars: number): string {
+  const cleaned = payload.replace(/\s+/g, ' ').trim();
+  if (cleaned.length <= maxChars) return cleaned;
+  return cleaned.slice(0, maxChars) + '...';
 }

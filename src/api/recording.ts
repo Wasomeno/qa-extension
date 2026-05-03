@@ -11,6 +11,14 @@ export const saveRecording = async (recording: TestRecording) => {
   return response.data;
 };
 
+export const getRecording = async (id: string) => {
+  const response = await api.get<any>(`/recordings/${id}`);
+  if (!response.success) {
+    throw new Error(response.error || 'Failed to get recording');
+  }
+  return response.data;
+};
+
 export const listRecordings = async (
   params?: ListRecordingsParams
 ): Promise<TestRecording[]> => {

@@ -66,6 +66,10 @@ export enum MessageType {
   START_VIDEO_CAPTURE = 'START_VIDEO_CAPTURE',
   STOP_VIDEO_CAPTURE = 'STOP_VIDEO_CAPTURE',
   VIDEO_CAPTURE_COMPLETE = 'VIDEO_CAPTURE_COMPLETE',
+  // Video Editor Flow - Jam.dev style
+  VIDEO_CAPTURE_READY = 'VIDEO_CAPTURE_READY', // Blob is ready for editing
+  GET_PENDING_EDIT_RECORDING = 'GET_PENDING_EDIT_RECORDING', // Get pending recording data
+  FINALIZE_EDITED_RECORDING = 'FINALIZE_EDITED_RECORDING', // Upload & generate blueprint after editing
   RECORDING_ERROR = 'RECORDING_ERROR',
   TELEMETRY_UPDATE = 'TELEMETRY_UPDATE',
   GET_TELEMETRY = 'GET_TELEMETRY',
@@ -207,4 +211,28 @@ export interface BackgroundFetchResponse<T = any> {
   url: string;
   headers?: Record<string, string>;
   body?: T;
+}
+
+// Video Editor Types
+export interface PendingEditRecording {
+  recordingId: string;
+  events: RawEvent[];
+  videoBlobKey: string; // Key to retrieve blob from IndexedDB
+  startUrl: string;
+  startTime: number;
+  endTime: number; // Initial duration
+  telemetry?: any;
+}
+
+export interface VideoEditParams {
+  trimStart: number; // Start time in seconds
+  trimEnd: number; // End time in seconds
+}
+
+export interface FinalizeEditRequest {
+  recordingId: string;
+  trimStart: number;
+  trimEnd: number;
+  title?: string;
+  description?: string;
 }
