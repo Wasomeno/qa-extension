@@ -4,26 +4,26 @@
 
 @layer base {
   :root {
-    /* Light mode - Vibrant palette */
-    --background: 0 0% 100%; /* #FFFFFF */
+    /* Light mode - shadcn/ui default blue theme (matches modal) */
+    --background: 0 0% 100%;
     --foreground: 222.2 84% 4.9%;
     --card: 0 0% 100%;
     --card-foreground: 222.2 84% 4.9%;
     --popover: 0 0% 100%;
     --popover-foreground: 222.2 84% 4.9%;
-    --primary: 14 97% 58%; /* #FC6D26 - Primary orange */
-    --primary-foreground: 0 0% 100%;
-    --secondary: 220 14% 96%; /* #F5F7FA - Neutral-100 */
-    --secondary-foreground: 217 12% 25%; /* #3D4046 - Neutral-700 */
-    --muted: 220 16% 86%; /* #D3D6DB - Neutral-300 */
-    --muted-foreground: 220 8% 45%; /* #6B7078 - Neutral-500 */
-    --accent: 201 90% 60%; /* #3BB2F6 - Accent blue */
-    --accent-foreground: 0 0% 100%;
-    --destructive: 0 73% 51%; /* #DC2626 - Danger */
-    --destructive-foreground: 0 0% 100%;
-    --border: 220 16% 86%; /* #D3D6DB - Neutral-300 */
-    --input: 220 16% 86%; /* #D3D6DB - Neutral-300 */
-    --ring: 14 97% 58%; /* #FC6D26 - Primary */
+    --primary: 221.2 83.2% 53.3%;
+    --primary-foreground: 210 40% 98%;
+    --secondary: 210 40% 96%;
+    --secondary-foreground: 222.2 84% 4.9%;
+    --muted: 210 40% 96%;
+    --muted-foreground: 215.4 16.3% 46.9%;
+    --accent: 210 40% 96%;
+    --accent-foreground: 222.2 84% 4.9%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
+    --ring: 221.2 83.2% 53.3%;
     --radius: 0.5rem;
     --sidebar-background: 0 0% 98%;
     --sidebar-foreground: 240 5.3% 26.1%;

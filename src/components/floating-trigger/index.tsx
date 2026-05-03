@@ -2,7 +2,6 @@ import React, { useState, useEffect, useCallback } from 'react';
 import {
   QueryClient,
   QueryClientProvider,
-  useQuery,
 } from '@tanstack/react-query';
 import FloatingTriggerButton from './components/floating-trigger-button';
 import PopupWrapper from './components/popup-wrapper';
@@ -13,7 +12,6 @@ import CompactIssueCreator from '@/pages/issues/create/components/compact-creato
 import CompactIssueList from '@/pages/issues/components/compact-list';
 import CompactPinnedIssues from '@/pages/pinned/components/compact-list';
 import { CompactRecordingsList } from '@/pages/recordings/components/compact-list';
-import { getGitlabLoginSession } from '@/api/auth';
 import { MessageType } from '@/types/messages';
 import { useSessionUser } from '@/hooks/use-session-user';
 import { SessionProvider, useSession } from '@/contexts/session-context';
@@ -21,6 +19,8 @@ import { SelectedProjectProvider } from '@/contexts/selected-project-context';
 
 interface FloatingTriggerProps {
   onClose?: () => void;
+  initialIsRecording?: boolean;
+  initialRecordingId?: string;
 }
 
 // Create a single QueryClient instance for the floating trigger
@@ -36,16 +36,20 @@ const queryClient = new QueryClient({
   },
 });
 
-const FloatingTriggerInner: React.FC<FloatingTriggerProps> = ({ onClose }) => {
+const FloatingTriggerInner: React.FC<FloatingTriggerProps> = ({
+  onClose,
+  initialIsRecording = false,
+  initialRecordingId = null,
+}) => {
   const sessionUser = useSession();
-  // Fallback to hook if provider is missing (though it shouldn't be here)
   const hookUser = useSessionUser();
-  const { user, clearUser } = sessionUser || hookUser;
+  const { user, clearUser, syncUser } = sessionUser || hookUser;
   const isLoading = sessionUser?.loading || hookUser?.loading || false;
 
   const [activeFeature, setActiveFeature] = useState<
-    'issue' | 'issues' | 'pinned' | 'menu' | 'login' | 'record' | null
+    'issue' | 'issues' | 'pinned' | 'menu' | 'login' | 'record' | 'start-recording' | null
   >(null);
+  const [isHovered, setIsHovered] = useState(false);
   const [popupPosition, setPopupPosition] = useState<{
     x: number;
     y: number;
@@ -54,6 +58,60 @@ const FloatingTriggerInner: React.FC<FloatingTriggerProps> = ({ onClose }) => {
   const [hiddenReason, setHiddenReason] = useState<'auto' | 'manual' | null>(
     null
   );
+  const [isRecording, setIsRecording] = useState(initialIsRecording);
+  const [recordingStartTime, setRecordingStartTime] = useState<number | null>(
+    () => {
+      if (initialIsRecording && initialRecordingId) {
+        const idParts = initialRecordingId.split('_') || [];
+        const timestamp = parseInt(idParts[idParts.length - 1]);
+        return isNaN(timestamp) ? Date.now() : timestamp;
+      }
+      return null;
+    }
+  );
+
+  const [isStopping, setIsStopping] = useState(false);
+
+  useEffect(() => {
+    // Initial check (backup for the prop)
+    if (!initialIsRecording) {
+      chrome.storage.local.get(['isRecording', 'currentRecordingId'], result => {
+        if (result.isRecording) {
+          setIsRecording(true);
+          const idParts = result.currentRecordingId?.split('_') || [];
+          const timestamp = parseInt(idParts[idParts.length - 1]);
+          setRecordingStartTime(isNaN(timestamp) ? Date.now() : timestamp);
+        }
+      });
+    }
+
+    // Listen for changes
+    const handleStorageChange = (
+      changes: { [key: string]: chrome.storage.StorageChange },
+      areaName: string
+    ) => {
+      if (areaName === 'local') {
+        if (changes.isRecording) {
+          const isRecordingNow = changes.isRecording.newValue;
+          setIsRecording(isRecordingNow);
+          if (isRecordingNow) {
+            setRecordingStartTime(Date.now());
+            setIsStopping(false);
+          } else {
+            setRecordingStartTime(null);
+            // Lock expansion for 3 seconds to prevent immediate hover expand
+            setIsStopping(true);
+            setIsHovered(false);
+            setTimeout(() => setIsStopping(false), 3000);
+          }
+        }
+      }
+    };
+
+    chrome.storage.onChanged.addListener(handleStorageChange);
+    return () => chrome.storage.onChanged.removeListener(handleStorageChange);
+  }, []);
+
   const [popupContainer, setPopupContainer] = useState<HTMLDivElement | null>(
     null
   );
@@ -63,22 +121,7 @@ const FloatingTriggerInner: React.FC<FloatingTriggerProps> = ({ onClose }) => {
 
   const opacity = 1;
 
-  const session = useQuery({
-    queryKey: ['session'],
-    queryFn: async () => getGitlabLoginSession(),
-    retry: 1,
-    staleTime: Infinity, // Keep session data until browser closes or explicit logout
-  });
-
   const isSessionExists = !isLoading && !!user;
-
-  // Sync state on logout
-  useEffect(() => {
-    if (!session.isLoading && session.data && !session.data.success && user) {
-      clearUser();
-      handleClose();
-    }
-  }, [session.data, session.isLoading, user, clearUser]);
 
   useEffect(() => {
     if (typeof chrome !== 'undefined' && chrome.runtime?.onMessage) {
@@ -87,8 +130,9 @@ const FloatingTriggerInner: React.FC<FloatingTriggerProps> = ({ onClose }) => {
           message.type === MessageType.AUTH_LOGOUT ||
           message.type === MessageType.AUTH_SESSION_UPDATED
         ) {
-          session.refetch();
+          syncUser?.();
           if (message.type === MessageType.AUTH_LOGOUT) {
+            clearUser?.();
             handleClose();
           }
         }
@@ -96,28 +140,26 @@ const FloatingTriggerInner: React.FC<FloatingTriggerProps> = ({ onClose }) => {
       chrome.runtime.onMessage.addListener(handleMessage);
       return () => chrome.runtime.onMessage.removeListener(handleMessage);
     }
-  }, [session]);
+  }, [syncUser, clearUser]);
 
   // Sync user state when window gains focus
   useEffect(() => {
     const handleFocus = () => {
-      session.refetch();
+      syncUser?.();
     };
     window.addEventListener('focus', handleFocus);
     return () => window.removeEventListener('focus', handleFocus);
-  }, [session]);
+  }, [syncUser]);
 
   // Calculate fixed bottom-center position for capsule
   const getCapsulePosition = useCallback(() => {
-    const capsuleWidth = 100; // Resting size
-    const capsuleHeight = 24;
     const bottomGap = 24; // 24px from bottom
-
     return {
-      x: (window.innerWidth - capsuleWidth) / 2,
-      y: window.innerHeight - capsuleHeight - bottomGap,
+      y: window.innerHeight - bottomGap,
     };
   }, []);
+
+  const restingWidth = isRecording ? 220 : isLoading ? 40 : isSessionExists ? 100 : 40;
 
   useEffect(() => {
     const handleVisibilityEvent = (event: Event) => {
@@ -154,12 +196,12 @@ const FloatingTriggerInner: React.FC<FloatingTriggerProps> = ({ onClose }) => {
 
   // Handle action click - calculate popup position above the capsule
   const handleActionClick = (
-    action: 'issue' | 'issues' | 'pinned' | 'menu' | 'login' | 'record',
+    action: 'issue' | 'issues' | 'pinned' | 'menu' | 'login' | 'record' | 'start-recording',
     iconRect: DOMRect,
     capsuleRect: DOMRect
   ) => {
     // If clicking the same feature that's already open, don't re-trigger
-    if (activeFeature === action) {
+    if (activeFeature === action && action !== 'start-recording') {
       return;
     }
 
@@ -167,6 +209,20 @@ const FloatingTriggerInner: React.FC<FloatingTriggerProps> = ({ onClose }) => {
       chrome.runtime.sendMessage({
         type: MessageType.OPEN_MAIN_MENU_PAGE,
       });
+      return;
+    }
+
+    if (action === 'start-recording') {
+      chrome.runtime.sendMessage({ type: MessageType.CLOSE_MAIN_MENU });
+      setTimeout(() => {
+        chrome.runtime.sendMessage(
+          {
+            type: MessageType.START_RECORDING,
+            data: {},
+          }
+        );
+      }, 100);
+      handleClose();
       return;
     }
 
@@ -187,9 +243,8 @@ const FloatingTriggerInner: React.FC<FloatingTriggerProps> = ({ onClose }) => {
   };
 
   const handleLoginSuccess = () => {
-    // Don't await syncUser here to allow immediate UI update
-    // The LoginPopup already calls syncUser which updates the shared context
-    session.refetch();
+    // Re-sync user state after login to ensure we have fresh data
+    syncUser?.();
     handleClose();
   };
 
@@ -218,6 +273,12 @@ const FloatingTriggerInner: React.FC<FloatingTriggerProps> = ({ onClose }) => {
 
   const handleGoToRecordings = () => {
     handleOpenMainMenu({ initialView: 'recordings' });
+  };
+
+  const handleStopRecording = () => {
+    // Prevent immediate hover expansion after stopping
+    setIsHovered(false);
+    chrome.runtime.sendMessage({ type: MessageType.STOP_RECORDING });
   };
 
   const handleViewAllRecordings = () => {
@@ -280,11 +341,17 @@ const FloatingTriggerInner: React.FC<FloatingTriggerProps> = ({ onClose }) => {
         hidden={!!hiddenReason}
         opacity={opacity}
         onActionClick={handleActionClick}
+        onHoverChange={setIsHovered}
+        isHovered={isHovered}
         hasActivePopup={!!activeFeature}
         isLoggedIn={isSessionExists}
         isLoading={isLoading}
         containerRef={setButtonContainer}
         tooltipContainer={buttonContainer}
+        isRecording={isRecording}
+        recordingStartTime={recordingStartTime}
+        onStopRecording={handleStopRecording}
+        isStopping={isStopping}
       />
 
       {activeFeature && activeFeature !== 'menu' && popupPosition && (

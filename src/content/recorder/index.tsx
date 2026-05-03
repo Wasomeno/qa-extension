@@ -19,11 +19,18 @@ let logger: EventLogger | null = null;
 let telemetryCapture: TelemetryCapture | null = null;
 let isRecording = false;
 let initializationPromise: Promise<void> | null = null;
+let iframeReady = false;
+const pendingMessages: BridgeMessage[] = [];
 
 // Helper to send message to iframe via postMessage
 function sendToIframe(message: BridgeMessage) {
   if (!iframe?.contentWindow) {
-    console.log('[Recorder] Iframe not ready, cannot send message:', message.type);
+    console.log('[Recorder] Iframe window not available, cannot send message:', message.type);
+    return;
+  }
+  if (!iframeReady) {
+    console.log('[Recorder] Iframe React app not ready, queuing message:', message.type);
+    pendingMessages.push(message);
     return;
   }
   console.log('[Recorder] Sending to iframe:', message.type);
@@ -31,6 +38,17 @@ function sendToIframe(message: BridgeMessage) {
     { type: BRIDGE_MESSAGE_TYPE, message },
     '*'
   );
+}
+
+function flushPendingMessages() {
+  while (pendingMessages.length > 0) {
+    const msg = pendingMessages.shift()!;
+    console.log('[Recorder] Sending queued message to iframe:', msg.type);
+    iframe?.contentWindow?.postMessage(
+      { type: BRIDGE_MESSAGE_TYPE, message: msg },
+      '*'
+    );
+  }
 }
 
 // Helper to relay message to background
@@ -61,14 +79,11 @@ function setIframeStyles(state: 'hidden' | 'overlay' | 'recording') {
     iframe.style.pointerEvents = 'auto';
     iframe.style.opacity = '1';
   } else if (state === 'recording') {
-    iframe.style.width = '200px';
-    iframe.style.height = '100px';
-    iframe.style.top = 'auto';
-    iframe.style.left = 'auto';
-    iframe.style.bottom = '0';
-    iframe.style.right = '0';
-    iframe.style.pointerEvents = 'auto';
-    iframe.style.opacity = '1';
+    // Hide the iframe during recording as the stop button is now in the floating trigger
+    iframe.style.width = '0px';
+    iframe.style.height = '0px';
+    iframe.style.pointerEvents = 'none';
+    iframe.style.opacity = '0';
   }
   
   console.log(`[Recorder] Iframe styles set. pointerEvents: ${iframe.style.pointerEvents}`);
@@ -171,7 +186,11 @@ async function doInitialize() {
       const innerMessage = message.message;
       console.log('[Recorder] Message from iframe:', innerMessage?.type);
 
-      if (innerMessage?.type === 'ACTUAL_START_RECORDING') {
+      if (innerMessage?.type === 'IFRAME_READY') {
+        console.log('[Recorder] Iframe ready signal received');
+        iframeReady = true;
+        flushPendingMessages();
+      } else if (innerMessage?.type === 'ACTUAL_START_RECORDING') {
         // Relay to background
         chrome.runtime.sendMessage({
           type: MessageType.ACTUAL_START_RECORDING,
@@ -295,9 +314,10 @@ async function doInitialize() {
           break;
 
         case MessageType.RESIZE_IFRAME:
+          // Ignore resize during recording as we want it hidden
           if (iframe && isRecording) {
-            iframe.style.width = `${message.data.width}px`;
-            iframe.style.height = `${message.data.height}px`;
+            iframe.style.width = '0px';
+            iframe.style.height = '0px';
           }
           break;
           

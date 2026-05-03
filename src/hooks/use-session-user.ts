@@ -6,8 +6,10 @@ import {
   createContext,
 } from 'react';
 import { User, getCurrentUser } from '../api/user';
+import { getGitlabLoginSession } from '../api/auth';
 
 const STORAGE_KEY = 'session_user';
+const SESSION_ID_KEY = 'session_id';
 
 /**
  * Hook to manage ephemeral global user state
@@ -15,6 +17,7 @@ const STORAGE_KEY = 'session_user';
  */
 export const useSessionUser = () => {
   const [user, setUserState] = useState<User | null>(null);
+  const [sessionId, setSessionId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   const setUser = useCallback(async (newUser: User) => {
@@ -25,13 +28,28 @@ export const useSessionUser = () => {
     }
   }, []);
 
+  const storeSessionId = useCallback(async (id: string) => {
+    setSessionId(id);
+    if (chrome.storage && chrome.storage.session) {
+      await chrome.storage.session.set({ [SESSION_ID_KEY]: id });
+    }
+  }, []);
+
+  const clearSessionId = useCallback(async () => {
+    setSessionId(null);
+    if (chrome.storage && chrome.storage.session) {
+      await chrome.storage.session.remove(SESSION_ID_KEY);
+    }
+  }, []);
+
   const clearUser = useCallback(async () => {
     // Update local state immediately
     setUserState(null);
     if (chrome.storage && chrome.storage.session) {
       await chrome.storage.session.remove(STORAGE_KEY);
     }
-  }, []);
+    await clearSessionId();
+  }, [clearSessionId]);
 
   const syncUser = useCallback(async () => {
     try {
@@ -43,6 +61,15 @@ export const useSessionUser = () => {
         console.log('[useSessionUser] avatar_url:', response.data.avatar_url);
         setLoading(false);
         await setUser(response.data);
+        // Also fetch and store session_id for background fetch fallback
+        try {
+          const sessionRes = await getGitlabLoginSession();
+          if (sessionRes.success && sessionRes.data?.session_id) {
+            await storeSessionId(sessionRes.data.session_id);
+          }
+        } catch (e) {
+          console.log('[useSessionUser] Failed to fetch session_id:', e);
+        }
         return response.data;
       } else {
         setLoading(false);
@@ -60,9 +87,14 @@ export const useSessionUser = () => {
   useEffect(() => {
     // Check if chrome.storage.session is available (it might not be in some content script contexts if not configured)
     if (chrome.storage && chrome.storage.session) {
-      chrome.storage.session.get(STORAGE_KEY).then(result => {
+      chrome.storage.session.get([STORAGE_KEY, SESSION_ID_KEY]).then(result => {
         if (result[STORAGE_KEY]) {
           setUserState(result[STORAGE_KEY]);
+        }
+        if (result[SESSION_ID_KEY]) {
+          setSessionId(result[SESSION_ID_KEY]);
+        }
+        if (result[STORAGE_KEY]) {
           setLoading(false); // User exists in storage, no need to fetch
         } else {
           // No user in storage - need to check API (syncUser will set loading: false)
@@ -82,12 +114,18 @@ export const useSessionUser = () => {
       changes: { [key: string]: chrome.storage.StorageChange },
       areaName: string
     ) => {
-      if (areaName === 'session' && changes[STORAGE_KEY]) {
-        const newValue = changes[STORAGE_KEY].newValue || null;
-        // Only update if different to avoid cycles
-        setUserState(prev =>
-          JSON.stringify(prev) !== JSON.stringify(newValue) ? newValue : prev
-        );
+      if (areaName === 'session') {
+        if (changes[STORAGE_KEY]) {
+          const newValue = changes[STORAGE_KEY].newValue || null;
+          // Only update if different to avoid cycles
+          setUserState(prev =>
+            JSON.stringify(prev) !== JSON.stringify(newValue) ? newValue : prev
+          );
+        }
+        if (changes[SESSION_ID_KEY]) {
+          const newValue = changes[SESSION_ID_KEY].newValue || null;
+          setSessionId(newValue);
+        }
       }
     };
 
@@ -118,5 +156,5 @@ export const useSessionUser = () => {
     };
   }, [syncUser]);
 
-  return { user, setUser, syncUser, clearUser, loading };
+  return { user, setUser, syncUser, clearUser, loading, sessionId, storeSessionId, clearSessionId };
 };

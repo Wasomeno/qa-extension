@@ -7,6 +7,8 @@ import {
   LogIn,
   FileText as FileIcon,
   FileText,
+  Square,
+  CircleDot,
 } from 'lucide-react';
 import { useKeyboardIsolation } from '@/hooks/use-keyboard-isolation';
 import {
@@ -38,6 +40,11 @@ interface FloatingTriggerButtonProps {
   isLoggedIn?: boolean;
   isLoading?: boolean;
   tooltipContainer?: HTMLElement | null;
+  isRecording?: boolean;
+  recordingStartTime?: number | null;
+  onStopRecording?: () => void;
+  isHovered?: boolean;
+  isStopping?: boolean;
 }
 
 const containerVariants = {
@@ -92,18 +99,48 @@ const FloatingTriggerButton: React.FC<FloatingTriggerButtonProps> = ({
   isLoggedIn = false,
   isLoading = false,
   tooltipContainer,
+  isRecording = false,
+  recordingStartTime = null,
+  onStopRecording,
+  isHovered = false,
+  isStopping = false,
 }) => {
   const keyboardIsolation = useKeyboardIsolation();
   const rootRef = React.useRef<HTMLDivElement>(null);
-  const [isHovered, setIsHovered] = React.useState(false);
   const [hoveredAction, setHoveredAction] = React.useState<string | null>(null);
   const [isPopoverOpen, setIsPopoverOpen] = React.useState(false);
   const createIconRef = React.useRef<HTMLButtonElement>(null);
   const listIconRef = React.useRef<HTMLButtonElement>(null);
   const pinnedIconRef = React.useRef<HTMLButtonElement>(null);
   const recordIconRef = React.useRef<HTMLButtonElement>(null);
+  const startRecordIconRef = React.useRef<HTMLButtonElement>(null);
   const menuIconRef = React.useRef<HTMLButtonElement>(null);
   const loginIconRef = React.useRef<HTMLButtonElement>(null);
+
+  const [duration, setDuration] = React.useState('00:00');
+
+  React.useEffect(() => {
+    if (!isRecording || !recordingStartTime) {
+      setDuration('00:00');
+      return;
+    }
+
+    const updateDuration = () => {
+      const elapsedMs = Date.now() - recordingStartTime;
+      const seconds = Math.floor((elapsedMs / 1000) % 60);
+      const minutes = Math.floor((elapsedMs / 1000 / 60) % 60);
+      setDuration(
+        `${minutes.toString().padStart(2, '0')}:${seconds
+          .toString()
+          .padStart(2, '0')}`
+      );
+    };
+
+    updateDuration();
+    const interval = setInterval(updateDuration, 1000);
+
+    return () => clearInterval(interval);
+  }, [isRecording, recordingStartTime]);
 
   // Provide root element to parent if requested
   React.useEffect(() => {
@@ -112,7 +149,7 @@ const FloatingTriggerButton: React.FC<FloatingTriggerButtonProps> = ({
 
   // Notify parent of hover state changes
   React.useEffect(() => {
-    onHoverChange?.(isHovered);
+    // This is now handled via onMouseEnter/onMouseLeave calling onHoverChange directly
   }, [isHovered, onHoverChange]);
 
   const handleActionClick = (
@@ -130,24 +167,26 @@ const FloatingTriggerButton: React.FC<FloatingTriggerButtonProps> = ({
   };
 
   // Show expanded state if hovered OR if there's an active popup OR if popover is open
-  const isExpanded = isHovered || hasActivePopup || isPopoverOpen;
+  // BUT NEVER if we are currently recording OR just finished stopping (to avoid buggy AF behavior)
+  const isExpanded = (isHovered || hasActivePopup || isPopoverOpen) && !isRecording && !isStopping;
 
   // During loading, hide content and show pulsing animation
   const isLoadingState = isLoading;
 
   // Calculate position adjustment to keep capsule centered horizontally
   // and grow from bottom to top vertically
-  const restingWidth = isLoadingState ? 40 : isLoggedIn ? 100 : 40;
-  const expandedWidth = isLoggedIn ? 240 : 60; // Wider for 4 buttons
-  const restingHeight = 24;
-  const expandedHeight = 52; // Slightly taller for elegance
-  const widthDiff = expandedWidth - restingWidth;
-  const heightDiff = expandedHeight - restingHeight;
-  const offsetX = isExpanded ? -widthDiff / 2 : 0;
-  const offsetY = isExpanded ? -heightDiff : 0; // Move up when expanding
+  // PRIORITY: isRecording > isLoadingState > isLoggedIn
+  const restingWidth = isRecording ? 220 : isLoadingState ? 40 : isLoggedIn ? 100 : 40;
+  const expandedWidth = isRecording ? 220 : isLoggedIn ? 290 : 60; // Increased width for the extra icon
+  const restingHeight = isRecording ? 48 : 24;
+  const expandedHeight = isRecording ? 48 : 52;
 
-  // During loading, hide content
-  const showContent = !isLoadingState;
+  // During loading or recording, hide standard content
+  const showContent = !isLoadingState && !isRecording;
+  
+  // Show expanded state if hovered OR if there's an active popup OR if popover is open
+  // BUT NEVER if we are currently recording OR just finished stopping
+  const isExpanded = (isHovered || hasActivePopup || isPopoverOpen) && !isRecording && !isStopping;
 
   return (
     <>
@@ -155,9 +194,9 @@ const FloatingTriggerButton: React.FC<FloatingTriggerButtonProps> = ({
       <motion.div
         ref={rootRef}
         initial={false}
-        onMouseEnter={() => setIsHovered(true)}
+        onMouseEnter={() => !isRecording && !isStopping && onHoverChange?.(true)}
         onMouseLeave={() => {
-          setIsHovered(false);
+          onHoverChange?.(false);
           setHoveredAction(null);
         }}
         className="fixed bg-white/95 backdrop-blur-xs border border-black/5 shadow-sm"
@@ -166,19 +205,31 @@ const FloatingTriggerButton: React.FC<FloatingTriggerButtonProps> = ({
           zIndex: 999999,
           pointerEvents: hidden ? 'none' : 'auto',
           overflow: isExpanded ? 'visible' : 'hidden',
-          transformOrigin: 'center center',
+          transformOrigin: 'center bottom',
+          left: '50%',
+          x: '-50%',
         }}
         animate={
-          isLoadingState
+          isRecording
             ? {
-                left: position.x + (100 - 100 * 0.9) / 2, // Center the 90% button
-                top: position.y + (24 - 24 * 0.9) / 2, // Center the 90% height
-                width: 100 * 0.9, // 90% of authenticated button size (100px)
-                height: 24 * 0.9, // 90% of authenticated button height (24px)
+                top: position.y - 48,
+                width: 220,
+                height: 48,
+                borderRadius: 24,
+                opacity: opacity,
+                scale: 1,
+                backgroundColor: 'rgb(220 38 38)', // bg-red-600
+                boxShadow: '0 8px 24px rgba(220, 38, 38, 0.4)',
+              }
+            : isLoadingState
+            ? {
+                top: position.y - 24,
+                width: 40,
+                height: 24,
                 borderRadius: 26,
                 opacity: opacity,
                 scale: [1, 1.08, 1],
-                backgroundColor: ['rgb(250 250 252)', 'rgb(248 248 250)', 'rgb(250 250 252)'], // very light gray, almost white
+                backgroundColor: ['rgb(250 250 252)', 'rgb(248 248 250)', 'rgb(250 250 252)'],
                 boxShadow: [
                   '0 2px 8px rgba(0, 0, 0, 0.08)',
                   '0 6px 24px rgba(0, 0, 0, 0.2)',
@@ -186,8 +237,7 @@ const FloatingTriggerButton: React.FC<FloatingTriggerButtonProps> = ({
                 ],
               }
             : {
-                left: isExpanded ? position.x - (expandedWidth - restingWidth) / 2 : position.x, // Center-aligned expansion
-                top: isExpanded ? position.y - (expandedHeight - restingHeight) : position.y, // Grow upward from center
+                top: isExpanded ? position.y - expandedHeight : position.y - restingHeight,
                 width: isExpanded ? expandedWidth : restingWidth,
                 height: isExpanded ? expandedHeight : restingHeight,
                 borderRadius: isExpanded ? 26 : isLoggedIn ? 20 : 26,
@@ -237,7 +287,33 @@ const FloatingTriggerButton: React.FC<FloatingTriggerButtonProps> = ({
         <TooltipProvider delayDuration={200}>
           <div className="flex items-center justify-center h-full w-full">
             <AnimatePresence mode="wait">
-              {showContent && isExpanded && !isLoggedIn && (
+              {isRecording ? (
+                <motion.div
+                  key="recording-container"
+                  initial={{ opacity: 0, scale: 0.9 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.9 }}
+                  className="flex items-center justify-between w-full px-4 text-white"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-2.5 h-2.5 rounded-full bg-white animate-pulse" />
+                    <span className="text-sm font-mono font-bold tracking-widest">{duration}</span>
+                  </div>
+                  <motion.button
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      onStopRecording?.();
+                    }}
+                    className="flex items-center gap-2 px-3 py-1.5 bg-white/20 hover:bg-white/30 rounded-full transition-colors border border-white/20"
+                  >
+                    <Square className="w-3.5 h-3.5 fill-white" />
+                    <span className="text-[11px] font-bold uppercase tracking-wide">Stop</span>
+                  </motion.button>
+                </motion.div>
+              ) : showContent && isExpanded && !isLoggedIn && (
                 <motion.div
                   key="login-container"
                   variants={containerVariants}
@@ -359,7 +435,7 @@ const FloatingTriggerButton: React.FC<FloatingTriggerButtonProps> = ({
                             }}
                           />
                         )}
-                        <Pin className="relative z-10 w-5 h-5 text-gray-700\" />
+                        <Pin className="relative z-10 w-5 h-5 text-gray-700" />
                       </motion.button>
                     </TooltipTrigger>
                     {!hasActivePopup && (
@@ -369,7 +445,45 @@ const FloatingTriggerButton: React.FC<FloatingTriggerButtonProps> = ({
                     )}
                   </Tooltip>
 
-                  {/* Record Test */}
+                  {/* Start Recording */}
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <motion.button
+                        ref={startRecordIconRef}
+                        variants={iconVariants}
+                        whileHover={{ scale: 1.05 }}
+                        whileTap={{ scale: 0.95 }}
+                        onMouseEnter={() => setHoveredAction('start-recording')}
+                        onMouseLeave={() => setHoveredAction(null)}
+                        onClick={e =>
+                          handleActionClick(e, 'start-recording', startRecordIconRef)
+                        }
+                        className="relative flex items-center justify-center p-2 rounded-full pointer-events-auto"
+                        aria-label="Start Recording"
+                      >
+                        {hoveredAction === 'start-recording' && (
+                          <motion.div
+                            layoutId="action-highlight"
+                            className="absolute inset-0 bg-black/5 rounded-full"
+                            initial={false}
+                            transition={{
+                              type: 'spring',
+                              bounce: 0.2,
+                              duration: 0.6,
+                            }}
+                          />
+                        )}
+                        <CircleDot className="relative z-10 w-5 h-5 text-red-600 drop-shadow-sm" />
+                      </motion.button>
+                    </TooltipTrigger>
+                    {!hasActivePopup && (
+                      <TooltipContent side="top" className="mb-2" container={tooltipContainer}>
+                        <p>Start Recording</p>
+                      </TooltipContent>
+                    )}
+                  </Tooltip>
+
+                  {/* Record Test List */}
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <motion.button
@@ -397,7 +511,7 @@ const FloatingTriggerButton: React.FC<FloatingTriggerButtonProps> = ({
                             }}
                           />
                         )}
-                        <FileText className="relative z-10 w-5 h-5 text-gray-700\" />
+                        <FileText className="relative z-10 w-5 h-5 text-gray-700" />
                       </motion.button>
                     </TooltipTrigger>
                     {!hasActivePopup && (

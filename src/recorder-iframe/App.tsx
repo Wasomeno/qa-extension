@@ -35,6 +35,19 @@ const App = () => {
     targetRecordingIdRef.current = targetRecordingId;
   }, [targetRecordingId]);
 
+  // Signal to parent content script that the React app is mounted and listening
+  useEffect(() => {
+    console.log('[Recorder Iframe] React app mounted, sending IFRAME_READY');
+    try {
+      window.parent.postMessage(
+        { type: CONTENT_SCRIPT_MESSAGE_TYPE, message: { type: 'IFRAME_READY' } },
+        '*'
+      );
+    } catch (e) {
+      console.error('[Recorder Iframe] Failed to send IFRAME_READY:', e);
+    }
+  }, []);
+
   // Listen for messages from parent page (content script) via postMessage
   useEffect(() => {
     const handleMessage = (event: MessageEvent) => {
@@ -121,9 +134,8 @@ const App = () => {
     console.log('[Recorder Iframe] State updated, waiting for confirmation');
 
     try {
-      console.log('[Recorder Iframe] Attempting to set storage...');
+      console.log('[Recorder Iframe] Attempting to set storage for ID tracking...');
       await chrome.storage.local.set({
-        isRecording: true,
         currentRecordingId: id,
       });
       console.log('[Recorder Iframe] Storage set successfully');
@@ -320,36 +332,8 @@ const App = () => {
         </div>
       )}
 
-      {/* Recording UI - shown when recording is active */}
-      {isRecording && (
-        <div
-          style={{
-            pointerEvents: 'auto',
-            padding: '10px',
-          }}
-        >
-          <button
-            onClick={requestStopRecording}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              padding: '10px 20px',
-              borderRadius: '9999px',
-              cursor: 'pointer',
-              backgroundColor: '#dc2626',
-              color: '#ffffff',
-              border: 'none',
-              fontWeight: '600',
-              fontSize: '14px',
-              boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)',
-            }}
-          >
-            <Square className="w-3.5 h-3.5 fill-current" size={14} />
-            <span>Stop Recording</span>
-          </button>
-        </div>
-      )}
+      {/* Recording UI - removed and moved to floating trigger capsule */}
+      {isRecording && null}
     </div>
   );
 };

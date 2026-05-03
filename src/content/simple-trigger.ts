@@ -504,9 +504,17 @@ class SimpleTrigger {
         // Create React root and render
         this.floatingTriggerRoot = createRoot(this.shadowDOMInstance.container);
       }
+      // Fetch initial state before rendering to avoid flicker
+      const initialState = await chrome.storage.local.get([
+        'isRecording',
+        'currentRecordingId',
+      ]);
+
       this.floatingTriggerRoot.render(
         React.createElement(FloatingTrigger, {
           onClose: () => this.removeFloatingTrigger(),
+          initialIsRecording: !!initialState.isRecording,
+          initialRecordingId: initialState.currentRecordingId,
         })
       );
     } catch (error) {}

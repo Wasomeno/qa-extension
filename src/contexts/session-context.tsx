@@ -8,6 +8,9 @@ interface SessionContextType {
   setUser: (newUser: User) => Promise<void>;
   syncUser: () => Promise<User | null>;
   clearUser: () => Promise<void>;
+  sessionId: string | null;
+  storeSessionId: (id: string) => Promise<void>;
+  clearSessionId: () => Promise<void>;
 }
 
 const SessionContext = createContext<SessionContextType | undefined>(undefined);
