@@ -659,6 +659,22 @@ class BackgroundService {
     sender: chrome.runtime.MessageSender,
     sendResponse: (response?: any) => void
   ) {
+    // Handle direct messages from video-editor page
+    // These are internal messages that need to be forwarded to offscreen
+    if (message.type === 'GET_VIDEO_BLOB') {
+      const { key } = message.data || {};
+      if (!key) {
+        sendResponse({ success: false, error: 'Missing blob key' });
+        return;
+      }
+      
+      // Ensure offscreen document exists and forward the message
+      this.getVideoBlobFromOffscreen(key)
+        .then(result => sendResponse(result))
+        .catch(err => sendResponse({ success: false, error: err.message }));
+      return;
+    }
+
     switch (message.type) {
       case MessageType.VIDEO_CAPTURE_COMPLETE:
         try {
@@ -1533,8 +1549,18 @@ class BackgroundService {
       case MessageType.TELEMETRY_UPDATE:
         if (message.data) {
           const data = message.data as Partial<SessionTelemetry>;
+          console.log('[Background] TELEMETRY_UPDATE received, networkRequests count:', data.networkRequests?.length || 0);
           if (data.consoleLogs) this.consoleLogs = data.consoleLogs;
           if (data.jsErrors) this.jsErrors = data.jsErrors;
+          if (data.networkRequests) {
+            // Merge network requests, avoiding duplicates
+            const existingUrls = new Set(this.networkRequests.map(r => `${r.method}:${r.url}`));
+            const newRequests = data.networkRequests.filter(
+              r => !existingUrls.has(`${r.method}:${r.url}`)
+            );
+            this.networkRequests.push(...newRequests);
+            console.log(`[Background] Merged ${newRequests.length} network requests from content script (total: ${this.networkRequests.length})`);
+          }
           if (data.storageSnapshots) this.telemetry.storageSnapshots = data.storageSnapshots;
           if (data.domMutations) this.telemetry.domMutations = data.domMutations;
         }
@@ -1547,6 +1573,15 @@ class BackgroundService {
           this.telemetry = { ...this.telemetry, ...data };
           if (data.consoleLogs) this.consoleLogs = data.consoleLogs;
           if (data.jsErrors) this.jsErrors = data.jsErrors;
+          if (data.networkRequests) {
+            // Merge network requests, avoiding duplicates
+            const existingUrls = new Set(this.networkRequests.map(r => `${r.method}:${r.url}`));
+            const newRequests = data.networkRequests.filter(
+              r => !existingUrls.has(`${r.method}:${r.url}`)
+            );
+            this.networkRequests.push(...newRequests);
+            console.log(`[Background] Merged ${newRequests.length} network requests from content script on GET_TELEMETRY (total: ${this.networkRequests.length})`);
+          }
         }
         sendResponse({ success: true, telemetry: this.telemetry });
         break;
@@ -1718,14 +1753,28 @@ class BackgroundService {
       chrome.action.setBadgeBackgroundColor({ color: '#ef4444' });
 
       // Enable CDP Network domain for network capture
+      // IMPORTANT: CDP cannot attach to tabs with extension iframes
+      // So we need to skip CDP and rely on content-script interception
+      // OR we need to start recording BEFORE any chrome-extension:// URL is involved
       try {
+        console.log(`[Background] Attempting to attach CDP debugger to tab ${targetTabId}`);
+        
+        // First, try to detach any existing debugger (from previous recording attempt)
+        try {
+          await CDPHandler.detach(targetTabId);
+        } catch (e) {
+          // Ignore if not attached
+        }
+        
         await CDPHandler.attach(targetTabId);
+        console.log(`[Background] CDP debugger attached, enabling Network domain`);
         await CDPHandler.sendCommand(targetTabId, 'Network.enable', {});
         this.cdpNetworkEnabled = true;
         this.setupCDPNetworkListener(targetTabId);
-        console.log('[Background] CDP Network domain enabled');
-      } catch (e) {
-        console.warn('[Background] Failed to enable CDP Network:', e);
+        console.log('[Background] CDP Network domain enabled successfully');
+      } catch (e: any) {
+        console.warn('[Background] Failed to enable CDP Network:', e?.message || e);
+        console.warn('[Background] Network requests will be captured by the content script instead');
       }
 
       // 2. Start Video Capture in Offscreen Document
@@ -1916,9 +1965,26 @@ class BackgroundService {
     await chrome.storage.session.remove('currentRecording');
     await chrome.storage.local.remove(['currentRecordingId']);
     
-    // Open video editor in a new tab
-    const videoEditorUrl = chrome.runtime.getURL(`video-editor.html?id=${tempId}`);
-    await chrome.tabs.create({ url: videoEditorUrl });
+    // Open video editor as a modal in the content script instead of a new tab
+    if (tab?.id) {
+      try {
+        await chrome.tabs.sendMessage(
+          tab.id,
+          {
+            type: MessageType.OPEN_VIDEO_EDITOR_MODAL,
+            data: { recordingId: tempId },
+          }
+        );
+        console.log(`[Background] Sent OPEN_VIDEO_EDITOR_MODAL to tab ${tab.id}`);
+      } catch (e) {
+        console.error('[Background] Failed to open video editor modal, falling back to new tab:', e);
+        const videoEditorUrl = chrome.runtime.getURL(`video-editor.html?id=${tempId}`);
+        await chrome.tabs.create({ url: videoEditorUrl });
+      }
+    } else {
+      const videoEditorUrl = chrome.runtime.getURL(`video-editor.html?id=${tempId}`);
+      await chrome.tabs.create({ url: videoEditorUrl });
+    }
     
     console.log(`[Background] Opened video editor for recording ${tempId}`);
   }
@@ -2241,6 +2307,42 @@ class BackgroundService {
 
   /**
    * Get video blob from IndexedDB via offscreen document
+   * Ensures offscreen document exists before querying
+   */
+  private async getVideoBlobFromOffscreen(key: string): Promise<{ success: boolean; data?: { videoData: Blob; type: string; size: number }; error?: string }> {
+    // Ensure offscreen document exists (required for IndexedDB access)
+    if (!(await chrome.offscreen.hasDocument())) {
+      await chrome.offscreen.createDocument({
+        url: 'offscreen.html',
+        reasons: [chrome.offscreen.Reason.DOM_SCRAPING],
+        justification: 'Access video blob from IndexedDB for video editor',
+      });
+    }
+
+    return new Promise((resolve) => {
+      chrome.runtime.sendMessage(
+        { type: 'GET_VIDEO_BLOB', data: { key } },
+        (response) => {
+          if (response?.success && response.data?.videoData) {
+            // videoData is already a Blob from offscreen
+            resolve({
+              success: true,
+              data: {
+                videoData: response.data.videoData,
+                type: response.data.type || 'video/webm',
+                size: response.data.size
+              }
+            });
+          } else {
+            resolve({ success: false, error: response?.error || 'Video blob not found' });
+          }
+        }
+      );
+    });
+  }
+
+  /**
+   * Legacy method - kept for backward compatibility
    */
   private async getVideoBlobFromIndexedDB(key: string): Promise<Blob | null> {
     return new Promise((resolve) => {
