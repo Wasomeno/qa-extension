@@ -70,6 +70,7 @@ export enum MessageType {
   VIDEO_CAPTURE_READY = 'VIDEO_CAPTURE_READY', // Blob is ready for editing
   GET_PENDING_EDIT_RECORDING = 'GET_PENDING_EDIT_RECORDING', // Get pending recording data
   FINALIZE_EDITED_RECORDING = 'FINALIZE_EDITED_RECORDING', // Upload & generate blueprint after editing
+  OPEN_VIDEO_EDITOR_MODAL = 'OPEN_VIDEO_EDITOR_MODAL', // Open video editor as modal in content script
   RECORDING_ERROR = 'RECORDING_ERROR',
   TELEMETRY_UPDATE = 'TELEMETRY_UPDATE',
   GET_TELEMETRY = 'GET_TELEMETRY',
