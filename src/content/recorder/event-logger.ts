@@ -61,10 +61,11 @@ export class EventLogger {
     const rawTarget = event.target as HTMLElement;
     
     // Debug logging for all captured events
+    const targetClass = typeof rawTarget?.className === 'string' ? rawTarget.className.substring(0, 50) : String(rawTarget?.className);
     console.log(`[EventLogger] Event captured: ${event.type}`, {
       targetTag: rawTarget?.tagName,
       targetId: rawTarget?.id,
-      targetClass: rawTarget?.className?.substring(0, 50),
+      targetClass: targetClass,
       isFromShadow: this.isEventFromShadowDOM(rawTarget),
       isTrusted: event.isTrusted
     });
@@ -82,8 +83,10 @@ export class EventLogger {
       return;
     }
 
+    const textContent = target.textContent?.trim();
+    const displayText = typeof textContent === 'string' ? textContent.substring(0, 50) : String(textContent);
     console.log(
-      `[EventLogger] Captured ${event.type} on ${target.tagName.toLowerCase()}: ${target.textContent?.trim().substring(0, 50) || '(no text)'}`
+      `[EventLogger] Captured ${event.type} on ${target.tagName.toLowerCase()}: ${displayText || '(no text)'}`
     );
 
     this.eventCount++;
