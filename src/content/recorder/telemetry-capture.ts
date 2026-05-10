@@ -51,7 +51,11 @@ export class TelemetryCapture {
     this.startMutationObserver();
     this.captureStorageSnapshot();
 
-    console.log('[TelemetryCapture] Started');
+    
+  }
+
+  public setRecordingId(id: string) {
+    this.recordingId = id;
   }
 
   public stop(): Partial<SessionTelemetry> {
@@ -87,12 +91,7 @@ export class TelemetryCapture {
       domMutations: this.domMutations,
     };
 
-    console.log('[TelemetryCapture] Stopped', {
-      logs: this.consoleLogs.length,
-      errors: this.jsErrors.length,
-      mutations: this.domMutations.length,
-      networkRequests: this.networkRequests.length,
-    });
+    
 
     return telemetry;
   }
@@ -307,10 +306,7 @@ export class TelemetryCapture {
   private flushToBackground() {
     if (!this.onTelemetryUpdate) return;
     const currentTelemetry = this.getCurrentTelemetry();
-    console.log('[TelemetryCapture] Flushing to background:', {
-      networkRequests: currentTelemetry.networkRequests?.length || 0,
-      consoleLogs: currentTelemetry.consoleLogs?.length || 0
-    });
+    
     this.onTelemetryUpdate(currentTelemetry);
   }
 
@@ -321,11 +317,11 @@ export class TelemetryCapture {
     // Check if axios is available in the page
     const axios = (window as any).axios;
     if (!axios) {
-      console.log('[TelemetryCapture] Axios not found in window - page may be using a bundled version');
+      
       return;
     }
 
-    console.log('[TelemetryCapture] Axios found, patching...');
+    
 
     // Store original adapter
     const originalAdapter = axios.defaults.adapter;
@@ -336,7 +332,7 @@ export class TelemetryCapture {
       const url = config.url || '';
       const method = config.method || 'GET';
 
-      console.log('[TelemetryCapture] Axios request intercepted:', method, url);
+      
 
       // Skip non-http URLs
       if (!url.startsWith('http://') && !url.startsWith('https://')) {
@@ -376,19 +372,19 @@ export class TelemetryCapture {
         }
 
         self.networkRequests.push(entry);
-        console.log(`[TelemetryCapture] Network: ${method} ${url} -> ${response.status} (${self.networkRequests.length} total)`);
+        
 
         return response;
       } catch (error: any) {
         entry.error = error.message || 'Request failed';
         entry.durationMs = Date.now() - startTime;
         self.networkRequests.push(entry);
-        console.log(`[TelemetryCapture] Network: ${method} ${url} -> ERROR (${self.networkRequests.length} total)`);
+        
         throw error;
       }
     };
 
-    console.log('[TelemetryCapture] Axios adapter patched');
+    
   }
 
   private patchResponsePrototype() {
@@ -403,7 +399,7 @@ export class TelemetryCapture {
         const response = new OriginalResponse(body, init);
         const url = init?.url || (response as any).url || '';
         if (url && (url.startsWith('http://') || url.startsWith('https://'))) {
-          console.log('[TelemetryCapture] Response constructor called for:', url);
+          
         }
         return response;
       } as any;
@@ -415,7 +411,7 @@ export class TelemetryCapture {
       (window as any).Response.error = OriginalResponse.error;
       (window as any).Response.json = OriginalResponse.json;
       
-      console.log('[TelemetryCapture] Response constructor patched');
+      
     }
 
     // Patch Response.prototype.clone to capture responses from any source
@@ -425,11 +421,11 @@ export class TelemetryCapture {
       Response.prototype.clone = function() {
         const url = (this as any).url || '';
         if (url && (url.startsWith('http://') || url.startsWith('https://'))) {
-          console.log('[TelemetryCapture] Response.clone intercepted:', url);
+          
         }
         return originalClone.call(this);
       };
-      console.log('[TelemetryCapture] Response.prototype.clone patched');
+      
     }
 
     // Patch Body.prototype.json if available
@@ -440,11 +436,11 @@ export class TelemetryCapture {
           const result = await originalJson.call(this);
           const url = (this as any).url || '';
           if (url && (url.startsWith('http://') || url.startsWith('https://'))) {
-            console.log('[TelemetryCapture] Body.json intercepted for:', url);
+            
           }
           return result;
         };
-        console.log('[TelemetryCapture] Body.prototype.json patched');
+        
       }
     }
 
@@ -471,7 +467,7 @@ export class TelemetryCapture {
               continue;
             }
 
-            console.log('[TelemetryCapture] PerformanceObserver caught resource:', method, url, 'duration:', resource.duration?.toFixed(2));
+            
 
             // Only capture if we haven't captured this URL recently
             const entryKey = `perf-${url}`;
@@ -482,7 +478,7 @@ export class TelemetryCapture {
               // Check if we already have this via fetch/XHR
               const alreadyCaptured = self.networkRequests.some(r => r.url === url);
               if (!alreadyCaptured) {
-                console.log('[TelemetryCapture] NEW resource from PerformanceObserver (not captured by fetch/XHR):', url);
+                
                 self.networkRequests.push({
                   requestId: `perf-${++requestId}`,
                   url,
@@ -492,7 +488,7 @@ export class TelemetryCapture {
                   requestHeaders: {},
                   responseHeaders: {},
                 });
-                console.log(`[TelemetryCapture] Network: ${method} ${url} -> captured via PerformanceObserver (${self.networkRequests.length} total)`);
+                
               }
             }
           }
@@ -500,12 +496,12 @@ export class TelemetryCapture {
       });
 
       observer.observe({ entryTypes: ['resource'] });
-      console.log('[TelemetryCapture] PerformanceObserver for resource timing enabled');
+      
       
       // Store reference for cleanup
       (this as any).__performanceObserver = observer;
     } catch (e) {
-      console.log('[TelemetryCapture] PerformanceObserver setup failed:', e);
+      
     }
   }
 
@@ -515,10 +511,10 @@ export class TelemetryCapture {
     const self = this;
     let requestId = 0;
 
-    console.log('[TelemetryCapture] Patching fetch...');
+    
 
     // Test that fetch is being patched
-    console.log('[TelemetryCapture] Before patch - window.fetch type:', typeof window.fetch);
+    
 
     // Also try to detect and patch axios if present
     this.patchAxios();
@@ -529,15 +525,15 @@ export class TelemetryCapture {
     // Patch fetch
     this.originalFetch = window.fetch;
     
-    console.log('[TelemetryCapture] After patch - window.fetch type:', typeof window.fetch);
-    console.log('[TelemetryCapture] originalFetch type:', typeof this.originalFetch);
+    
+    
     
     // Test the fetch interception by making a test request
-    console.log('[TelemetryCapture] Testing fetch interception...');
+    
     fetch('https://httpbin.org/get').then(() => {
-      console.log('[TelemetryCapture] Test fetch completed - fetch interception is working!');
+      
     }).catch(e => {
-      console.log('[TelemetryCapture] Test fetch failed (expected in some environments):', e?.message);
+      
     });
     window.fetch = async function(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
       const startTime = Date.now();
@@ -567,7 +563,7 @@ export class TelemetryCapture {
           }
         }
       } catch (e) {
-        console.log('[TelemetryCapture] Fetch: URL extraction error:', e);
+        
       }
 
       // Extract from init
@@ -588,19 +584,19 @@ export class TelemetryCapture {
       }
 
       // Debug log the URL
-      console.log('[TelemetryCapture] Fetch intercepted:', method, url);
+      
 
       // Skip non-http(s) URLs and extension URLs
       if (!url) {
-        console.log('[TelemetryCapture] Fetch: empty URL, passing through');
+        
         return self.originalFetch!.call(window, input, init);
       }
       if (!url.startsWith('http://') && !url.startsWith('https://')) {
-        console.log('[TelemetryCapture] Fetch: non-http URL, passing through:', url);
+        
         return self.originalFetch!.call(window, input, init);
       }
       if (url.includes('chrome-extension://')) {
-        console.log('[TelemetryCapture] Fetch: extension URL, passing through');
+        
         return self.originalFetch!.call(window, input, init);
       }
 
@@ -644,7 +640,7 @@ export class TelemetryCapture {
         }
 
         self.networkRequests.push(entry);
-        console.log(`[TelemetryCapture] Network: ${method} ${url} -> ${response.status} (${self.networkRequests.length} total)`);
+        
 
         // Flush network requests to background periodically
         if (self.networkRequests.length % 20 === 0) {
@@ -656,7 +652,7 @@ export class TelemetryCapture {
         entry.error = error instanceof Error ? error.message : 'Fetch failed';
         entry.durationMs = Date.now() - startTime;
         self.networkRequests.push(entry);
-        console.log(`[TelemetryCapture] Network: ${method} ${url} -> ERROR (${self.networkRequests.length} total)`);
+        
         throw error;
       }
     };
@@ -666,15 +662,15 @@ export class TelemetryCapture {
     const xhrOpen = OriginalXHR.prototype.open;
     const xhrSend = OriginalXHR.prototype.send;
 
-    console.log('[TelemetryCapture] XHR patching - OriginalXHR exists:', !!OriginalXHR);
-    console.log('[TelemetryCapture] XHR patching - original xhrOpen type:', typeof xhrOpen);
-    console.log('[TelemetryCapture] XHR patching - original xhrSend type:', typeof xhrSend);
+    
+    
+    
 
     this.originalXHROpen = xhrOpen;
     this.originalXHRSend = xhrSend;
 
     OriginalXHR.prototype.open = function(method: string, url: string | URL, ...rest: any[]) {
-      console.log('[TelemetryCapture] XHR.open intercepted:', method, url);
+      
       (this as any).__qaXHR = {
         method: method as string,
         url: url instanceof URL ? url.toString() : String(url),
@@ -686,7 +682,7 @@ export class TelemetryCapture {
 
     OriginalXHR.prototype.send = function(data?: any) {
       const xhrInfo = (this as any).__qaXHR;
-      console.log('[TelemetryCapture] XHR.send intercepted, xhrInfo:', xhrInfo?.url);
+      
       const capture = self; // Reference to TelemetryCapture instance
       if (xhrInfo) {
         xhrInfo.requestPayload = typeof data === 'string' ? data : 
@@ -746,7 +742,7 @@ export class TelemetryCapture {
 
             if (entry.url && entry.url.startsWith('http')) {
               capture.networkRequests.push(entry);
-              console.log(`[TelemetryCapture] Network: ${entry.method} ${entry.url} -> ${entry.status} (${capture.networkRequests.length} total)`);
+              
 
               // Flush network requests to background periodically
               if (capture.networkRequests.length % 20 === 0) {
@@ -764,7 +760,7 @@ export class TelemetryCapture {
       return xhrSend.call(this, data);
     };
 
-    console.log('[TelemetryCapture] Network interception enabled (fetch + XHR)');
+    
   }
 
   private restoreNetwork() {

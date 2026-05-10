@@ -88,7 +88,7 @@ class PlayerEngine {
         this.state.status === 'playing' && 
         this.state.blueprint?.id === blueprint.id &&
         this.state.currentStepIndex === stepIndex) {
-      console.log('[Player] Playback already active at this step, skipping re-start');
+      
       return;
     }
 
@@ -148,7 +148,7 @@ class PlayerEngine {
     };
     
     try {
-      console.log(`[Player] Executing step ${this.state.currentStepIndex + 1}/${this.state.blueprint.steps.length}: ${step.action} - ${step.description}`);
+      
       
       // Notify background about current step starting
       chrome.runtime.sendMessage({
@@ -163,7 +163,7 @@ class PlayerEngine {
 
       // Special handling for navigation: save state BEFORE navigating
       if (step.action === 'navigate') {
-        console.log(`[Player] Navigating to: ${step.value}`);
+        
         this.state.currentStepIndex++;
         await this.saveState();
         const actualUrl = await Executor.executeStep(step);
@@ -183,18 +183,18 @@ class PlayerEngine {
         // If navigation was skipped (already on page), continue immediately
         // Otherwise, wait for page reload and checkAutoResume will continue
         if (actualUrl === window.location.href || actualUrl === undefined) {
-          console.log(`[Player] Navigation skipped, continuing to next step...`);
+          
           setTimeout(() => this.runNextStep(), 500);
         }
         return;
       }
 
-      console.log(`[Player] Waiting for page to settle...`);
+      
       await Executor.waitForPageSettled();
 
-      console.log(`[Player] Resolving and executing step...`);
+      
       const actualValue = await Executor.executeStep(step);
-      console.log(`[Player] Step successful. Actual value: ${actualValue}`);
+      
 
       this.state.currentStepIndex++;
       await this.saveState();
@@ -221,7 +221,7 @@ class PlayerEngine {
       console.error(`[Player] Step failed: ${error.message}`);
       
       if (retryCount < 2) {
-        console.log(`[Player] Retrying step ${this.state.currentStepIndex + 1} (Attempt ${retryCount + 2})...`);
+        
         setTimeout(() => this.runNextStep(retryCount + 1), 2000);
       } else {
         this.stopPlayback('failed', error.message);

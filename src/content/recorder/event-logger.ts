@@ -7,6 +7,7 @@ export class EventLogger {
   private onEventCaptured?: (event: RawEvent) => void;
   private shadowHostId: string;
   private eventCount: number = 0;
+  private capturedEvents: RawEvent[] = [];
 
   constructor(
     shadowHostId: string,
@@ -21,24 +22,21 @@ export class EventLogger {
     if (this.isRecording) return;
     this.isRecording = true;
     this.eventCount = 0;
-    console.log(
-      `[EventLogger] Started listening for interactions in frame: ${window.location.href}`
-    );
+    this.capturedEvents = [];
+    
 
     window.addEventListener('click', this.handleEvent, true);
     window.addEventListener('input', this.handleEvent, true);
     window.addEventListener('change', this.handleEvent, true);
     window.addEventListener('keydown', this.handleKeyDown, true);
     
-    console.log(`[EventLogger] Event listeners attached (capture phase)`);
+    
   }
 
   public stop() {
     if (!this.isRecording) return;
     this.isRecording = false;
-    console.log(
-      `[EventLogger] Stopped listening for interactions. Total events captured: ${this.eventCount}`
-    );
+    
 
     window.removeEventListener('click', this.handleEvent, true);
     window.removeEventListener('input', this.handleEvent, true);
@@ -51,7 +49,7 @@ export class EventLogger {
     if (!this.isRecording) return;
     
     if (event.key === 'Tab' || event.key === 'Enter') {
-      console.log(`[EventLogger] Key pressed: ${event.key} (for awareness, not recorded)`);
+      
     }
   }
 
@@ -62,51 +60,31 @@ export class EventLogger {
     
     // Debug logging for all captured events
     const targetClass = typeof rawTarget?.className === 'string' ? rawTarget.className.substring(0, 50) : String(rawTarget?.className);
-    console.log(`[EventLogger] Event captured: ${event.type}`, {
-      targetTag: rawTarget?.tagName,
-      targetId: rawTarget?.id,
-      targetClass: targetClass,
-      isFromShadow: this.isEventFromShadowDOM(rawTarget),
-      isTrusted: event.isTrusted
-    });
+    
 
     // Check if this is from our extension's iframe
     if (this.isEventFromShadowDOM(rawTarget)) {
-      console.log(`[EventLogger] Ignoring event from extension iframe`);
+      
       return;
     }
 
     // Get the semantic target element
     const target = this.getActionableTarget(rawTarget, event.type);
     if (!target) {
-      console.log(`[EventLogger] No actionable target found`);
+      
       return;
     }
 
     const textContent = target.textContent?.trim();
     const displayText = typeof textContent === 'string' ? textContent.substring(0, 50) : String(textContent);
-    console.log(
-      `[EventLogger] Captured ${event.type} on ${target.tagName.toLowerCase()}: ${displayText || '(no text)'}`
-    );
+    
 
     this.eventCount++;
 
     const elementInfo = getElementInfo(target);
     
     // Debug: Log xpath generation status
-    console.log(`[EventLogger] Element info for ${target.tagName.toLowerCase()}:`, {
-      selector: elementInfo.selector,
-      xpath: elementInfo.xpath,
-      xpathCandidatesCount: elementInfo.xpathCandidates?.length || 0,
-      xpathCandidates: elementInfo.xpathCandidates,
-      hasText: !!elementInfo.textContent,
-      hasAttributes: !!Object.keys(elementInfo.attributes || {}).length,
-      hasDataTestId: !!(
-        elementInfo.attributes?.['data-testid'] ||
-        elementInfo.attributes?.['data-qa'] ||
-        elementInfo.attributes?.['data-cy']
-      ),
-    });
+    
 
     const interactionEvent: RawEvent = {
       type: event.type as any,
@@ -134,6 +112,9 @@ export class EventLogger {
       interactionEvent.value = target.textContent || '';
     }
 
+    // Store locally for retrieval on stop
+    this.capturedEvents.push(interactionEvent);
+
     // Local callback
     if (this.onEventCaptured) {
       this.onEventCaptured(interactionEvent);
@@ -144,10 +125,14 @@ export class EventLogger {
       type: MessageType.TRACK_INTERACTION,
       data: interactionEvent,
     }).then(() => {
-      console.log(`[EventLogger] Event sent to background successfully`);
+      
     }).catch((err) => {
       console.error(`[EventLogger] Failed to send event to background:`, err);
     });
+  }
+
+  public getEvents(): RawEvent[] {
+    return [...this.capturedEvents];
   }
 
   private getActionableTarget(

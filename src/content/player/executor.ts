@@ -20,13 +20,13 @@ export class Executor {
     type: MessageType,
     data: any
   ): Promise<void> {
-    console.log(`[Executor] Sending CDP message: ${type}`, data);
+    
     const response = await new Promise<{ success: boolean; error?: string }>(
       resolve => {
         chrome.runtime.sendMessage({ type, data }, resolve);
       }
     );
-    console.log(`[Executor] CDP message ${type} response:`, response);
+    
     if (!response?.success) {
       throw new Error(
         `CDP command failed: ${response?.error || 'Unknown error'}`
@@ -100,14 +100,8 @@ export class Executor {
   private static async handleClick(
     step: TestStep
   ): Promise<string | undefined> {
-    console.log(
-      `[Executor] Handling click for CSS selectors:`,
-      this.getSelectors(step)
-    );
-    console.log(
-      `[Executor] Handling click for XPath selectors:`,
-      this.getXPathSelectors(step)
-    );
+    
+    
     // Clean up any existing highlights before starting new action
     removeHighlight();
     
@@ -121,7 +115,7 @@ export class Executor {
       );
     }
 
-    console.log(`[Executor] Element found. Ensuring in viewport...`);
+    
     await this.ensureElementInViewport(element);
     highlightElement(element, { color: '#4dabf7' }); // Blue for playback
 
@@ -132,9 +126,7 @@ export class Executor {
     const rect = element.getBoundingClientRect();
     const tabId = await this.getTabId();
 
-    console.log(
-      `[Executor] Sending CDP click to (${Math.round(rect.left + rect.width / 2)}, ${Math.round(rect.top + rect.height / 2)})`
-    );
+    
     await this.sendCDPMessage(MessageType.CDP_CLICK, {
       tabId,
       x: Math.round(rect.left + rect.width / 2),
@@ -145,10 +137,7 @@ export class Executor {
   }
 
   private static async handleType(step: TestStep): Promise<string | undefined> {
-    console.log(
-      `[Executor] Handling type "${step.value}" for selectors:`,
-      this.getSelectors(step)
-    );
+    
     // Clean up any existing highlights before starting new action
     removeHighlight();
     
@@ -174,7 +163,7 @@ export class Executor {
     const rect = element.getBoundingClientRect();
     const tabId = await this.getTabId();
 
-    console.log(`[Executor] Sending CDP click to focus element...`);
+    
     // Focus element via CDP click first - this triggers browser autofill
     await this.sendCDPMessage(MessageType.CDP_CLICK, {
       tabId,
@@ -187,21 +176,21 @@ export class Executor {
 
     // NOW clear the input (after autofill has occurred)
     // This is done directly in the content script where we have DOM access
-    console.log(`[Executor] Clearing existing input value (including autofill)...`);
+    
     const wasCleared = clearInputElement(element);
-    console.log(`[Executor] Input cleared: ${wasCleared}, previous value was: "${getElementValue(element)}"`);
+    
 
     // Small delay to ensure clear events are processed by frameworks
     await new Promise(resolve => setTimeout(resolve, 100));
 
     // TYPE THE VALUE - use JavaScript to set value directly (more reliable than CDP insertText)
     // This ensures the text goes into the correct element regardless of focus state
-    console.log(`[Executor] Typing value via JavaScript...`);
+    
     const typedValue = this.setElementValue(element, step.value!);
-    console.log(`[Executor] Value set via JavaScript: "${typedValue}"`);
+    
 
     const finalValue = getElementValue(element);
-    console.log(`[Executor] Final element value: "${finalValue}"`);
+    
     return finalValue;
   }
 
@@ -249,7 +238,7 @@ export class Executor {
         }
       }
 
-      console.log(`[setElementValue] Set ${tagName} value to: "${value}"`);
+      
       return value;
     }
 
@@ -262,7 +251,7 @@ export class Executor {
       return value;
     }
 
-    console.log(`[setElementValue] Element ${tagName} is not an input`);
+    
     return '';
   }
 
@@ -324,11 +313,11 @@ export class Executor {
     const normalizedTarget = targetUrl.endsWith('/') ? targetUrl.slice(0, -1) : targetUrl;
     
     if (normalizedCurrent === normalizedTarget) {
-      console.log(`[Executor] Already on target URL ${targetUrl}, skipping navigation`);
+      
       return targetUrl;
     }
 
-    console.log(`[Executor] Navigating to: ${targetUrl} (from ${currentUrl})`);
+    
     window.location.href = targetUrl;
     return targetUrl;
   }
@@ -522,9 +511,7 @@ export class Executor {
     let lastBest: Element | null = null;
     let attempts = 0;
 
-    console.log(
-      `[Executor] Starting Playwright-style polling for [${selectors.join(', ')}]...`
-    );
+    
 
     while (Date.now() - start < timeout) {
       const elapsed = Date.now() - start;
@@ -553,13 +540,11 @@ export class Executor {
             console.warn(
               `[Executor] Forcing interaction with element after 15s timeout.`
             );
-          console.log('[Executor] Element resolved and actionable!');
+          
           return bestMatch;
         }
 
-        console.log(
-          `[Executor] Element found but not yet actionable (Visibility/Stability/Occlusion). Retrying...`
-        );
+        
       }
 
       attempts += 1;
@@ -575,14 +560,8 @@ export class Executor {
     // When primary selectors fail and fallbackPolicy is 'agent_resolve',
     // use comprehensive element hints to find the element
     if (step.fallbackPolicy === 'agent_resolve' && step.elementHints) {
-      console.log('[Executor] Primary selectors failed, attempting agent_resolve fallback...');
-      console.log('[Executor] Element hints context:', {
-        tagName: step.elementHints.tagName,
-        textContent: step.elementHints.textContent?.substring(0, 50),
-        attributes: step.elementHints.attributes,
-        parentInfo: step.elementHints.parentInfo,
-        structuralInfo: step.elementHints.structuralInfo
-      });
+      
+      
 
       const context: ElementResolutionContext = {
         tagName: step.elementHints.tagName,
@@ -595,28 +574,28 @@ export class Executor {
       const contextElement = findElementByContext(context);
 
       if (contextElement) {
-        console.log('[Executor] Found element via context hints, checking actionability...');
+        
         if (!requireActionable || await isElementActionable(contextElement)) {
-          console.log('[Executor] Agent resolve fallback successful!');
+          
           // Give it a highlight to show it was resolved via fallback
           highlightElement(contextElement, { color: '#ffd43b', duration: 2000 }); // Yellow for fallback
           return contextElement;
         } else {
-          console.log('[Executor] Context element found but not actionable, scrolling into view...');
+          
           contextElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
           await new Promise(resolve => setTimeout(resolve, 500));
           if (await isElementActionable(contextElement)) {
-            console.log('[Executor] Element now actionable after scroll!');
+            
             highlightElement(contextElement, { color: '#ffd43b', duration: 2000 });
             return contextElement;
           }
         }
       } else {
-        console.log('[Executor] Agent resolve fallback: No element found via context');
+        
       }
     }
 
-    console.log(`[Executor] Element resolution failed after ${timeout}ms`);
+    
     return requireActionable ? null : lastBest;
   }
 
@@ -630,12 +609,12 @@ export class Executor {
 
     // 1. XPath FIRST (primary matching strategy - more specific)
     if (xpathSelectors.length > 0) {
-      console.log(`[Executor] Trying ${xpathSelectors.length} XPath selectors...`);
+      
       
       xpathSelectors.forEach((xpath, priority) => {
         try {
           const matches = findAllByXPath(xpath);
-          console.log(`[Executor] XPath "${xpath}" found ${matches.length} matches`);
+          
           matches.forEach((el, index) => {
             if (el.isConnected && !seen.has(el)) {
               seen.add(el);
@@ -653,7 +632,7 @@ export class Executor {
 
     // 2. CSS selectors as FALLBACK (when XPath fails)
     if (results.length === 0) {
-      console.log(`[Executor] XPath found no matches, trying CSS selectors as fallback...`);
+      
       
       selectors.forEach((selector, priority) => {
         try {

@@ -1,3 +1,9 @@
+import React, { useState, useEffect } from 'react';
+import { createRoot } from 'react-dom/client';
+import { Toaster, toast } from 'sonner';
+import { GenerationStatusPanel } from '../../components/generation-status';
+import { shadowDOMManager } from '@/utils/shadow-dom';
+import { loadShadowDOMCSS } from '@/utils/css-loader';
 import { EventLogger } from './event-logger';
 import { TelemetryCapture } from './telemetry-capture';
 import { MessageType } from '@/types/messages';
@@ -20,369 +26,320 @@ let telemetryCapture: TelemetryCapture | null = null;
 let isRecording = false;
 let initializationPromise: Promise<void> | null = null;
 let iframeReady = false;
+let toastRoot: any = null;
 const pendingMessages: BridgeMessage[] = [];
 
-// Helper to send message to iframe via postMessage
-function sendToIframe(message: BridgeMessage) {
-  if (!iframe?.contentWindow) {
-    console.log(
-      '[Recorder] Iframe window not available, cannot send message:',
-      message.type
-    );
-    return;
+let generationStatusAPI: {
+  setStatus: (status: 'idle' | 'generating' | 'success' | 'error', data?: any) => void;
+} | null = null;
+
+function AppRoot() {
+  const [genStatus, setGenStatus] = useState<'idle' | 'generating' | 'success' | 'error'>('idle');
+  const [genData, setGenData] = useState<any>({});
+
+  useEffect(() => {
+    generationStatusAPI = {
+      setStatus: (status, data) => {
+        setGenStatus(status);
+        if (data) {
+          setGenData(prev => ({ ...prev, ...data }));
+        }
+      }
+    };
+  }, []);
+
+  return (
+    <>
+      <Toaster 
+        position="bottom-right" 
+        richColors 
+        closeButton
+        toastOptions={{ style: { zIndex: 2147483647 } }}
+      />
+      <GenerationStatusPanel
+        status={genStatus}
+        title={genData.title}
+        error={genData.error}
+        blueprintId={genData.blueprintId}
+        onClose={() => setGenStatus('idle')}
+        onView={() => {
+          if (genData.blueprintId) {
+            window.open(chrome.runtime.getURL(`recording-detail.html?id=${genData.blueprintId}`), '_blank');
+          }
+          setGenStatus('idle');
+        }}
+      />
+    </>
+  );
+}
+
+async function setupToaster() {
+  if (toastRoot) return;
+  try {
+    const css = await loadShadowDOMCSS();
+    const instance = shadowDOMManager.create({
+      hostId: 'qa-recorder-toast-host',
+      shadowMode: 'open',
+      css: css,
+    });
+    toastRoot = createRoot(instance.container);
+    toastRoot.render(<AppRoot />);
+  } catch (e) {
+    console.error('[Recorder] Toaster failed:', e);
   }
+}
+
+function sendToIframe(message: BridgeMessage) {
+  if (!iframe?.contentWindow) return;
   if (!iframeReady) {
-    console.log(
-      '[Recorder] Iframe React app not ready, queuing message:',
-      message.type
-    );
     pendingMessages.push(message);
     return;
   }
-  console.log('[Recorder] Sending to iframe:', message.type);
   iframe.contentWindow.postMessage({ type: BRIDGE_MESSAGE_TYPE, message }, '*');
 }
 
 function flushPendingMessages() {
   while (pendingMessages.length > 0) {
     const msg = pendingMessages.shift()!;
-    console.log('[Recorder] Sending queued message to iframe:', msg.type);
-    iframe?.contentWindow?.postMessage(
-      { type: BRIDGE_MESSAGE_TYPE, message: msg },
-      '*'
-    );
+    iframe?.contentWindow?.postMessage({ type: BRIDGE_MESSAGE_TYPE, message: msg }, '*');
   }
 }
 
-// Helper to relay message to background
 function sendToBackground(message: { type: string; data?: any }) {
-  chrome.runtime
-    .sendMessage(message)
-    .catch(e => console.error('[Recorder] Failed to send to background:', e));
+  chrome.runtime.sendMessage(message).catch(() => {});
 }
 
-function setIframeStyles(state: 'hidden' | 'overlay' | 'recording') {
-  if (!iframe) {
-    console.log('[Recorder] Iframe not found, cannot set styles');
-    return;
-  }
+function setIframeStyles(state: 'hidden' | 'overlay' | 'recording', options?: { background?: string; pointerEvents?: string }) {
+  if (!iframe) return;
 
-  console.log(
-    `[Recorder] setIframeStyles called with: ${state}, iframe opacity: ${iframe.style.opacity}, width: ${iframe.style.width}`
-  );
+  
 
-  if (state === 'hidden') {
-    iframe.style.width = '0px';
-    iframe.style.height = '0px';
-    iframe.style.pointerEvents = 'none';
-    iframe.style.opacity = '0';
-  } else if (state === 'overlay') {
+  if (state === 'overlay') {
+    iframe.style.display = 'block';
     iframe.style.width = '100vw';
     iframe.style.height = '100vh';
     iframe.style.top = '0';
     iframe.style.left = '0';
-    iframe.style.bottom = 'auto';
     iframe.style.right = 'auto';
-    iframe.style.pointerEvents = 'auto';
+    iframe.style.bottom = 'auto';
+    iframe.style.pointerEvents = options?.pointerEvents || 'auto';
     iframe.style.opacity = '1';
+    iframe.style.background = options?.background || 'rgba(0, 0, 0, 0.4)';
+    iframe.style.zIndex = '2147483647';
   } else if (state === 'recording') {
-    // Hide the iframe during recording as the stop button is now in the floating trigger
+    // Hide the iframe entirely while recording without using display: none 
+    // which can pause iframe execution in some browsers
+    iframe.style.display = 'block';
     iframe.style.width = '0px';
     iframe.style.height = '0px';
+    iframe.style.top = '-9999px';
+    iframe.style.left = '-9999px';
+    iframe.style.right = 'auto';
+    iframe.style.bottom = 'auto';
     iframe.style.pointerEvents = 'none';
     iframe.style.opacity = '0';
+    iframe.style.background = 'transparent';
+    iframe.style.zIndex = '-1';
+  } else {
+    // hidden state
+    iframe.style.display = 'block';
+    iframe.style.width = '0px';
+    iframe.style.height = '0px';
+    iframe.style.top = '-9999px';
+    iframe.style.left = '-9999px';
+    iframe.style.pointerEvents = 'none';
+    iframe.style.opacity = '0';
+    iframe.style.background = 'transparent';
   }
-
-  console.log(
-    `[Recorder] Iframe styles set. pointerEvents: ${iframe.style.pointerEvents}`
-  );
 }
 
 async function initializeRecorder() {
-  if ((window as any).__QA_RECORDER_INITIALIZED__) {
-    console.log('[Recorder] Already initialized');
-    return;
-  }
-
-  if (initializationPromise) {
-    return initializationPromise;
-  }
-
+  if ((window as any).__QA_RECORDER_INITIALIZED__) return;
+  if (initializationPromise) return initializationPromise;
   initializationPromise = doInitialize();
   return initializationPromise;
 }
 
 async function doInitialize() {
-  console.log('[Recorder] Initializing recorder...');
+  if (window !== window.top) return;
 
-  // Check if iframe already exists
-  if (document.getElementById(IFRAME_ID)) {
-    console.log('[Recorder] Iframe already exists, not creating another one');
-    iframe = document.getElementById(IFRAME_ID) as HTMLIFrameElement;
-  }
+  window.addEventListener('message', event => {
+    const message = event.data as BridgeMessage;
+    if (!message || message.type !== BRIDGE_MESSAGE_TYPE) return;
 
-  // Only run in main frame
-  if (window !== window.top) {
-    console.log('[Recorder] Not in main frame, skipping initialization');
-    return;
-  }
+    const innerMessage = message.message;
+    
 
-  try {
-    // Create iframe
+    if (innerMessage?.type === 'IFRAME_READY') {
+      iframeReady = true;
+      flushPendingMessages();
+    } else if (innerMessage?.type === 'GENERATION_STARTED') {
+      const title = innerMessage.data?.title || 'Recording';
+      if (generationStatusAPI) {
+        generationStatusAPI.setStatus('generating', { title });
+      }
+      setIframeStyles('hidden');
+    } else if (innerMessage?.type === 'ACTUAL_START_RECORDING') {
+      // Immediately hide the overlay while the browser's native screen picker is open
+      setIframeStyles('hidden');
+      chrome.runtime.sendMessage({
+        type: MessageType.ACTUAL_START_RECORDING,
+        data: innerMessage.data,
+      }).catch(e => {
+        sendToIframe({ type: MessageType.RECORDING_ERROR, data: { error: e?.message } });
+      });
+    } else if (innerMessage?.type === MessageType.IFRAME_STARTED_RECORDING) {
+      if (!isRecording) {
+        isRecording = true;
+        logger?.start();
+        telemetryCapture?.start();
+        setIframeStyles('recording');
+        sendToIframe({ type: 'RECORDING_CONFIRMED' });
+      }
+    } else if (innerMessage?.type === MessageType.STOP_RECORDING) {
+      if (isRecording) {
+        isRecording = false;
+        logger?.stop();
+        const telemetry = telemetryCapture?.stop();
+        if (telemetry) {
+          chrome.runtime.sendMessage({ type: MessageType.GET_TELEMETRY, data: telemetry }).catch(() => {});
+        }
+      }
+      setIframeStyles('hidden');
+      sendToBackground({ type: MessageType.STOP_RECORDING });
+    } else if (innerMessage?.type === MessageType.IFRAME_CLOSED_OVERLAY) {
+      if (isRecording) {
+        isRecording = false;
+        logger?.stop();
+      }
+      setIframeStyles('hidden');
+      if (iframe) iframe.src = chrome.runtime.getURL('recorder-iframe.html');
+      sendToBackground({ type: MessageType.IFRAME_CLOSED_OVERLAY });
+    } else if (innerMessage?.type === MessageType.RESIZE_IFRAME) {
+      if (iframe) {
+        if (innerMessage.data?.pointerEvents) {
+          iframe.style.pointerEvents = innerMessage.data.pointerEvents;
+        }
+      }
+    }
+  });
+
+  chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    switch (message.type) {
+      case MessageType.OPEN_RECORDING_OVERLAY:
+        setIframeStyles('overlay');
+        sendToIframe({ type: MessageType.IFRAME_PREPARE_RECORDING, data: message.data });
+        sendResponse({ success: true });
+        break;
+
+      case MessageType.OPEN_VIDEO_EDITOR_MODAL:
+        if (iframe) {
+          const recordingId = message.data?.recordingId;
+          iframe.src = chrome.runtime.getURL(`video-editor.html?id=${recordingId}&modal=true`);
+          // Show the editor immediately as an overlay
+          setIframeStyles('overlay', { background: 'transparent', pointerEvents: 'auto' });
+        }
+        sendResponse({ success: true });
+        break;
+
+      case MessageType.IFRAME_STARTED_RECORDING:
+        if (!isRecording) {
+          isRecording = true;
+          logger?.start();
+          const recordingId = message.data?.recordingId;
+          if (recordingId) {
+            telemetryCapture?.setRecordingId(recordingId);
+          }
+          telemetryCapture?.start();
+          setIframeStyles('recording');
+          sendToIframe({ type: 'RECORDING_CONFIRMED' });
+        }
+        break;
+
+      case MessageType.IFRAME_CLOSED_OVERLAY:
+        if (isRecording) {
+          isRecording = false;
+          logger?.stop();
+        }
+        setIframeStyles('hidden');
+        break;
+
+      case MessageType.STOP_RECORDING:
+        if (isRecording) {
+          isRecording = false;
+          logger?.stop();
+          const telemetry = telemetryCapture?.stop();
+          const capturedEvents = logger?.getEvents() || [];
+          
+          setIframeStyles('hidden');
+          sendResponse({ success: true, events: capturedEvents, telemetry });
+          return true;
+        }
+        setIframeStyles('hidden');
+        sendToIframe({ type: MessageType.IFRAME_STOP_RECORDING });
+        sendResponse({ success: true });
+        break;
+
+      case MessageType.BLUEPRINT_PROCESSING:
+        if (generationStatusAPI) {
+          generationStatusAPI.setStatus('generating');
+        }
+        break;
+
+      case MessageType.BLUEPRINT_GENERATED:
+        const blueprint = message.data?.blueprint;
+        if (blueprint?.status === 'error') {
+          if (generationStatusAPI) {
+            generationStatusAPI.setStatus('error', { error: blueprint.error });
+          }
+        } else {
+          if (generationStatusAPI) {
+            generationStatusAPI.setStatus('success', { 
+              title: blueprint?.name,
+              blueprintId: blueprint?.id 
+            });
+          }
+        }
+        break;
+    }
+    return true;
+  });
+
+  logger = new EventLogger(IFRAME_ID, event => {
+    sendToIframe({ type: MessageType.IFRAME_LOG_EVENT, data: event });
+  });
+
+  telemetryCapture = new TelemetryCapture('', telemetry => {
+    chrome.runtime.sendMessage({ type: MessageType.TELEMETRY_UPDATE, data: telemetry }).catch(() => {});
+  });
+
+  setupToaster();
+
+  if (!document.getElementById(IFRAME_ID)) {
     iframe = document.createElement('iframe');
     iframe.id = IFRAME_ID;
     iframe.src = chrome.runtime.getURL('recorder-iframe.html');
-    iframe.style.position = 'fixed';
-    iframe.style.border = 'none';
-    iframe.style.zIndex = '2147483647';
-    iframe.style.background = 'transparent';
+    iframe.style.cssText = 'position:fixed; border:none; z-index:2147483647; background:transparent; pointer-events:none; display:none;';
     iframe.allow = 'camera; microphone; display-capture';
-    iframe.style.pointerEvents = 'none';
-    iframe.style.opacity = '0';
-    iframe.style.transition = 'opacity 0.2s';
-
     document.body.appendChild(iframe);
-    console.log('[Recorder] Iframe created and appended');
-
-    // Wait for iframe to load
-    await new Promise<void>((resolve, reject) => {
-      const timeout = setTimeout(() => {
-        console.warn('[Recorder] Iframe load timeout');
-        resolve(); // Don't block on iframe load
-      }, 5000);
-
-      iframe!.onload = () => {
-        clearTimeout(timeout);
-        console.log('[Recorder] Iframe loaded successfully');
-        resolve();
-      };
-
-      iframe!.onerror = () => {
-        clearTimeout(timeout);
-        console.error('[Recorder] Iframe failed to load');
-        resolve(); // Don't block on iframe error
-      };
-    });
-
-    // Initialize EventLogger with callback to send events to iframe
-    logger = new EventLogger(IFRAME_ID, event => {
-      console.log('[Recorder] Local callback: event captured', event.type);
-      // Send event to iframe via postMessage
-      sendToIframe({
-        type: MessageType.IFRAME_LOG_EVENT,
-        data: event,
-      });
-    });
-
-    // Initialize TelemetryCapture (inactive until recording starts)
-    telemetryCapture = new TelemetryCapture('', telemetry => {
-      // Send telemetry updates to background for buffering
-      chrome.runtime
-        .sendMessage({
-          type: MessageType.TELEMETRY_UPDATE,
-          data: telemetry,
-        })
-        .catch(() => {});
-    });
-
-    console.log('[Recorder] EventLogger initialized');
-
-    // Listen for messages from iframe
-    window.addEventListener('message', event => {
-      const message = event.data as BridgeMessage;
-
-      // Only accept our bridge messages (check the unique message type)
-      if (!message || message.type !== BRIDGE_MESSAGE_TYPE) return;
-
-      const innerMessage = message.message;
-      console.log('[Recorder] Message from iframe:', innerMessage?.type);
-
-      if (innerMessage?.type === 'IFRAME_READY') {
-        console.log('[Recorder] Iframe ready signal received');
-        iframeReady = true;
-        flushPendingMessages();
-      } else if (innerMessage?.type === 'ACTUAL_START_RECORDING') {
-        // Relay to background
-        chrome.runtime
-          .sendMessage({
-            type: MessageType.ACTUAL_START_RECORDING,
-            data: innerMessage.data,
-          })
-          .catch(e => {
-            console.error('[Recorder] Failed to start recording:', e);
-            sendToIframe({
-              type: MessageType.RECORDING_ERROR,
-              data: { error: e?.message || 'Failed to start recording' },
-            });
-          });
-      } else if (innerMessage?.type === MessageType.IFRAME_STARTED_RECORDING) {
-        console.log('[Recorder] IFRAME_STARTED_RECORDING from iframe');
-        if (!isRecording) {
-          console.log('[Recorder] Starting recording...');
-          isRecording = true;
-          logger?.start();
-          telemetryCapture?.start();
-          setIframeStyles('recording');
-          console.log(
-            '[Recorder] Recording started, logger active:',
-            logger?.isActive()
-          );
-
-          // Send confirmation back to iframe so it knows to show recording UI
-          sendToIframe({
-            type: 'RECORDING_CONFIRMED',
-          });
-        }
-        // Also relay to background
-        sendToBackground({ type: MessageType.IFRAME_STARTED_RECORDING });
-      } else if (innerMessage?.type === MessageType.STOP_RECORDING) {
-        console.log('[Recorder] STOP_RECORDING from iframe');
-        if (isRecording) {
-          isRecording = false;
-          const eventCount = logger?.getEventCount() || 0;
-          logger?.stop();
-          const telemetry = telemetryCapture?.stop();
-          console.log(
-            `[Recorder] Recording stopped. Total events captured: ${eventCount}`
-          );
-          // Send final telemetry to background
-          if (telemetry) {
-            chrome.runtime
-              .sendMessage({
-                type: MessageType.GET_TELEMETRY,
-                data: telemetry,
-              })
-              .catch(() => {});
-          }
-        }
-        setIframeStyles('hidden');
-        sendToBackground({ type: MessageType.STOP_RECORDING });
-      } else if (innerMessage?.type === MessageType.IFRAME_CLOSED_OVERLAY) {
-        console.log('[Recorder] IFRAME_CLOSED_OVERLAY from iframe');
-        if (isRecording) {
-          isRecording = false;
-          logger?.stop();
-          console.log('[Recorder] Recording stopped');
-        }
-        setIframeStyles('hidden');
-        sendToBackground({ type: MessageType.IFRAME_CLOSED_OVERLAY });
-      }
-    });
-
-    // Set up message listener for messages from background/popup
-    chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-      console.log(
-        '[Recorder] Message from background:',
-        message.type,
-        'sender:',
-        sender.url?.substring(0, 50)
-      );
-
-      switch (message.type) {
-        case MessageType.OPEN_RECORDING_OVERLAY:
-          console.log('[Recorder] OPEN_RECORDING_OVERLAY received');
-          setIframeStyles('overlay');
-          // Send prepare message to iframe
-          sendToIframe({
-            type: MessageType.IFRAME_PREPARE_RECORDING,
-            data: message.data,
-          });
-          sendResponse({ success: true });
-          break;
-
-        case MessageType.IFRAME_STARTED_RECORDING:
-          console.log('[Recorder] IFRAME_STARTED_RECORDING received');
-          if (!isRecording) {
-            console.log('[Recorder] Starting recording...');
-            isRecording = true;
-            logger?.start();
-            telemetryCapture?.start();
-            setIframeStyles('recording');
-            console.log(
-              '[Recorder] Recording started, logger active:',
-              logger?.isActive()
-            );
-          } else {
-            console.log('[Recorder] Already recording');
-          }
-          break;
-
-        case MessageType.IFRAME_CLOSED_OVERLAY:
-          console.log('[Recorder] IFRAME_CLOSED_OVERLAY received');
-          if (isRecording) {
-            isRecording = false;
-            logger?.stop();
-            console.log('[Recorder] Recording stopped');
-          }
-          setIframeStyles('hidden');
-          break;
-
-        case MessageType.STOP_RECORDING:
-          console.log('[Recorder] STOP_RECORDING received');
-          if (isRecording) {
-            isRecording = false;
-            const eventCount = logger?.getEventCount() || 0;
-            logger?.stop();
-            const telemetry = telemetryCapture?.stop();
-            console.log(
-              `[Recorder] Recording stopped. Total events captured: ${eventCount}`
-            );
-            // Return telemetry and events to background
-            sendResponse({
-              success: true,
-              events: logger ? [] : [], // events are already streamed
-              telemetry,
-            });
-            return true;
-          }
-          setIframeStyles('hidden');
-          // Notify iframe
-          sendToIframe({
-            type: MessageType.IFRAME_STOP_RECORDING,
-          });
-          sendResponse({ success: true });
-          break;
-
-        case MessageType.RESIZE_IFRAME:
-          // Ignore resize during recording as we want it hidden
-          if (iframe && isRecording) {
-            iframe.style.width = '0px';
-            iframe.style.height = '0px';
-          }
-          break;
-
-        case MessageType.PING:
-          sendResponse({ success: true, data: 'PONG_RECORDER' });
-          break;
-      }
-      return true;
-    });
-
-    // Check initial state from storage
-    const result = await chrome.storage.local.get([
-      'isRecording',
-      'currentRecordingId',
-    ]);
-    console.log('[Recorder] Initial state:', {
-      isRecording: result.isRecording,
-      recordingId: result.currentRecordingId,
-    });
-
-    if (result.isRecording) {
-      console.log('[Recorder] Restoring recording state from storage');
-      isRecording = true;
-      logger?.start();
-      setIframeStyles('recording');
-    }
-
-    (window as any).__QA_RECORDER_INITIALIZED__ = true;
-    console.log('[Recorder] Initialization complete');
-  } catch (error) {
-    console.error('[Recorder] Initialization failed:', error);
+  } else {
+    iframe = document.getElementById(IFRAME_ID) as HTMLIFrameElement;
   }
+
+  const result = await chrome.storage.local.get(['isRecording', 'currentRecordingId']);
+  if (result.isRecording) {
+    isRecording = true;
+    logger?.start();
+    if (result.currentRecordingId) {
+      telemetryCapture?.setRecordingId(result.currentRecordingId);
+    }
+    telemetryCapture?.start();
+    setIframeStyles('recording');
+  }
+
+  (window as any).__QA_RECORDER_INITIALIZED__ = true;
 }
 
-// Initialize when DOM is ready
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', () => initializeRecorder());
 } else {
