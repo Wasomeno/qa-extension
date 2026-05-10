@@ -38,10 +38,10 @@ if (descMatch && sourceMatch && videoMatch) {
   content = content.replace('max-w-4xl', 'max-w-6xl');
   
   fs.writeFileSync('src/pages/recordings/detail.tsx', content);
-  console.log('Reordered successfully.');
+  
 } else {
-  console.log('Regex match failed.');
-  if (!descMatch) console.log('Desc missing');
-  if (!sourceMatch) console.log('Source missing');
-  if (!videoMatch) console.log('Video missing');
+  
+  if (!descMatch) 
+  if (!sourceMatch) 
+  if (!videoMatch) 
 }

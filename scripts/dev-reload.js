@@ -18,17 +18,17 @@ class ExtensionReloader {
     this.clients = new Set();
     this.setupWebSocketServer();
     this.setupFileWatcher();
-    console.log(`🔥 Extension hot reload server started on port ${PORT}`);
+    
   }
 
   setupWebSocketServer() {
     this.wss.on('connection', (ws) => {
       this.clients.add(ws);
-      console.log('📱 Extension connected for hot reload');
+      
       
       ws.on('close', () => {
         this.clients.delete(ws);
-        console.log('📱 Extension disconnected from hot reload');
+        
       });
       
       ws.on('error', (error) => {
@@ -48,7 +48,7 @@ class ExtensionReloader {
     let reloadTimeout;
     
     watcher.on('change', (path) => {
-      console.log(`📝 File changed: ${path}`);
+      
       
       // Debounce rapid file changes
       clearTimeout(reloadTimeout);
@@ -58,7 +58,7 @@ class ExtensionReloader {
     });
 
     watcher.on('add', (path) => {
-      console.log(`📄 File added: ${path}`);
+      
       clearTimeout(reloadTimeout);
       reloadTimeout = setTimeout(() => {
         this.notifyReload();
@@ -68,7 +68,7 @@ class ExtensionReloader {
 
   notifyReload() {
     if (this.clients.size === 0) {
-      console.log('🔄 Files changed but no extension connected');
+      
       return;
     }
 
@@ -78,18 +78,18 @@ class ExtensionReloader {
       }
     });
     
-    console.log('🔄 Reload signal sent to extension');
+    
   }
 }
 
 // Handle graceful shutdown
 process.on('SIGINT', () => {
-  console.log('\n🛑 Shutting down hot reload server...');
+  
   process.exit(0);
 });
 
 process.on('SIGTERM', () => {
-  console.log('\n🛑 Shutting down hot reload server...');
+  
   process.exit(0);
 });
 

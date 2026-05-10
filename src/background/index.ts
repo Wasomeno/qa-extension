@@ -104,7 +104,7 @@ export class CDPHandler {
   public static async type(tabId: number, text: string): Promise<void> {
     if (!text) return;
 
-    console.log(`[CDPHandler.type] Using Input.insertText for: "${text}"`);
+    
     
     // Use Input.insertText which handles all characters correctly
     // This is more reliable than individual key events for special characters
@@ -112,7 +112,7 @@ export class CDPHandler {
       text: text,
     });
     
-    console.log(`[CDPHandler.type] Input.insertText completed`);
+    
   }
 
   public static async clearInput(tabId: number): Promise<void> {
@@ -224,7 +224,7 @@ class BackgroundService {
     fileName: string,
     contentType: string
   ): Promise<string> {
-    console.log(`[Background] PutObjectCommand for ${fileName}, body size: ${body.length} bytes`);
+    
     const command = new PutObjectCommand({
       Bucket: bucketName,
       Key: fileName,
@@ -396,10 +396,7 @@ class BackgroundService {
                 }
 
                 if (!dataString) {
-                  console.log(
-                    `[Background] SSE Block with no data:`,
-                    trimmedBlock
-                  );
+                  
                   continue;
                 }
 
@@ -410,10 +407,7 @@ class BackgroundService {
                   data = dataString;
                 }
 
-                console.log(
-                  `[Background] SSE Forwarding - Event: ${eventType}`,
-                  data
-                );
+                
                 port.postMessage({ event: eventType, data });
               }
             };
@@ -421,10 +415,7 @@ class BackgroundService {
             while (true) {
               const { value, done } = await reader.read();
               if (done) {
-                console.log(
-                  '[Background] SSE Stream Done. Finalizing buffer:',
-                  buffer
-                );
+                
                 processBuffer('', true);
                 break;
               }
@@ -517,10 +508,7 @@ class BackgroundService {
                 }
 
                 if (!dataString) {
-                  console.log(
-                    `[Background] SSE Block with no data:`,
-                    trimmedBlock
-                  );
+                  
                   continue;
                 }
 
@@ -531,10 +519,7 @@ class BackgroundService {
                   data = dataString;
                 }
 
-                console.log(
-                  `[Background] SSE Forwarding - Event: ${eventType}`,
-                  data
-                );
+                
                 port.postMessage({ event: eventType, data });
               }
             };
@@ -542,10 +527,7 @@ class BackgroundService {
             while (true) {
               const { value, done } = await reader.read();
               if (done) {
-                console.log(
-                  '[Background] SSE Stream Done. Finalizing buffer:',
-                  buffer
-                );
+                
                 processBuffer('', true);
                 break;
               }
@@ -692,9 +674,7 @@ class BackgroundService {
           }
 
           if (existingUrl && recordingId) {
-            console.log(
-              `[Background] Video capture already uploaded: ${existingUrl}`
-            );
+            
             this.pendingVideoUrls.set(
               recordingId as string,
               existingUrl as string
@@ -713,9 +693,7 @@ class BackgroundService {
             return;
           }
 
-          console.log(
-            `[Background] Uploading video data for ${recordingId} (${videoData.length} bytes)...`
-          );
+          
           const fileName = `recordings/${recordingId}.webm`;
           const videoUrl = await this.uploadToR2(
             new Uint8Array(videoData),
@@ -723,7 +701,7 @@ class BackgroundService {
             'video/webm'
           );
 
-          console.log(`[Background] Video capture complete: ${videoUrl}`);
+          
           this.pendingVideoUrls.set(recordingId as string, videoUrl);
 
           const pending = this.pendingVideoUpload.get(recordingId as string);
@@ -744,7 +722,7 @@ class BackgroundService {
       case MessageType.VIDEO_CAPTURE_READY:
         try {
           const { recordingId, videoBlobKey, duration, size } = message.data || {};
-          console.log(`[Background] Video capture ready for editing: ${recordingId}, duration: ${duration}s, size: ${size}`);
+          
           
           // Update the pending edit recording with video metadata if it exists
           const existing = this.pendingEditRecordings.get(recordingId);
@@ -755,7 +733,7 @@ class BackgroundService {
               videoBlobKey,
               endTime: Date.now(),
             });
-            console.log(`[Background] Updated pending recording ${recordingId} with video blob key`);
+            
           }
           // If not exists, the video is ready before stopRecording finished
           // stopRecording will store the events and use this videoBlobKey
@@ -798,7 +776,7 @@ class BackgroundService {
       case MessageType.FINALIZE_EDITED_RECORDING:
         try {
           const { recordingId, trimStart, trimEnd, title, description } = message.data || {};
-          console.log(`[Background] Finalizing edited recording: ${recordingId}, trim: ${trimStart}s - ${trimEnd}s`);
+          
           
           const pending = this.pendingEditRecordings.get(recordingId);
           if (!pending) {
@@ -1094,12 +1072,12 @@ class BackgroundService {
           }
           
           // Debug: Check if incoming blueprint has xpath (skip navigate step)
-          console.log('[Background] SAVE_BLUEPRINT received blueprint, checking steps:');
+          
           if (blueprint.steps && blueprint.steps.length > 1) {
             for (let i = 1; i < Math.min(blueprint.steps.length, 4); i++) {
               const step = blueprint.steps[i];
-              console.log(`[Background] SAVE_BLUEPRINT: Step ${i} (${step.action}) xpath:`, step.xpath);
-              console.log(`[Background] SAVE_BLUEPRINT: Step ${i} (${step.action}) xpathCandidates length:`, step.xpathCandidates?.length);
+              
+              
             }
           }
 
@@ -1117,7 +1095,7 @@ class BackgroundService {
                 finalSteps[0].value?.includes(blueprint.baseUrl));
 
             if (!hasNavigateStep) {
-              console.log('[Background] SAVE_BLUEPRINT: Prepending navigate step');
+              
               finalSteps = [
                 {
                   action: 'navigate',
@@ -1163,14 +1141,14 @@ class BackgroundService {
             telemetry: blueprint.telemetry,
           };
 
-          console.log('[Background] Saving recording payload:', recording);
+          
           
           // Debug: Check if xpath is in the steps (skip navigate step)
           if (recording.steps && recording.steps.length > 1) {
             for (let i = 1; i < Math.min(recording.steps.length, 3); i++) {
               const step = recording.steps[i];
-              console.log(`[Background] DEBUG: Step ${i} (${step.action}) has xpath:`, step.xpath);
-              console.log(`[Background] DEBUG: Step ${i} (${step.action}) has xpathCandidates:`, step.xpathCandidates);
+              
+              
             }
           }
 
@@ -1499,9 +1477,9 @@ class BackgroundService {
 
       case MessageType.CDP_TYPE:
         try {
-          console.log(`[CDPHandler] Typing "${message.data.text}" on tab ${message.data.tabId}`);
+          
           await CDPHandler.type(message.data.tabId, message.data.text);
-          console.log(`[CDPHandler] Type completed successfully`);
+          
           sendResponse({ success: true });
         } catch (e: any) {
           console.error(`[CDPHandler] Type failed:`, e);
@@ -1549,7 +1527,7 @@ class BackgroundService {
       case MessageType.TELEMETRY_UPDATE:
         if (message.data) {
           const data = message.data as Partial<SessionTelemetry>;
-          console.log('[Background] TELEMETRY_UPDATE received, networkRequests count:', data.networkRequests?.length || 0);
+          
           if (data.consoleLogs) this.consoleLogs = data.consoleLogs;
           if (data.jsErrors) this.jsErrors = data.jsErrors;
           if (data.networkRequests) {
@@ -1559,7 +1537,7 @@ class BackgroundService {
               r => !existingUrls.has(`${r.method}:${r.url}`)
             );
             this.networkRequests.push(...newRequests);
-            console.log(`[Background] Merged ${newRequests.length} network requests from content script (total: ${this.networkRequests.length})`);
+            
           }
           if (data.storageSnapshots) this.telemetry.storageSnapshots = data.storageSnapshots;
           if (data.domMutations) this.telemetry.domMutations = data.domMutations;
@@ -1580,7 +1558,7 @@ class BackgroundService {
               r => !existingUrls.has(`${r.method}:${r.url}`)
             );
             this.networkRequests.push(...newRequests);
-            console.log(`[Background] Merged ${newRequests.length} network requests from content script on GET_TELEMETRY (total: ${this.networkRequests.length})`);
+            
           }
         }
         sendResponse({ success: true, telemetry: this.telemetry });
@@ -1718,9 +1696,7 @@ class BackgroundService {
 
     try {
       const currentRecordingId = recordingId || `rec-${Date.now()}`;
-      console.log(
-        `[Background] Starting recording session: ${currentRecordingId} for tab ${targetTabId}`
-      );
+      
 
       // 1. Immediate State
       this.recordingEvents = [];
@@ -1728,17 +1704,18 @@ class BackgroundService {
       this.consoleLogs = [];
       this.jsErrors = [];
       (this as any).__pendingNetworkRequests = new Map();
-      this.telemetry = {
-        recordingId: currentRecordingId,
-        startTime: Date.now(),
-        startUrl: startUrl || '',
-      };
 
       const [tab] = await chrome.tabs.query({
         active: true,
         currentWindow: true,
       });
       const startUrl = tab?.url;
+
+      this.telemetry = {
+        recordingId: currentRecordingId,
+        startTime: Date.now(),
+        startUrl: startUrl || '',
+      };
 
       await chrome.storage.session.remove('currentRecording');
       await chrome.storage.local.set({
@@ -1757,7 +1734,7 @@ class BackgroundService {
       // So we need to skip CDP and rely on content-script interception
       // OR we need to start recording BEFORE any chrome-extension:// URL is involved
       try {
-        console.log(`[Background] Attempting to attach CDP debugger to tab ${targetTabId}`);
+        
         
         // First, try to detach any existing debugger (from previous recording attempt)
         try {
@@ -1767,11 +1744,11 @@ class BackgroundService {
         }
         
         await CDPHandler.attach(targetTabId);
-        console.log(`[Background] CDP debugger attached, enabling Network domain`);
+        
         await CDPHandler.sendCommand(targetTabId, 'Network.enable', {});
         this.cdpNetworkEnabled = true;
         this.setupCDPNetworkListener(targetTabId);
-        console.log('[Background] CDP Network domain enabled successfully');
+        
       } catch (e: any) {
         console.warn('[Background] Failed to enable CDP Network:', e?.message || e);
         console.warn('[Background] Network requests will be captured by the content script instead');
@@ -1811,6 +1788,14 @@ class BackgroundService {
       await chrome.storage.local.set({ isRecording: true });
       chrome.action.setBadgeText({ text: 'REC' });
       chrome.action.setBadgeBackgroundColor({ color: '#ef4444' });
+
+      // 4. Notify the content script that recording has actually started
+      // This triggers the EventLogger and TelemetryCapture to begin capturing events
+      await this.notifyTab(targetTabId, {
+        type: MessageType.IFRAME_STARTED_RECORDING,
+        data: { recordingId: currentRecordingId },
+      });
+      
     } catch (e) {
       this.isStartingRecording = false;
       throw e;
@@ -1838,21 +1823,23 @@ class BackgroundService {
       ]);
     const tempId = currentRecordingId || `rec-${Date.now()}`;
     const startUrl = currentRecordingStartUrl || tab?.url;
-    console.log(
-      `[Background] Stopping recording session: ${tempId} (Started at: ${startUrl})`
-    );
+    
 
     // Stop Video Capture (offscreen will store blob in IndexedDB and send VIDEO_CAPTURE_READY)
-    chrome.runtime.sendMessage({ type: MessageType.STOP_VIDEO_CAPTURE });
+    try {
+      chrome.runtime.sendMessage({ type: MessageType.STOP_VIDEO_CAPTURE }, () => {
+        void chrome.runtime.lastError;
+      });
+    } catch (e) {
+      
+    }
 
     await chrome.storage.local.set({ isRecording: false });
     chrome.action.setBadgeText({ text: '' });
 
     // 1. Collect events from all possible sources
     const allEvents: RawEvent[] = [...this.recordingEvents];
-    console.log(
-      `[Background] Collected ${allEvents.length} events from internal buffer`
-    );
+    
 
     // Try session storage fallback
     try {
@@ -1860,9 +1847,7 @@ class BackgroundService {
         'currentRecording',
       ]);
       if (sessionData.currentRecording?.events?.length > 0) {
-        console.log(
-          `[Background] Syncing ${sessionData.currentRecording.events.length} events from session storage`
-        );
+        
         // Merge and deduplicate by timestamp + type
         const existing = new Set(
           allEvents.map(e => `${e.timestamp}-${e.type}`)
@@ -1880,7 +1865,7 @@ class BackgroundService {
     // Try tab fallback (final sync)
     if (tab?.id) {
       try {
-        console.log('[Background] Requesting final event sync from tab...');
+        
         const response = await new Promise<any>(resolve => {
           chrome.tabs.sendMessage(
             tab.id!,
@@ -1892,9 +1877,7 @@ class BackgroundService {
           );
         });
         if (response?.events?.length > 0) {
-          console.log(
-            `[Background] Syncing ${response.events.length} events from tab content script`
-          );
+          
           // Merge and deduplicate
           const existing = new Set(
             allEvents.map(e => `${e.timestamp}-${e.type}`)
@@ -1910,9 +1893,7 @@ class BackgroundService {
       }
     }
 
-    console.log(
-      `[Background] Final event count after deduplication: ${allEvents.length}`
-    );
+    
 
     // Sort by timestamp
     allEvents.sort((a, b) => a.timestamp - b.timestamp);
@@ -1958,7 +1939,7 @@ class BackgroundService {
       },
     });
     
-    console.log(`[Background] Stored pending recording ${tempId} for video editor`);
+    
     
     // Clear recording state
     this.recordingEvents = [];
@@ -1975,7 +1956,7 @@ class BackgroundService {
             data: { recordingId: tempId },
           }
         );
-        console.log(`[Background] Sent OPEN_VIDEO_EDITOR_MODAL to tab ${tab.id}`);
+        
       } catch (e) {
         console.error('[Background] Failed to open video editor modal, falling back to new tab:', e);
         const videoEditorUrl = chrome.runtime.getURL(`video-editor.html?id=${tempId}`);
@@ -1986,7 +1967,7 @@ class BackgroundService {
       await chrome.tabs.create({ url: videoEditorUrl });
     }
     
-    console.log(`[Background] Opened video editor for recording ${tempId}`);
+    
   }
 
   /**
@@ -2058,7 +2039,7 @@ class BackgroundService {
       telemetry: blueprint.telemetry,
     };
 
-    console.log(`[Background] Saving recording ${blueprint.id} to API...`);
+    
     const response = await api.post<any>('/recordings', {
       body: recording as any,
     });
@@ -2085,7 +2066,7 @@ class BackgroundService {
     title?: string,
     description?: string
   ): Promise<void> {
-    console.log(`[Background] Finalizing recording ${recordingId}, trim: ${trimStart}s - ${trimEnd}s`);
+    
     
     try {
       // Broadcast processing status
@@ -2104,7 +2085,7 @@ class BackgroundService {
       });
 
       // 1. Get trimmed video blob from offscreen document
-      console.log(`[Background] Requesting trimmed video from offscreen: ${trimStart}s - ${trimEnd}s`);
+      
       const videoBlob = await new Promise<Blob | null>((resolve) => {
         chrome.runtime.sendMessage(
           { 
@@ -2144,7 +2125,7 @@ class BackgroundService {
       
       // 2. Upload video to R2 if we have it
       if (videoBlob) {
-        console.log(`[Background] Uploading trimmed video, size: ${videoBlob.size} bytes`);
+        
         const fileName = `recordings/${recordingId}.webm`;
         const buffer = await videoBlob.arrayBuffer();
         
@@ -2153,7 +2134,7 @@ class BackgroundService {
           fileName,
           'video/webm'
         );
-        console.log(`[Background] Trimmed video uploaded: ${videoUrl}`);
+        
         
         // Clean up the original blob from IndexedDB
         await this.deleteVideoBlobFromIndexedDB(pendingData.videoBlobKey);
@@ -2181,11 +2162,11 @@ class BackgroundService {
         return event.timestamp >= trimStartMs && event.timestamp <= trimEndMs;
       });
       
-      console.log(`[Background] Filtered events: ${filteredEvents.length} of ${pendingData.events.length} within trim range`);
+      
       
       // 4. Run AI blueprint generation
       if (filteredEvents.length > 0) {
-        console.log(`[Background] Running AI processing on ${filteredEvents.length} events...`);
+        
         
         const blueprint = await this.aiProcessor.generateBlueprint(
           filteredEvents,
@@ -2197,7 +2178,7 @@ class BackgroundService {
           throw new Error('AI generated an invalid blueprint');
         }
         
-        console.log(`[Background] AI processing complete, enriching steps...`);
+        
         
         // Enrich steps with selectors and xpath
         const enrichedSteps = this.enrichBlueprintSteps(blueprint.steps || [], filteredEvents, pendingData.startUrl);
@@ -2216,10 +2197,10 @@ class BackgroundService {
         };
         
         // --- AUTO-SAVE TO DATABASE ---
-        console.log(`[Background] Auto-saving recording to database...`);
+        
         try {
           await this.saveBlueprintToApi(finalBlueprint);
-          console.log(`[Background] Successfully saved recording to database`);
+          
           
           // Clear "Recent Recording" card from UI since it's now saved
           await chrome.storage.local.remove('lastBlueprint');
@@ -2239,7 +2220,7 @@ class BackgroundService {
           data: { blueprint: finalBlueprint },
         });
         
-        console.log(`[Background] Blueprint finalized for ${recordingId}`);
+        
       } else {
         // No events after trimming - create empty blueprint
         const emptyBlueprint = {
@@ -2354,7 +2335,7 @@ class BackgroundService {
             
             // Handle potentially mangled serialization
             if (rawData && typeof rawData === 'object' && !Array.isArray(rawData) && !(rawData instanceof Uint8Array)) {
-              console.log('[Background] Fixing object-based Uint8Array from offscreen');
+              
               const keys = Object.keys(rawData).map(Number).sort((a, b) => a - b);
               const arr = new Uint8Array(keys.length);
               for (let i = 0; i < keys.length; i++) {
@@ -2416,20 +2397,20 @@ class BackgroundService {
 
   // Legacy method - kept for reference
   private async stopRecordingLegacy() {
-    console.log(`[Background] LEGACY STOP_RECORDING - THIS SHOULD NOT BE CALLED`);
+    
     // This method is no longer used. The new flow uses:
     // 1. stopRecording() - collects events and opens video editor
     // 2. finalizeEditedRecording() - processes after user edits video
   }
 
   private setupCDPNetworkListener(tabId: number) {
-    console.log(`[Background] Setting up CDP Network listener for tab ${tabId}`);
+    
     // Listen for CDP events via chrome.debugger.onEvent
     const listener = (source: any, method: string, params: any) => {
       if (source.tabId !== tabId) return;
 
       if (method === 'Network.requestWillBeSent') {
-        console.log(`[Background] CDP Network: requestWillBeSent ${params.request.url}`);
+        
         const entry: NetworkRequestEntry = {
           requestId: params.requestId,
           url: params.request.url,
@@ -2470,7 +2451,7 @@ class BackgroundService {
           }
 
           this.networkRequests.push(pending.entry);
-          console.log(`[Background] CDP Network: loadingFinished ${pending.entry.url} (${this.networkRequests.length} total)`);
+          
           (this as any).__pendingNetworkRequests.delete(params.requestId);
           // Flush every 20 requests
           if (this.networkRequests.length % 20 === 0) {
@@ -2503,7 +2484,7 @@ class BackgroundService {
     try {
       await CDPHandler.sendCommand(tabId, 'Network.disable', {});
       this.cdpNetworkEnabled = false;
-      console.log('[Background] CDP Network domain disabled');
+      
     } catch (e) {
       console.warn('[Background] Failed to disable CDP Network:', e);
     }

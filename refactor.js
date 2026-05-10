@@ -76,4 +76,4 @@ content = content.replace(oldEnd, newEnd);
 // Let's reorder the video to be at the top of the left pane instead of below the description.
 // It's a bit tricky with string replacement, but let's see.
 fs.writeFileSync('./src/pages/recordings/detail.tsx', content);
-console.log('Refactoring complete.');
+

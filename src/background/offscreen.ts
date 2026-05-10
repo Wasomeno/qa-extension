@@ -142,20 +142,20 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       });
     return true;
   } else if (message.type === MessageType.STOP_VIDEO_CAPTURE) {
-    console.log('[Offscreen] Stop video capture requested');
+    
 
     // 1. Stop MediaRecorder
     if (mediaRecorder && mediaRecorder.state !== 'inactive') {
-      console.log('[Offscreen] Stopping MediaRecorder...');
+      
       mediaRecorder.stop();
     }
 
     // 2. IMPORTANT: Stop all tracks in the stream immediately to remove the yellow border
     if (activeStream) {
-      console.log('[Offscreen] Stopping all media tracks...');
+      
       activeStream.getTracks().forEach(track => {
         track.stop();
-        console.log(`[Offscreen] Track ${track.kind} stopped`);
+        
       });
       activeStream = null;
     }
@@ -220,9 +220,7 @@ async function handleStartVideoCapture(recordingId: string) {
   currentRecordingId = recordingId;
 
   try {
-    console.log(
-      `[Offscreen] Initiating native getDisplayMedia for ${recordingId}...`
-    );
+    
 
     // Clean up any existing stream first
     if (activeStream) {
@@ -248,9 +246,7 @@ async function handleStartVideoCapture(recordingId: string) {
     };
 
     mediaRecorder.onstop = async () => {
-      console.log(
-        `[Offscreen] MediaRecorder stopped. Chunks: ${recordedChunks.length}`
-      );
+      
 
       // If the stream is still active, stop it here as well (backup)
       if (activeStream) {
@@ -260,14 +256,14 @@ async function handleStartVideoCapture(recordingId: string) {
 
       const blob = new Blob(recordedChunks, { type: 'video/webm' });
       const duration = 0; // Duration will be calculated from video metadata
-      console.log(`[Offscreen] Video blob size: ${blob.size} bytes`);
+      
 
       try {
         // Store blob in IndexedDB for the video editor (Jam.dev style)
         const blobKey = `recording-${currentRecordingId}`;
         await storeVideoBlob(blobKey, blob);
         
-        console.log(`[Offscreen] Video stored in IndexedDB with key: ${blobKey}`);
+        
         
         // Notify background that video is ready for editing
         chrome.runtime.sendMessage({
@@ -292,7 +288,7 @@ async function handleStartVideoCapture(recordingId: string) {
     };
 
     mediaRecorder.start();
-    console.log('[Offscreen] Native video recording started successfully.');
+    
   } catch (err) {
     console.error('[Offscreen] Failed to start native video capture:', err);
     throw err;
@@ -319,7 +315,7 @@ async function generateThumbnail(
     video.addEventListener('loadedmetadata', () => {
       // Seek to the requested time, or 3 seconds into the video, whichever is smaller
       const seekTime = Math.min(time, video.duration || time);
-      console.log(`[Thumbnail] Seeking to ${seekTime}s (requested: ${time}s, duration: ${video.duration}s)`);
+      
       video.currentTime = seekTime;
     });
 
@@ -332,7 +328,7 @@ async function generateThumbnail(
         if (ctx) {
           ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
           const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
-          console.log(`[Thumbnail] Generated at ${video.currentTime}s`);
+          
           resolve(dataUrl);
         } else {
           reject(new Error('Canvas context not available'));
