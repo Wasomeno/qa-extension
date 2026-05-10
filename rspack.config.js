@@ -271,7 +271,8 @@ module.exports = (env, argv) => {
             chunk.name !== 'content' &&
             chunk.name !== 'background' &&
             chunk.name !== 'recorder' &&
-            chunk.name !== 'player'
+            chunk.name !== 'player' &&
+            chunk.name !== 'recorder-iframe'
           );
         },
         cacheGroups: {
