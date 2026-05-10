@@ -92,7 +92,7 @@ export const TestScenariosPage: React.FC<{
     queryKey: ['test-scenarios'],
     queryFn: async () => {
       const result = await testScenarioApi.listScenarios();
-      console.log('API Response for scenarios:', result);
+      
       // Handle both array response and paginated response { data: [...] }
       if (result && typeof result === 'object' && !Array.isArray(result) && 'data' in result) {
         return (result as any).data || [];

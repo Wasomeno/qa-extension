@@ -1,339 +1,73 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Square, Play } from 'lucide-react';
-import { MessageType } from '@/types/messages';
 
-// Bridge messages between content script and iframe using postMessage
 const CONTENT_SCRIPT_MESSAGE_TYPE = '__QA_EXTENSION_MESSAGE__';
 
-interface BridgeMessage {
-  type: string;
-  message?: {
-    type: string;
-    data?: any;
-  };
-  data?: any;
-}
-
 const App = () => {
+  const [view, setView] = useState<'recording' | 'editor'>('recording');
   const [targetRecordingId, setTargetRecordingId] = useState<string | null>(null);
   const [isRecording, setIsRecording] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  // Guard against multiple clicks
-  const isStartingRef = useRef(false);
-
-  // Use refs to avoid stale closure issues
-  const isRecordingRef = useRef(isRecording);
-  const targetRecordingIdRef = useRef(targetRecordingId);
-
-  // Keep refs in sync with state
-  useEffect(() => {
-    isRecordingRef.current = isRecording;
-  }, [isRecording]);
 
   useEffect(() => {
-    targetRecordingIdRef.current = targetRecordingId;
-  }, [targetRecordingId]);
-
-  // Signal to parent content script that the React app is mounted and listening
-  useEffect(() => {
-    console.log('[Recorder Iframe] React app mounted, sending IFRAME_READY');
-    try {
-      window.parent.postMessage(
-        { type: CONTENT_SCRIPT_MESSAGE_TYPE, message: { type: 'IFRAME_READY' } },
-        '*'
-      );
-    } catch (e) {
-      console.error('[Recorder Iframe] Failed to send IFRAME_READY:', e);
-    }
+    
+    window.parent.postMessage({ 
+      type: CONTENT_SCRIPT_MESSAGE_TYPE, 
+      message: { type: 'IFRAME_READY' } 
+    }, '*');
   }, []);
 
-  // Listen for messages from parent page (content script) via postMessage
   useEffect(() => {
     const handleMessage = (event: MessageEvent) => {
-      const bridgeMessage = event.data as BridgeMessage;
+      if (!event.data || event.data.type !== CONTENT_SCRIPT_MESSAGE_TYPE) return;
+      const { type, data } = event.data.message || {};
       
-      // Only accept our bridge messages
-      if (!bridgeMessage || bridgeMessage.type !== CONTENT_SCRIPT_MESSAGE_TYPE) return;
-      
-      const { type, data } = bridgeMessage.message || {};
-      console.log('[Recorder Iframe] Message received from parent:', type, 'data:', data);
 
-      if (type === MessageType.IFRAME_PREPARE_RECORDING) {
-        // Only set if not already recording and not already set
-        if (isRecordingRef.current) {
-          console.log('[Recorder Iframe] Already recording, ignoring IFRAME_PREPARE_RECORDING');
-          return;
-        }
-        if (targetRecordingIdRef.current) {
-          console.log('[Recorder Iframe] targetRecordingId already set, ignoring IFRAME_PREPARE_RECORDING');
-          return;
-        }
-        const id = data?.id || `rec_${Date.now()}`;
-        console.log('[Recorder Iframe] Setting targetRecordingId:', id);
-        setTargetRecordingId(id);
-        setError(null);
-      } else if (type === MessageType.IFRAME_STOP_RECORDING) {
-        console.log('[Recorder Iframe] IFRAME_STOP_RECORDING received');
-        setIsRecording(false);
-        setTargetRecordingId(null);
-        chrome.storage.local.set({ isRecording: false });
+      if (type === 'IFRAME_PREPARE_RECORDING') {
+        setTargetRecordingId(data?.id || 'rec_test');
+        setView('recording');
+      } else if (type === 'OPEN_VIDEO_EDITOR_MODAL') {
+        setTargetRecordingId(data?.recordingId);
+        setView('editor');
       } else if (type === 'RECORDING_CONFIRMED') {
-        // Recording has been confirmed by content script, ensure state is correct
-        console.log('[Recorder Iframe] Recording confirmed by content script, current isRecordingRef:', isRecordingRef.current);
-        if (!isRecordingRef.current) {
-          console.log('[Recorder Iframe] Setting isRecording to true (from confirmation)');
-          setIsRecording(true);
-        }
-      } else if (type === MessageType.RECORDING_ERROR) {
-        console.error('[Recorder Iframe] Recording error:', data?.error);
-        isStartingRef.current = false;
-        setError(data?.error || 'Failed to start recording');
+        setIsRecording(true);
       }
     };
-
     window.addEventListener('message', handleMessage);
     return () => window.removeEventListener('message', handleMessage);
   }, []);
 
-  // Helper to send message to parent (content script)
-  const sendToParent = (message: { type: string; data?: any }) => {
-    console.log('[Recorder Iframe] sendToParent called with:', message);
-    console.log('[Recorder Iframe] window.parent:', window.parent ? 'exists' : 'undefined');
-    console.log('[Recorder Iframe] window.parent === window:', window.parent === window);
-    
-    try {
-      // Check if we have a valid parent window reference
-      if (!window.parent) {
-        console.error('[Recorder Iframe] No parent window available');
-        return;
-      }
-      
-      if (window.parent === window) {
-        console.log('[Recorder Iframe] window.parent === window (not in iframe), skipping postMessage');
-        return;
-      }
-      
-      const bridgeMessage = {
-        type: CONTENT_SCRIPT_MESSAGE_TYPE,
-        message: message,
-      };
-      console.log('[Recorder Iframe] Sending to parent:', JSON.stringify(bridgeMessage));
-      window.parent.postMessage(bridgeMessage, '*');
-      console.log('[Recorder Iframe] postMessage called successfully');
-    } catch (e) {
-      console.error('[Recorder Iframe] Failed to send message to parent:', e);
-    }
+  const start = () => {
+    window.parent.postMessage({ 
+      type: CONTENT_SCRIPT_MESSAGE_TYPE, 
+      message: { type: 'ACTUAL_START_RECORDING', data: { id: targetRecordingId } } 
+    }, '*');
   };
 
-  const startDomRecording = async (id: string) => {
-    console.log('[Recorder Iframe] Starting DOM recording with id:', id);
-
-    // Don't set isRecording yet - wait for confirmation from content script
-    setError(null);
-    console.log('[Recorder Iframe] State updated, waiting for confirmation');
-
-    try {
-      console.log('[Recorder Iframe] Attempting to set storage for ID tracking...');
-      await chrome.storage.local.set({
-        currentRecordingId: id,
-      });
-      console.log('[Recorder Iframe] Storage set successfully');
-
-      // Send actual start recording to background via content script
-      console.log('[Recorder Iframe] Calling sendToParent for ACTUAL_START_RECORDING...');
-      sendToParent({
-        type: 'ACTUAL_START_RECORDING',
-        data: { id },
-      });
-      console.log('[Recorder Iframe] sendToParent called for ACTUAL_START_RECORDING');
-
-      // Send started event to content script
-      console.log('[Recorder Iframe] Calling sendToParent for IFRAME_STARTED_RECORDING...');
-      sendToParent({
-        type: MessageType.IFRAME_STARTED_RECORDING,
-      });
-      console.log('[Recorder Iframe] sendToParent called for IFRAME_STARTED_RECORDING');
-
-      console.log('[Recorder Iframe] Waiting for confirmation from content script');
-    } catch (error) {
-      console.error('[Recorder Iframe] Error starting DOM recording:', error);
-      setError(error instanceof Error ? error.message : 'Failed to start recording');
-      setTargetRecordingId(null);
-      isStartingRef.current = false;
-      try {
-        await chrome.storage.local.remove(['isRecording', 'currentRecordingId']);
-      } catch (e) {
-        console.error('[Recorder Iframe] Failed to clear storage:', e);
-      }
-      sendToParent({
-        type: MessageType.IFRAME_CLOSED_OVERLAY,
-      });
-    }
-  };
-
-  const startRecording = () => {
-    // Prevent multiple clicks
-    if (isStartingRef.current) {
-      console.log('[Recorder Iframe] Already starting, ignoring click');
-      return;
-    }
-    
-    const currentId = targetRecordingIdRef.current;
-    if (currentId && !isRecordingRef.current) {
-      console.log('[Recorder Iframe] User clicked Start Recording, id:', currentId);
-      isStartingRef.current = true;
-      startDomRecording(currentId).finally(() => {
-        // Reset the guard after a short delay to allow future starts
-        setTimeout(() => {
-          isStartingRef.current = false;
-        }, 1000);
-      });
-    } else if (isRecordingRef.current) {
-      console.log('[Recorder Iframe] Already recording, ignoring click');
-    } else {
-      console.error('[Recorder Iframe] No targetRecordingId available');
-      setError('Recording ID not available');
-    }
-  };
-
-  const requestStopRecording = () => {
-    console.log('[Recorder Iframe] User clicked Stop Recording');
-    setIsRecording(false);
-    setTargetRecordingId(null);
-    sendToParent({
-      type: MessageType.STOP_RECORDING,
-    });
-  };
-
-  const cancelRecording = () => {
-    console.log('[Recorder Iframe] User cancelled recording');
-    isStartingRef.current = false;
-    setTargetRecordingId(null);
-    setIsRecording(false);
-    setError(null);
-    chrome.storage.local.remove(['isRecording', 'currentRecordingId']);
-    chrome.action.setBadgeText({ text: '' });
-    sendToParent({
-      type: MessageType.IFRAME_CLOSED_OVERLAY,
-    });
-  };
-
-  // Show nothing if no recording state
-  if (!isRecording && !targetRecordingId) {
-    console.log('[Recorder Iframe] Rendering: showing nothing (isRecording=false, targetRecordingId=null)');
-    return null;
+  if (view === 'editor') {
+    return (
+      <div style={{ background: 'white', padding: '40px', textAlign: 'center', height: '100vh' }}>
+        <h1 style={{ color: 'black' }}>Video Editor (Mock)</h1>
+        <p style={{ color: 'gray' }}>Recording ID: {targetRecordingId}</p>
+        <button onClick={() => window.parent.postMessage({ type: CONTENT_SCRIPT_MESSAGE_TYPE, message: { type: 'IFRAME_CLOSED_OVERLAY' } }, '*')} style={{ padding: '10px 20px', background: '#000', color: '#fff', borderRadius: '8px', cursor: 'pointer' }}>
+          Close Modal
+        </button>
+      </div>
+    );
   }
 
-  console.log('[Recorder Iframe] Rendering: isRecording=', isRecording, 'targetRecordingId=', targetRecordingId);
+  if (!isRecording && !targetRecordingId) return null;
 
   return (
-    <div
-      className="fixed inset-0 flex items-center justify-center p-6"
-      style={{
-        width: '100%',
-        height: '100%',
-        pointerEvents: isRecording ? 'none' : 'auto',
-        display: 'flex',
-        flexDirection: 'column',
-        justifyContent: isRecording ? 'flex-end' : 'center',
-        alignItems: isRecording ? 'flex-end' : 'center',
-      }}
-    >
-      {/* Confirmation Popup - shown when not recording but have a target ID */}
-      {!isRecording && targetRecordingId && (
-        <div
-          className="bg-white rounded-2xl p-6 shadow-2xl max-w-sm w-full text-center border border-gray-100"
-          style={{
-            pointerEvents: 'auto',
-            padding: '24px',
-            borderRadius: '16px',
-            boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
-            border: '1px solid #f3f4f6',
-          }}
-        >
-          <h2
-            style={{
-              fontSize: '20px',
-              fontWeight: 'bold',
-              marginBottom: '8px',
-              color: '#111827',
-            }}
-          >
-            Ready to Record
-          </h2>
-          <p
-            style={{
-              fontSize: '14px',
-              color: '#4b5563',
-              marginBottom: '16px',
-            }}
-          >
-            Click the button below to select what you want to share and start recording.
-          </p>
-
-          {error && (
-            <div
-              style={{
-                backgroundColor: '#fef2f2',
-                borderColor: '#fecaca',
-                borderRadius: '8px',
-                padding: '12px',
-                marginBottom: '16px',
-                border: '1px solid #fecaca',
-              }}
-            >
-              <p style={{ fontSize: '12px', color: '#dc2626' }}>
-                {error}
-              </p>
-            </div>
-          )}
-
-          <div
-            style={{
-              display: 'flex',
-              gap: '12px',
-              justifyContent: 'center',
-            }}
-          >
-            <button
-              onClick={cancelRecording}
-              style={{
-                padding: '8px 16px',
-                borderRadius: '9999px',
-                fontWeight: '500',
-                color: '#4b5563',
-                background: '#f3f4f6',
-                border: 'none',
-                cursor: 'pointer',
-              }}
-            >
-              Cancel
-            </button>
-            <button
-              onClick={startRecording}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-                padding: '8px 24px',
-                borderRadius: '9999px',
-                background: '#2563eb',
-                color: 'white',
-                border: 'none',
-                cursor: 'pointer',
-                fontWeight: '500',
-              }}
-            >
-              <Play size={16} />
-              Start Recording
-            </button>
-          </div>
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh' }}>
+      {!isRecording ? (
+        <div style={{ background: 'white', padding: '32px', borderRadius: '16px', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)', textAlign: 'center', border: '1px solid #eee' }}>
+          <h2 style={{ color: 'black', margin: '0 0 8px 0' }}>Ready to Record</h2>
+          <p style={{ color: 'gray', margin: '0 0 24px 0' }}>Debug Build: Communication Check</p>
+          <button onClick={start} style={{ background: '#2563eb', color: 'white', border: 'none', padding: '12px 24px', borderRadius: '8px', cursor: 'pointer', fontSize: '16px', fontWeight: 'bold' }}>
+            Start Recording
+          </button>
         </div>
-      )}
-
-      {/* Recording UI - removed and moved to floating trigger capsule */}
-      {isRecording && null}
+      ) : null}
     </div>
   );
 };

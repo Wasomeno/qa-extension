@@ -109,18 +109,18 @@ export const useAgent = (options?: UseAgentOptions) => {
 
         port.onMessage.addListener(msg => {
           const { event, data } = msg;
-          console.log(`[useAgent] Received Port Event: "${event}"`, data);
+          
 
           switch (event) {
             case 'progress':
               if (data && data.message) {
-                console.log(`[useAgent] Progress update: ${data.message}`);
+                
                 setProgressMessage(data.message);
               }
               break;
 
             case 'final':
-              console.log('[useAgent] Final response received. Data:', data);
+              
               setIsAgentLoading(false);
               setProgressMessage(null);
               activeSessionIdRef.current = null;
@@ -146,19 +146,16 @@ export const useAgent = (options?: UseAgentOptions) => {
                 );
               }
 
-              console.log('[useAgent] Disconnecting port after final event');
+              
               port.disconnect();
               break;
 
             case 'heartbeat':
-              console.log('[useAgent] Heartbeat received');
+              
               break;
 
             case 'message':
-              console.log(
-                '[useAgent] Raw message event received (unexpected for this backend):',
-                data
-              );
+              
               break;
 
             case 'error':
@@ -179,17 +176,15 @@ export const useAgent = (options?: UseAgentOptions) => {
               break;
 
             default:
-              console.log(`[useAgent] Unhandled event type: ${event}`);
+              
           }
         });
 
         port.onDisconnect.addListener(() => {
-          console.log('[useAgent] Port disconnected');
+          
           setIsAgentLoading(current => {
             if (current) {
-              console.log(
-                '[useAgent] Port disconnected while loading, clearing loading state'
-              );
+              
               setProgressMessage(null);
               activeSessionIdRef.current = null;
               return false;

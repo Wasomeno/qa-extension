@@ -122,7 +122,7 @@ const MainMenuPageInner: React.FC = () => {
             scenario={current.params}
             onClose={() => pop()}
             onGenerate={(sheets) => {
-              console.log('Generate for sheets:', sheets);
+              
             }}
             onDelete={() => {
               pop();

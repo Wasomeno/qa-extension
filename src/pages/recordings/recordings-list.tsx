@@ -106,7 +106,7 @@ export const RecordingsPage: React.FC<{
       }
 
       const result = await listRecordings(params);
-      console.log('API Response for recordings:', result);
+      
       // Handle both array response and paginated response { data: [...] }
       if (
         result &&

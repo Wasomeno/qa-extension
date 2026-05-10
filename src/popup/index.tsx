@@ -25,7 +25,7 @@ const Avatar: React.FC<{ src?: string; alt?: string }> = ({ src, alt }) => {
   const [imgError, setImgError] = useState(false);
   const [imgLoaded, setImgLoaded] = useState(false);
 
-  console.log('[Avatar] Render - src:', src, 'imgError:', imgError, 'imgLoaded:', imgLoaded);
+  
 
   return (
     <div className="w-12 h-12 rounded-full bg-gray-300 flex items-center justify-center overflow-hidden">
@@ -36,11 +36,11 @@ const Avatar: React.FC<{ src?: string; alt?: string }> = ({ src, alt }) => {
           className={`w-full h-full object-cover ${imgLoaded ? '' : 'hidden'}`}
           onLoad={() => {
             setImgLoaded(true);
-            console.log('[Avatar] Image loaded successfully:', src);
+            
           }}
           onError={() => {
             setImgError(true);
-            console.log('[Avatar] Image failed to load:', src);
+            
           }}
         />
       )}
@@ -79,8 +79,8 @@ const PopupApp: React.FC = () => {
     }
 
     const mapUserToUserData = (u: any): UserData => {
-      console.log('[mapUserToUserData] Input user object:', u);
-      console.log('[mapUserToUserData] avatar_url value:', u?.avatar_url);
+      
+      
       return {
         id: String(u.id),
         email: u.email || '',

@@ -202,7 +202,7 @@ const MainMenuInner: React.FC<MainMenuModalProps> = ({
             onClose={() => pop()}
             onGenerate={(sheets) => {
               // Handle generate - this would need to be connected to the test scenario API
-              console.log('Generate for sheets:', sheets);
+              
             }}
             onDelete={() => {
               // Handle delete

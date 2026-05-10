@@ -17,7 +17,19 @@ interface PendingRecording {
   telemetry?: any;
 }
 
-const VideoEditorPage: React.FC = () => {
+interface VideoEditorProps {
+  recordingId?: string;
+  isModal?: boolean;
+  onClose?: () => void;
+  onGenerateStarted?: () => void;
+}
+
+const VideoEditorPage: React.FC<VideoEditorProps> = ({ 
+  recordingId: propsRecordingId, 
+  isModal = false,
+  onClose,
+  onGenerateStarted
+}) => {
   const [recordingData, setRecordingData] = useState<PendingRecording | null>(null);
   const [videoBlob, setVideoBlob] = useState<Blob | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -40,16 +52,54 @@ const VideoEditorPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'events' | 'console' | 'network'>('events');
   const [title, setTitle] = useState('');
 
-  // Get recording ID from URL params
-  const urlParams = new URLSearchParams(window.location.search);
-  const recordingId = urlParams.get('id');
+  // Get recording ID from URL params or props
+  const urlParams = useMemo(() => new URLSearchParams(window.location.search), []);
+  const recordingId = propsRecordingId || urlParams.get('id');
+  const isModalFromUrl = urlParams.get('modal') === 'true';
+  const finalIsModal = isModal || isModalFromUrl;
+
+  useEffect(() => {
+    if (finalIsModal) {
+      document.body.style.backgroundColor = 'transparent';
+      document.documentElement.style.backgroundColor = 'transparent';
+      
+      // Also remove any classes that might set background
+      document.body.classList.remove('bg-background');
+    }
+  }, [finalIsModal]);
+
+  // Direct IndexedDB access to avoid message passing bottlenecks
+  const getVideoBlobFromIndexedDB = async (key: string): Promise<Blob | null> => {
+    return new Promise((resolve, reject) => {
+      const DB_NAME = 'flowg-video-storage';
+      const STORE_NAME = 'video-blobs';
+      
+      const request = indexedDB.open(DB_NAME, 1);
+      
+      request.onerror = () => reject(request.error);
+      
+      request.onsuccess = () => {
+        const db = request.result;
+        try {
+          const transaction = db.transaction(STORE_NAME, 'readonly');
+          const store = transaction.objectStore(STORE_NAME);
+          const getRequest = store.get(key);
+          
+          getRequest.onerror = () => reject(getRequest.error);
+          getRequest.onsuccess = () => resolve(getRequest.result || null);
+        } catch (e) {
+          reject(e);
+        }
+      };
+    });
+  };
 
   useEffect(() => {
     const handleMessage = (message: any) => {
       if (message.type === MessageType.BLUEPRINT_GENERATED) {
         const blueprint = message.data?.blueprint;
         if (blueprint && blueprint.id === recordingId) {
-          console.log('[VideoEditor] Blueprint generated successfully:', blueprint);
+          
           setGeneratedBlueprint(blueprint);
           setIsGenerated(true);
           setIsSubmitting(false);
@@ -68,7 +118,7 @@ const VideoEditorPage: React.FC = () => {
       return;
     }
 
-    console.log('[VideoEditor] Fetching recording data for ID:', recordingId);
+    
     // Fetch pending recording data from background
     chrome.runtime.sendMessage(
       {
@@ -78,11 +128,11 @@ const VideoEditorPage: React.FC = () => {
       (response) => {
         if (response?.success && response.data) {
           const data = response.data;
-          console.log('[VideoEditor] Received recording data:', data);
+          
           const initialDuration = (data.endTime - data.startTime) / 1000;
           
           setRecordingData(data);
-          console.log('RECORDING_DATA_FULL:', data);
+          
           if (data.title) {
             setTitle(data.title);
           }
@@ -101,18 +151,43 @@ const VideoEditorPage: React.FC = () => {
 
   const fetchVideoBlob = async (blobKey: string) => {
     try {
-      console.log('[VideoEditor] Fetching video blob for key:', blobKey);
-      // Request blob from offscreen document via background
+      
+      
+      try {
+        const blob = await getVideoBlobFromIndexedDB(blobKey);
+        
+        if (blob) {
+          
+          setVideoBlob(blob);
+          
+          if (finalIsModal) {
+            window.parent.postMessage({ 
+              type: '__QA_EXTENSION_MESSAGE__', 
+              message: { type: 'RESIZE_IFRAME', data: { pointerEvents: 'auto' } } 
+            }, '*');
+          }
+          
+          setIsLoading(false);
+          return;
+        } else {
+          
+        }
+      } catch (idbError) {
+        console.error('[VideoEditor] IndexedDB access failed, falling back:', idbError);
+      }
+      
+      // Fallback if IndexedDB fails or is unavailable
       chrome.runtime.sendMessage(
         { type: 'GET_VIDEO_BLOB', data: { key: blobKey } },
         (response) => {
           if (response?.success && response.data?.videoData) {
-            console.log('[VideoEditor] Received video data, size:', response.data.size);
             
-            // Check if videoData is an object with numeric keys (standard serialization for Uint8Array in some environments)
+
             let rawData = response.data.videoData;
+            
+            // Fix: If videoData is an object-wrapped Uint8Array (common with serialization)
             if (rawData && typeof rawData === 'object' && !Array.isArray(rawData) && !(rawData instanceof Uint8Array)) {
-              console.log('[VideoEditor] Converting object-based Uint8Array to actual Uint8Array');
+              
               const keys = Object.keys(rawData).map(Number).sort((a, b) => a - b);
               const arr = new Uint8Array(keys.length);
               for (let i = 0; i < keys.length; i++) {
@@ -121,21 +196,29 @@ const VideoEditorPage: React.FC = () => {
               rawData = arr;
             }
 
-            const blob = new Blob([rawData instanceof Uint8Array ? rawData : new Uint8Array(rawData)], {
-              type: response.data.type || 'video/webm',
+            const blob = new Blob([rawData instanceof Uint8Array ? rawData : new Uint8Array(rawData)], { 
+              type: response.data.type || 'video/webm' 
             });
-            console.log('[VideoEditor] Created blob:', blob.size, blob.type);
             setVideoBlob(blob);
+            
+            if (finalIsModal) {
+              window.parent.postMessage({ 
+                type: '__QA_EXTENSION_MESSAGE__', 
+                message: { type: 'RESIZE_IFRAME', data: { pointerEvents: 'auto' } } 
+              }, '*');
+            }
+            
+            setIsLoading(false);
           } else {
             console.error('[VideoEditor] Failed to fetch video blob:', response?.error);
-            setError('Failed to load video: ' + (response?.error || 'Unknown error'));
+            setError(response?.error || 'Failed to load video data');
+            setIsLoading(false);
           }
-          setIsLoading(false);
         }
       );
-    } catch (err) {
-      console.error('[VideoEditor] Exception fetching blob:', err);
-      setError('Failed to load video data');
+    } catch (e) {
+      console.error('[VideoEditor] Error fetching video:', e);
+      setError('Failed to fetch video blob');
       setIsLoading(false);
     }
   };
@@ -144,8 +227,8 @@ const VideoEditorPage: React.FC = () => {
     if (videoRef.current) {
       const time = videoRef.current.currentTime;
       
-      // If playing, enforce trimEnd constraint
-      if (!videoRef.current.paused) {
+      // Enforce trim boundaries during playback
+      if (isPlaying) {
         if (time >= trimEnd) {
           videoRef.current.pause();
           videoRef.current.currentTime = trimStart;
@@ -168,13 +251,13 @@ const VideoEditorPage: React.FC = () => {
   const handleLoadedMetadata = () => {
     if (videoRef.current) {
       let videoDuration = videoRef.current.duration;
-      console.log('[VideoEditor] Metadata loaded. Raw duration:', videoDuration);
+      
       
       // Fallback for Infinity or invalid duration (common in MediaRecorder WebM)
       if (videoDuration === Infinity || isNaN(videoDuration) || videoDuration <= 0) {
         if (recordingData) {
           videoDuration = (recordingData.endTime - recordingData.startTime) / 1000;
-          console.log('[VideoEditor] Duration invalid, using fallback:', videoDuration);
+          
         }
       }
       
@@ -229,7 +312,7 @@ const VideoEditorPage: React.FC = () => {
           videoRef.current.currentTime = trimStart;
         }
         
-        console.log('[VideoEditor] Attempting to play from:', videoRef.current.currentTime);
+        
         const playPromise = videoRef.current.play();
         if (playPromise !== undefined) {
           playPromise.catch(err => {
@@ -261,6 +344,25 @@ const VideoEditorPage: React.FC = () => {
 
     setIsSubmitting(true);
     setError(null);
+
+    // If in modal mode, notify parent that generation started so it can show a toast
+    if (finalIsModal) {
+      window.parent.postMessage({ 
+        type: '__QA_EXTENSION_MESSAGE__', 
+        message: { 
+          type: 'GENERATION_STARTED', 
+          data: { 
+            recordingId: recordingData.recordingId,
+            title: title || recordingData.title 
+          } 
+        } 
+      }, '*');
+      
+      // Also call the callback if provided
+      if (onGenerateStarted) {
+        onGenerateStarted();
+      }
+    }
 
     chrome.runtime.sendMessage(
       {
@@ -301,90 +403,111 @@ const VideoEditorPage: React.FC = () => {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-screen bg-zinc-50">
-        <Loader2 className="w-8 h-8 animate-spin text-zinc-400" />
-        <span className="ml-3 text-zinc-500 font-medium">Loading recording...</span>
+      <div className={`h-screen text-zinc-900 flex flex-col font-sans relative overflow-hidden ${finalIsModal ? 'bg-black/60 backdrop-blur-sm p-4 md:p-8 animate-fade-in' : 'bg-zinc-50'}`}>
+        <div className={`${finalIsModal ? 'bg-zinc-50 rounded-3xl shadow-2xl overflow-hidden flex flex-col items-center justify-center h-[80vh] max-w-5xl mx-auto w-full animate-slide-in-from-bottom mt-auto mb-auto' : 'flex flex-col items-center justify-center h-full'}`}>
+          <Loader2 className="w-10 h-10 animate-spin text-zinc-900 mb-4" />
+          <h3 className="text-zinc-900 font-bold text-lg mb-1">Loading Editor</h3>
+          <p className="text-zinc-500 text-sm text-center">Preparing your recording for review...</p>
+        </div>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="flex flex-col items-center justify-center h-screen bg-zinc-50 p-6 text-center">
-        <div className="w-16 h-16 rounded-full bg-red-50 flex items-center justify-center mb-6 border border-red-100">
-          <X className="w-8 h-8 text-red-500" />
+      <div className={`h-screen text-zinc-900 flex flex-col font-sans relative overflow-hidden ${finalIsModal ? 'bg-black/60 backdrop-blur-sm p-4 md:p-8 animate-fade-in' : 'bg-zinc-50'}`}>
+        <div className={`${finalIsModal ? 'bg-zinc-50 rounded-3xl shadow-2xl overflow-hidden flex flex-col items-center justify-center h-[80vh] max-w-5xl mx-auto w-full animate-slide-in-from-bottom mt-auto mb-auto' : 'flex flex-col items-center justify-center h-full'}`}>
+          <div className="max-w-sm w-full p-8 text-center flex flex-col items-center">
+            <div className="w-16 h-16 rounded-full bg-red-50 flex items-center justify-center mx-auto mb-6 border border-red-100">
+              <X className="w-8 h-8 text-red-500" />
+            </div>
+            <p className="text-zinc-900 text-lg font-bold mb-2">Failed to load recording</p>
+            <p className="text-zinc-500 mb-8 max-w-sm mx-auto">{error}</p>
+            <button
+              onClick={() => {
+                if (finalIsModal) {
+                  window.parent.postMessage({ 
+                    type: '__QA_EXTENSION_MESSAGE__', 
+                    message: { type: 'IFRAME_CLOSED_OVERLAY' } 
+                  }, '*');
+                } else if (onClose) {
+                  onClose();
+                } else {
+                  window.close();
+                }
+              }}
+              className="px-6 py-2.5 bg-zinc-900 text-white rounded-xl hover:bg-zinc-800 transition-all shadow-md font-medium w-full"
+            >
+              Close Editor
+            </button>
+          </div>
         </div>
-        <p className="text-zinc-900 text-lg font-bold mb-2">Failed to load recording</p>
-        <p className="text-zinc-500 mb-8 max-w-sm mx-auto">{error}</p>
-        <button
-          onClick={() => window.close()}
-          className="px-6 py-2.5 bg-zinc-900 text-white rounded-xl hover:bg-zinc-800 transition-all shadow-md font-medium"
-        >
-          Close Editor
-        </button>
       </div>
     );
   }
 
   if (isGenerated && generatedBlueprint) {
     return (
-      <div className="min-h-screen bg-white text-zinc-900 flex flex-col items-center justify-center p-6 text-center">
-        <div className="w-20 h-20 rounded-full bg-emerald-50 flex items-center justify-center mb-6 border border-emerald-100">
-          <Check className="w-10 h-10 text-emerald-600" />
-        </div>
-        <h1 className="text-3xl font-bold mb-2">Test Blueprint Ready!</h1>
-        <p className="text-zinc-500 mb-8 max-w-md">
-          Your recording has been processed, trimmed, and analyzed by AI. 
-          The test steps and video are now available.
-        </p>
-        
-        <div className="grid grid-cols-1 gap-4 w-full max-w-sm">
-          <button
-            onClick={() => {
-              const url = chrome.runtime.getURL(`recording-detail.html?id=${generatedBlueprint.id}`);
-              window.location.href = url;
-            }}
-            className="w-full py-3 bg-zinc-900 hover:bg-zinc-800 text-white rounded-xl font-semibold transition-all shadow-md flex items-center justify-center gap-2"
-          >
-            <Clock className="w-5 h-5" />
-            View Test Details
-          </button>
-          <button
-            onClick={() => window.close()}
-            className="w-full py-3 bg-white hover:bg-zinc-50 text-zinc-900 rounded-xl font-semibold transition-all border border-zinc-200"
-          >
-            Close Editor
-          </button>
+      <div className={`h-screen text-zinc-900 flex flex-col font-sans relative overflow-hidden ${finalIsModal ? 'bg-black/60 backdrop-blur-sm p-4 md:p-8 animate-fade-in' : 'bg-zinc-50'}`}>
+        <div className={`${finalIsModal ? 'bg-zinc-50 rounded-3xl shadow-2xl overflow-hidden flex flex-col items-center justify-center h-[80vh] max-w-5xl mx-auto w-full animate-slide-in-from-bottom mt-auto mb-auto' : 'flex flex-col items-center justify-center h-full'}`}>
+          <div className="max-w-md w-full p-8 text-center flex flex-col items-center">
+            <div className="w-20 h-20 rounded-full bg-emerald-50 flex items-center justify-center mx-auto mb-6 border border-emerald-100">
+              <Check className="w-10 h-10 text-emerald-600" />
+            </div>
+            <h1 className="text-2xl font-bold mb-2">Test Blueprint Ready!</h1>
+            <p className="text-zinc-500 mb-8">
+              Your recording has been processed and analyzed.
+            </p>
+            
+            <div className="grid grid-cols-1 gap-4 w-full">
+              <button
+                onClick={() => {
+                  const url = chrome.runtime.getURL(`recording-detail.html?id=${generatedBlueprint.id}`);
+                  if (finalIsModal) {
+                    window.open(url, '_blank');
+                    // Send message to content script to close the modal
+                    window.parent.postMessage({ 
+                      type: '__QA_EXTENSION_MESSAGE__', 
+                      message: { type: 'IFRAME_CLOSED_OVERLAY' } 
+                    }, '*');
+                  } else {
+                    window.location.href = url;
+                  }
+                }}
+                className="w-full py-3 bg-zinc-900 hover:bg-zinc-800 text-white rounded-xl font-semibold transition-all shadow-md flex items-center justify-center gap-2"
+              >
+                <Clock className="w-5 h-5" />
+                View Test Details
+              </button>
+              <button
+                onClick={() => {
+                  if (finalIsModal) {
+                    window.parent.postMessage({ 
+                      type: '__QA_EXTENSION_MESSAGE__', 
+                      message: { type: 'IFRAME_CLOSED_OVERLAY' } 
+                    }, '*');
+                  } else if (onClose) {
+                    onClose();
+                  } else {
+                    window.close();
+                  }
+                }}
+                className="w-full py-3 bg-white hover:bg-zinc-50 text-zinc-900 rounded-xl font-semibold transition-all border border-zinc-200"
+              >
+                Close Editor
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="h-screen bg-zinc-50 text-zinc-900 flex flex-col font-sans relative overflow-hidden">
-      {/* Processing Overlay */}
-      {isSubmitting && (
-        <div className="absolute inset-0 z-[100] bg-white/90 backdrop-blur-md flex flex-col items-center justify-center text-center p-6">
-          <div className="relative w-24 h-24 mb-8">
-            <div className="absolute inset-0 border-4 border-zinc-100 rounded-full"></div>
-            <div className="absolute inset-0 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
-            <div className="absolute inset-0 flex items-center justify-center">
-              <Wand2 className="w-8 h-8 text-blue-500 animate-pulse" />
-            </div>
-          </div>
-          <h2 className="text-2xl font-bold mb-2 text-zinc-900">Generating Blueprint...</h2>
-          <p className="text-zinc-500 max-w-xs">
-            We're trimming your video and using AI to transcribe the steps. This takes about 10-20 seconds.
-          </p>
-          <div className="mt-8 flex items-center gap-2 text-xs text-zinc-400 uppercase tracking-widest font-medium">
-            <span className="w-2 h-2 rounded-full bg-blue-500 animate-ping"></span>
-            AI processing in progress
-          </div>
-        </div>
-      )}
-
-      {/* Top Navigation Bar */}
-      <header className="sticky top-0 z-50 flex items-center justify-between px-6 py-4 bg-white/80 backdrop-blur-md border-b border-zinc-200/80">
+    <div className={`h-screen text-zinc-900 flex flex-col font-sans relative overflow-hidden ${finalIsModal ? 'bg-black/60 backdrop-blur-sm p-4 md:p-8 animate-fade-in' : 'bg-zinc-50'}`}>
+      <div className={`${finalIsModal ? 'bg-zinc-50 rounded-3xl shadow-2xl overflow-hidden flex flex-col h-[80vh] max-w-5xl mx-auto w-full animate-slide-in-from-bottom mt-auto mb-auto' : 'flex flex-col h-full'}`}>
+        {/* Top Navigation Bar */}
+        <header className="sticky top-0 z-50 flex items-center justify-between px-6 py-4 bg-white/80 backdrop-blur-md border-b border-zinc-200/80">
         <div className="flex items-center gap-3">
           <div className="w-8 h-8 rounded-lg bg-zinc-100 flex items-center justify-center">
             <Scissors className="w-4 h-4 text-zinc-600" />
@@ -395,23 +518,40 @@ const VideoEditorPage: React.FC = () => {
           </div>
         </div>
 
-        <button
-          onClick={handleGenerateTest}
-          disabled={isSubmitting}
-          className="px-5 py-2.5 bg-zinc-900 hover:bg-zinc-800 disabled:bg-zinc-100 disabled:text-zinc-400 disabled:cursor-not-allowed text-white rounded-full font-medium transition-all flex items-center gap-2 shadow-sm"
-        >
-          {isSubmitting ? (
-            <>
-              <Loader2 className="w-4 h-4 animate-spin" />
-              Processing...
-            </>
-          ) : (
-            <>
-              <Wand2 className="w-4 h-4" />
-              Generate Test Blueprint
-            </>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={handleGenerateTest}
+            disabled={isSubmitting}
+            className="px-5 py-2.5 bg-zinc-900 hover:bg-zinc-800 disabled:bg-zinc-100 disabled:text-zinc-400 disabled:cursor-not-allowed text-white rounded-full font-medium transition-all flex items-center gap-2 shadow-sm"
+          >
+            {isSubmitting ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                Processing...
+              </>
+            ) : (
+              <>
+                <Wand2 className="w-4 h-4" />
+                Generate Test Blueprint
+              </>
+            )}
+          </button>
+
+          {finalIsModal && (
+            <button
+              onClick={() => {
+                window.parent.postMessage({ 
+                  type: '__QA_EXTENSION_MESSAGE__', 
+                  message: { type: 'IFRAME_CLOSED_OVERLAY' } 
+                }, '*');
+              }}
+              className="p-2 text-zinc-400 hover:text-zinc-600 hover:bg-zinc-50 rounded-full transition-colors"
+              title="Close Editor"
+            >
+              <X className="w-6 h-6" />
+            </button>
           )}
-        </button>
+        </div>
       </header>
 
       <main className="flex-1 w-full grid grid-cols-1 xl:grid-cols-[1fr_400px] overflow-hidden">
@@ -447,106 +587,104 @@ const VideoEditorPage: React.FC = () => {
                     {!isPlaying && (
                       <div className="absolute inset-0 flex items-center justify-center pointer-events-none bg-black/20 transition-all duration-300">
                         <div className="w-20 h-20 rounded-full bg-white/10 backdrop-blur-md flex items-center justify-center text-white border border-white/20 shadow-2xl group-hover/video:bg-white/20 transform group-hover/video:scale-105 transition-all">
-                          <Play className="w-10 h-10 ml-1.5 fill-white" />
+                          <Play className="w-8 h-8 fill-current ml-1" />
                         </div>
                       </div>
                     )}
                   </div>
-
-                  <div className="absolute bottom-0 left-0 right-0 p-8 pt-32 bg-gradient-to-t from-black/80 via-black/40 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                    <div className="flex flex-col gap-5">
-                      <div className="flex items-center justify-between text-[10px] text-white/80 px-2 font-mono tracking-widest font-bold uppercase">
-                        <div className="flex items-center gap-4">
-                          <span className="flex items-center gap-1.5">
-                            <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse"></span>
-                            Start: {formatTime(trimStart)}
-                          </span>
-                          <span className="w-px h-3 bg-white/20"></span>
-                          <span>End: {formatTime(trimEnd)}</span>
-                        </div>
-                        <div className="flex items-center gap-4">
-                          <span className="text-white/60">{formatTime(currentTime)} / {formatTime(duration)}</span>
-                          <span className="px-2 py-0.5 rounded bg-blue-600 text-white shadow-[0_0_12px_rgba(37,99,235,0.4)]">
-                            Selected: {formatTime(trimEnd - trimStart)}
-                          </span>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-6">
-                        <button
-                          onClick={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            togglePlay();
-                          }}
-                          className="w-14 h-14 flex-shrink-0 flex items-center justify-center bg-white/10 hover:bg-white/20 backdrop-blur-xl rounded-full transition-all text-white border border-white/20 shadow-xl hover:scale-105 active:scale-95 z-50"
-                        >
-                          {isPlaying ? <Pause className="w-6 h-6 fill-white" /> : <Play className="w-6 h-6 ml-1 fill-white" />}
-                        </button>
-                        
-                        <div className="flex-1">
-                          <TrimSlider 
-                            duration={duration}
-                            trimStart={trimStart}
-                            trimEnd={trimEnd}
-                            currentTime={currentTime}
-                            onTrimStartChange={(val) => { setTrimStart(val); handleSeek(val); }}
-                            onTrimEndChange={(val) => { setTrimEnd(val); handleSeek(val); }}
-                            onSeek={handleSeek}
-                            events={recordingData?.events}
-                            recordingStartTime={recordingData?.startTime}
-                          />
-                        </div>
-                      </div>
-                    </div>
-                  </div>
                 </>
               ) : (
-                <div className="absolute inset-0 bg-zinc-50 flex items-center justify-center">
-                  <Loader2 className="w-8 h-8 animate-spin text-zinc-300" />
+                <div className="flex flex-col items-center justify-center h-full text-zinc-500">
+                  <div className="w-16 h-16 rounded-2xl bg-zinc-800 flex items-center justify-center mb-4">
+                    <Loader2 className="w-8 h-8 animate-spin" />
+                  </div>
+                  <p className="text-sm font-medium">Loading video preview...</p>
                 </div>
               )}
+            </div>
+
+            {/* Timeline & Controls */}
+            <div className="bg-white rounded-2xl border border-zinc-200 p-6 shadow-sm">
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center gap-4">
+                  <button 
+                    onClick={() => togglePlay()}
+                    className="w-12 h-12 rounded-full bg-zinc-900 flex items-center justify-center text-white hover:bg-zinc-800 transition-all shadow-md active:scale-95"
+                  >
+                    {isPlaying ? <Pause className="w-5 h-5 fill-current" /> : <Play className="w-5 h-5 fill-current ml-0.5" />}
+                  </button>
+                  <div>
+                    <div className="text-lg font-bold tabular-nums text-zinc-900">
+                      {formatTime(currentTime)}
+                    </div>
+                    <div className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider">
+                      Current Time
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-8">
+                  <div className="text-right">
+                    <div className="text-sm font-bold text-zinc-900 tabular-nums">
+                      {formatTime(trimStart)}
+                    </div>
+                    <div className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider">Start</div>
+                  </div>
+                  <div className="h-8 w-px bg-zinc-100"></div>
+                  <div className="text-right">
+                    <div className="text-sm font-bold text-zinc-900 tabular-nums">
+                      {formatTime(trimEnd)}
+                    </div>
+                    <div className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider">End</div>
+                  </div>
+                  <div className="h-8 w-px bg-zinc-100"></div>
+                  <div className="text-right">
+                    <div className="text-sm font-bold text-blue-600 tabular-nums">
+                      {formatTime(trimEnd - trimStart)}
+                    </div>
+                    <div className="text-[10px] text-blue-400 font-bold uppercase tracking-wider">Duration</div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="px-2">
+                <TrimSlider
+                  duration={duration}
+                  trimStart={trimStart}
+                  trimEnd={trimEnd}
+                  currentTime={currentTime}
+                  onChange={(start, end) => {
+                    setTrimStart(start);
+                    setTrimEnd(end);
+                  }}
+                  onSeek={handleSeek}
+                />
+              </div>
             </div>
           </div>
         </div>
 
-        {/* Right Column: Metadata & Insights */}
-        <div className="h-full bg-white flex flex-col border-l border-zinc-200 shadow-[-1px_0_10px_rgba(0,0,0,0.02)] overflow-hidden">
-          
-          <div className="p-6 space-y-6 flex-1 flex flex-col min-h-0">
-            {/* 1. Title */}
-            <div className="space-y-3 shrink-0">
-              <div className="flex items-center gap-2 text-zinc-400 uppercase tracking-widest text-[10px] font-bold">
-                <Wand2 className="w-3 h-3" />
-                Test Title
-              </div>
-              <input
-                type="text"
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                placeholder="e.g., User Onboarding Flow"
-                className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-4 py-3 text-sm text-zinc-900 placeholder-zinc-400 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20 transition-all shadow-sm"
-              />
-            </div>
-
-            {/* 2. Events, Logs, and Network */}
-            <div className="flex-1 flex flex-col min-h-0 space-y-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2 text-zinc-400 uppercase tracking-widest text-[10px] font-bold">
-                  <Activity className="w-3 h-3" />
-                  Telemetry & Logs
-                </div>
-                {recordingData && (
-                  <div className="text-[10px] font-mono text-zinc-400">
-                    {recordingData.events.length} events
-                  </div>
-                )}
+        {/* Right Column: Events & Metadata */}
+        <div className="flex flex-col h-full overflow-hidden bg-zinc-50/50">
+          <div className="flex flex-col h-full p-6">
+            <div className="bg-white rounded-2xl border border-zinc-200 flex flex-col h-full shadow-sm overflow-hidden">
+              <div className="p-4 border-b border-zinc-100">
+                <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-1.5 block">
+                  Recording Title
+                </label>
+                <input
+                  type="text"
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  placeholder="e.g., Login flow with invalid credentials"
+                  className="w-full bg-zinc-50 border-none rounded-xl px-4 py-2.5 text-sm font-medium focus:ring-2 focus:ring-zinc-900 transition-all"
+                />
               </div>
 
-              <div className="flex p-1 bg-zinc-100 rounded-lg shrink-0">
+              <div className="flex gap-1 p-1.5 bg-zinc-100/50 mx-4 mt-4 rounded-lg">
                 {[
-                  { id: 'events', label: 'Events', icon: <MousePointer2 className="w-3 h-3" /> },
-                  { id: 'console', label: 'Console', icon: <Terminal className="w-3 h-3" />, count: recordingData?.telemetry?.consoleLogs?.length },
+                  { id: 'events', label: 'Steps', icon: <MousePointer2 className="w-3 h-3" />, count: recordingData?.events?.length },
+                  { id: 'console', label: 'Logs', icon: <Terminal className="w-3 h-3" />, count: recordingData?.telemetry?.consoleLogs?.length },
                   { id: 'network', label: 'Network', icon: <Activity className="w-3 h-3" />, count: recordingData?.telemetry?.networkRequests?.length }
                 ].map((tab) => (
                   <button
@@ -571,7 +709,7 @@ const VideoEditorPage: React.FC = () => {
                 ))}
               </div>
 
-              <div className="flex-1 overflow-y-auto border border-zinc-100 rounded-xl bg-zinc-50/30 p-2 custom-scrollbar">
+              <div className="flex-1 overflow-y-auto border border-zinc-100 rounded-xl bg-zinc-50/30 p-2 custom-scrollbar m-4 mt-2">
                 {activeTab === 'events' && recordingData && (
                   <div className="space-y-2">
                     {recordingData.events.map((event, i) => (
@@ -665,6 +803,7 @@ const VideoEditorPage: React.FC = () => {
         }
       `}} />
     </div>
+  </div>
   );
 };
 

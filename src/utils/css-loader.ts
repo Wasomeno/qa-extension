@@ -50,6 +50,7 @@ export async function loadShadowDOMCSS(): Promise<string> {
       .shadow-lg { box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05) !important; }
       .font-semibold { font-weight: 600 !important; }
       .text-sm { font-size: 0.875rem !important; }
+      [data-sonner-toast] { pointer-events: auto !important; }
     `;
   }
 }

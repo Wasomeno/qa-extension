@@ -989,10 +989,7 @@ export async function isElementActionable(element: Element): Promise<boolean> {
     return true;
   }
 
-  console.log(
-    `[Actionable] Occlusion check: Element at (${Math.round(centerX)}, ${Math.round(centerY)}) is blocked by:`,
-    elAtPoint
-  );
+  
   return false; // Covered by something else
 }
 
@@ -1416,7 +1413,7 @@ export function clearInputElement(element: Element): boolean {
       }
     }
 
-    console.log(`[clearInputElement] Cleared ${tagName}, old value: "${oldValue}"`);
+    
     return oldValue !== '';
   }
 
@@ -1427,11 +1424,11 @@ export function clearInputElement(element: Element): boolean {
     element.dispatchEvent(
       new Event('input', { bubbles: true, cancelable: true })
     );
-    console.log(`[clearInputElement] Cleared contenteditable, old value: "${oldValue}"`);
+    
     return oldValue !== '';
   }
 
-  console.log(`[clearInputElement] Element ${tagName} is not clearable`);
+  
   return false;
 }
 

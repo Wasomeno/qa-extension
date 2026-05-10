@@ -106,7 +106,7 @@ export const IssuesPage: React.FC<IssuesPageProps> = ({
     );
   }
 
-  console.log('ISSUEs', issues.data);
+  
 
   return (
     <div className="flex flex-1 w-full flex-col overflow-hidden">

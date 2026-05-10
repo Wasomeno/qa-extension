@@ -9,7 +9,7 @@ export function useGetIssue(projectId: number, id: number) {
     refetchOnReconnect: false,
   });
 
-  console.log('DATA', query.data);
+  
 
   return { ...query };
 }

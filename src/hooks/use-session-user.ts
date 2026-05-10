@@ -55,10 +55,10 @@ export const useSessionUser = () => {
     try {
       setLoading(true);
       const response = await getCurrentUser();
-      console.log('[useSessionUser] API response:', response);
+      
       if (response.success && response.data) {
-        console.log('[useSessionUser] User data:', response.data);
-        console.log('[useSessionUser] avatar_url:', response.data.avatar_url);
+        
+        
         setLoading(false);
         await setUser(response.data);
         // Also fetch and store session_id for background fetch fallback
@@ -68,7 +68,7 @@ export const useSessionUser = () => {
             await storeSessionId(sessionRes.data.session_id);
           }
         } catch (e) {
-          console.log('[useSessionUser] Failed to fetch session_id:', e);
+          
         }
         return response.data;
       } else {
@@ -76,7 +76,7 @@ export const useSessionUser = () => {
         await clearUser();
       }
     } catch (err) {
-      console.log('[useSessionUser] Error:', err);
+      
       setLoading(false);
       // Keep existing state on network error, but we could clear it here too if desired
     }

@@ -51,7 +51,7 @@ const StandaloneDetailApp = () => {
     const loadData = async () => {
       try {
         const result = await getRecording(id);
-        console.log('[StandaloneDetail] API result:', result);
+        
 
         if (!result || typeof result !== 'object') {
           setError('Invalid response from server');

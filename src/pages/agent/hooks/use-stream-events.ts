@@ -40,19 +40,19 @@ export const useStreamEvents = (options: UseStreamEventsOptions = {}) => {
     if (type) params.set('type', type);
 
     const url = `https://playground-qa-extension.online/api/stream${params.toString() ? `?${params.toString()}` : ''}`;
-    console.log('[useStreamEvents] Connecting to:', url);
+    
 
     const eventSource = new EventSource(url);
     eventSourceRef.current = eventSource;
 
     eventSource.onopen = () => {
-      console.log('[useStreamEvents] SSE connection opened');
+      
     };
 
     eventSource.onmessage = (event) => {
       try {
         const data: StreamEvent = JSON.parse(event.data);
-        console.log('[useStreamEvents] Received event:', data);
+        
         if (onEventRef.current) {
           onEventRef.current(data);
         }
@@ -68,7 +68,7 @@ export const useStreamEvents = (options: UseStreamEventsOptions = {}) => {
 
   const disconnect = useCallback(() => {
     if (eventSourceRef.current) {
-      console.log('[useStreamEvents] Disconnecting SSE');
+      
       eventSourceRef.current.close();
       eventSourceRef.current = null;
     }
