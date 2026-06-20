@@ -51,27 +51,11 @@ export interface MockIssue {
   relatedMrs?: any[]; // Avoiding circular dependency hell for now
   priority?: 'Low' | 'Medium' | 'High' | 'Urgent';
   mrStatus?: string;
-  pinnedMeta?: PinnedIssueMeta;
   mrId?: number;
   webUrl?: string;
   dueDate?: string;
 }
 
-export type PinColor =
-  | 'default'
-  | 'red'
-  | 'orange'
-  | 'yellow'
-  | 'green'
-  | 'blue'
-  | 'purple';
-
-export interface PinnedIssueMeta {
-  pinnedAt: string;
-  pinColor: PinColor;
-  note?: string;
-  projectId?: number;
-}
 export interface Milestone {
   id: string;
   title: string;

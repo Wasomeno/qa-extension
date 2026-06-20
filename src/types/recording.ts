@@ -87,8 +87,6 @@ export interface TestRecording {
   name: string;
   description?: string;
   status: string;
-  source_type?: 'manual' | 'test_scenario'; // "manual" | "test_scenario"
-  source_id?: string; // Links to test_scenario ID if source_type is "test_scenario"
   project_id?: string;
   project_name?: string;
   projectDetails?: ProjectDetails;
@@ -105,7 +103,6 @@ export interface TestRecording {
 export interface ListRecordingsParams {
   project_id?: string;
   issue_id?: string;
-  source_type?: 'manual' | 'test_scenario';
   sort_by?: 'created_at' | 'name';
   order?: 'desc' | 'asc';
 }
@@ -148,8 +145,6 @@ export interface TestBlueprint {
   id: string;
   name: string;
   description: string;
-  source_type?: 'manual' | 'test_scenario'; // "manual" | "test_scenario"
-  source_id?: string; // Links to test_scenario ID if source_type is "test_scenario"
   baseUrl?: string;
   project_id?: number;
   project_name?: string;

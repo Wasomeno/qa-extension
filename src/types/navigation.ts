@@ -1,19 +1,9 @@
 export type ViewType =
   | 'issues'
   | 'issue-detail'
-  | 'boards'
-  | 'pinned'
   | 'create-issue'
   | 'profile'
-  | 'agent'
-  | 'chat-sessions'
-  | 'chat-view'
-  | 'fix-sessions'
-  | 'fix-session-detail'
   | 'recordings'
-  | 'test-scenarios'
-  | 'test-scenario-detail'
-
   | 'login'
   | 'loading'
   | 'recording-detail';

@@ -22,9 +22,6 @@ export enum MessageType {
   AUTH_GET_SESSION = 'AUTH_GET_SESSION',
   AUTH_LOGOUT = 'AUTH_LOGOUT',
   AUTH_SESSION_UPDATED = 'AUTH_SESSION_UPDATED',
-  CREATE_MERGE_REQUEST = 'CREATE_MERGE_REQUEST',
-  GET_PROJECT_BRANCHES = 'GET_PROJECT_BRANCHES',
-  GET_MERGE_REQUESTS = 'GET_MERGE_REQUESTS',
   START_RECORDING = 'START_RECORDING',
   ACTUAL_START_RECORDING = 'ACTUAL_START_RECORDING',
   STOP_RECORDING = 'STOP_RECORDING',
@@ -60,9 +57,6 @@ export enum MessageType {
   BLUEPRINT_GENERATED = 'BLUEPRINT_GENERATED',
   GET_VIDEO_THUMBNAIL = 'GET_VIDEO_THUMBNAIL',
   UPDATE_BLUEPRINT = 'UPDATE_BLUEPRINT',
-  AGENT_CHAT_SSE = 'AGENT_CHAT_SSE',
-  AGENT_FIX_ISSUE_SSE = 'AGENT_FIX_ISSUE_SSE',
-  TEST_SCENARIO_UPLOAD = 'TEST_SCENARIO_UPLOAD',
   START_VIDEO_CAPTURE = 'START_VIDEO_CAPTURE',
   STOP_VIDEO_CAPTURE = 'STOP_VIDEO_CAPTURE',
   VIDEO_CAPTURE_COMPLETE = 'VIDEO_CAPTURE_COMPLETE',
@@ -143,21 +137,6 @@ export interface IssueData {
   browserContext?: any;
   errorDetails?: any;
   checkDuplicates?: boolean;
-  // Optional Slack notification fields
-  slackChannelId?: string;
-  slackUserIds?: string[];
-}
-
-export interface MergeRequestData {
-  projectId: string;
-  sourceBranch: string;
-  targetBranch: string;
-  title: string;
-  description?: string;
-  assigneeIds?: number[];
-  reviewerIds?: number[];
-  removeSourceBranch?: boolean;
-  squash?: boolean;
   // Optional Slack notification fields
   slackChannelId?: string;
   slackUserIds?: string[];

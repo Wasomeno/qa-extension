@@ -15,6 +15,8 @@ declare global {
       R2_ACCESS_KEY_ID?: string;
       R2_SECRET_ACCESS_KEY?: string;
       R2_PUBLIC_DOMAIN?: string;
+      QA_WEB_APP_URL?: string;
+      VITE_QA_WEB_APP_URL?: string;
     };
   };
 
