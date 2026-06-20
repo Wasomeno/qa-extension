@@ -26,17 +26,8 @@ async function request<T>(
       });
     }
 
-    const isFormData = options.body instanceof FormData;
-    let finalBody: any = options.body;
-    let finalHeaders = { ...headers };
-
-    if (isFormData) {
-      // Background bridge cannot serialize FormData directly via sendMessage
-      // Instead of relying on api.post intercepting FormData, let's just use the normal JSON path
-      // if it's not FormData. Wait, for FormData we must extract the file to Base64 first!
-      // But `request` is sync (await bridgeFetch). We can't easily async iterate FormData here reliably without FileReader.
-      // So instead, we let the specific `uploadScenario` use the `TEST_SCENARIO_UPLOAD` message directly OR we fix API service.
-    }
+    const finalBody: any = options.body;
+    const finalHeaders = { ...headers };
 
     const resp = await bridgeFetch<T>({
       url,
@@ -58,8 +49,10 @@ async function request<T>(
       );
       return {
         success: false,
-        error: `API Error: ${resp.status} ${resp.statusText}`,
-        // message: resp.body,
+        error:
+          (resp.body as any)?.error ||
+          (resp.body as any)?.message ||
+          `API Error: ${resp.status} ${resp.statusText}`,
       };
     }
 
@@ -71,7 +64,7 @@ async function request<T>(
     console.error(`[API Service] Network error for ${endpoint}:`, error);
     return {
       success: false,
-      // error: error?.message || 'Network error calling GitLab API',
+      error: (error as Error)?.message || 'Network error calling API',
     };
   }
 }

@@ -18,7 +18,7 @@ export class AIProcessor {
     telemetry?: SessionTelemetry
   ): Promise<TestBlueprint> {
     const model = this.genAI.getGenerativeModel({
-      model: 'gemini-3-flash-preview',
+      model: 'gemini-3.1-flash-lite',
       generationConfig: {
         responseMimeType: 'application/json',
       },
@@ -26,20 +26,58 @@ export class AIProcessor {
 
     const prompt = this.constructPrompt(events, startUrl, telemetry);
 
-    try {
-      const result = await model.generateContent(prompt);
-      const response = await result.response;
-      const text = response.text();
+    return this.retryWithBackoff(() => this.callGemini(model, prompt), 3);
+  }
 
-      if (!text) {
-        throw new Error('Empty response from Gemini API');
-      }
+  private async callGemini(
+    model: ReturnType<GoogleGenerativeAI['getGenerativeModel']>,
+    prompt: string
+  ): Promise<TestBlueprint> {
+    const result = await model.generateContent(prompt);
+    const response = await result.response;
+    const text = response.text();
 
-      return JSON.parse(text) as TestBlueprint;
-    } catch (error) {
-      console.error('[AIProcessor] Error generating blueprint:', error);
-      throw error;
+    if (!text) {
+      throw new Error('Empty response from Gemini API');
     }
+
+    return JSON.parse(text) as TestBlueprint;
+  }
+
+  /**
+   * Retry with exponential backoff on 429/503 rate-limit errors.
+   */
+  private async retryWithBackoff<T>(
+    fn: () => Promise<T>,
+    maxRetries: number,
+    baseDelayMs: number = 1000
+  ): Promise<T> {
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        return await fn();
+      } catch (error: any) {
+        const isRetryable =
+          error?.status === 429 ||
+          error?.status === 503 ||
+          error?.message?.includes('429') ||
+          error?.message?.includes('503') ||
+          error?.message?.includes('RESOURCE_EXHAUSTED') ||
+          error?.message?.includes('UNAVAILABLE');
+
+        if (!isRetryable || attempt >= maxRetries) {
+          throw error;
+        }
+
+        const delay = baseDelayMs * Math.pow(2, attempt) + Math.random() * 500;
+        console.warn(
+          `[AIProcessor] Gemini API error (attempt ${attempt + 1}/${maxRetries}), retrying in ${Math.round(delay)}ms...`,
+          error?.message || error
+        );
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
+    }
+
+    throw new Error('Unreachable');
   }
 
   private constructPrompt(events: RawEvent[], startUrl?: string, telemetry?: SessionTelemetry): string {

@@ -3,7 +3,6 @@ import {
   GitLabProject,
   GitlabProjectLabel,
   GitLabProjectMember,
-  GetProjectBoardsResponse,
 } from '@/types/project';
 import { MessageType } from '@/types/messages';
 
@@ -18,10 +17,6 @@ export async function getProjects(searchParam?: string | any) {
 export async function getProjectById(projectId: number | string) {
   const response = await api.get<{ project: GitLabProject }>(`/projects/${projectId}`);
   return response;
-}
-
-export async function getProjectBoards(projectId: number) {
-  return api.get<GetProjectBoardsResponse>(`/projects/${projectId}/boards`);
 }
 
 export async function getProjectLabels(projectId: number) {
@@ -65,30 +60,4 @@ export async function uploadProjectFile(
       reader.readAsDataURL(file);
     }
   );
-}
-
-export interface GitLabBranch {
-  name: string;
-  merged: boolean;
-  protected: boolean;
-  default: boolean;
-  developers_can_push: boolean;
-  developers_can_merge: boolean;
-  can_push: boolean;
-  web_url: string;
-  commit: {
-    id: string;
-    short_id: string;
-    title: string;
-    author_name: string;
-    author_email: string;
-    authored_date: string;
-  };
-}
-
-export async function getProjectBranches(projectId: number | string) {
-  const response = await api.get<{ branches: GitLabBranch[] }>(
-    `/projects/${projectId}/branches`
-  );
-  return response;
 }
