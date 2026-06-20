@@ -1,7 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect } from 'react';
 import { createRoot } from 'react-dom/client';
-import { Toaster, toast } from 'sonner';
-import { GenerationStatusPanel } from '../../components/generation-status';
 import { shadowDOMManager } from '@/utils/shadow-dom';
 import { loadShadowDOMCSS } from '@/utils/css-loader';
 import { EventLogger } from './event-logger';
@@ -10,6 +8,23 @@ import { MessageType } from '@/types/messages';
 
 const IFRAME_ID = 'qa-recorder-iframe';
 const BRIDGE_MESSAGE_TYPE = '__QA_EXTENSION_MESSAGE__';
+const VIDEO_EDIT_GENERATION_STATUS_KEY = 'videoEditGenerationStatus';
+const VIDEO_EDIT_GENERATION_STATUS_EVENT = 'qa-video-edit-generation-status';
+
+type VideoEditGenerationStatus = 'idle' | 'generating' | 'success' | 'error';
+
+interface VideoEditGenerationPayload {
+  status: VideoEditGenerationStatus;
+  title?: string;
+  error?: string;
+  blueprintId?: string;
+  recordingId?: string;
+  updatedAt: number;
+}
+
+type VideoEditGenerationData = Partial<
+  Omit<VideoEditGenerationPayload, 'status' | 'updatedAt'>
+>;
 
 interface BridgeMessage {
   type: string;
@@ -30,47 +45,44 @@ let toastRoot: any = null;
 const pendingMessages: BridgeMessage[] = [];
 
 let generationStatusAPI: {
-  setStatus: (status: 'idle' | 'generating' | 'success' | 'error', data?: any) => void;
+  setStatus: (status: VideoEditGenerationStatus, data?: VideoEditGenerationData) => void;
 } | null = null;
 
-function AppRoot() {
-  const [genStatus, setGenStatus] = useState<'idle' | 'generating' | 'success' | 'error'>('idle');
-  const [genData, setGenData] = useState<any>({});
+function publishVideoEditGenerationStatus(
+  status: VideoEditGenerationStatus,
+  data: VideoEditGenerationData = {}
+) {
+  const payload: VideoEditGenerationPayload = {
+    ...data,
+    status,
+    updatedAt: Date.now(),
+  };
 
+  try {
+    window.dispatchEvent(
+      new CustomEvent(VIDEO_EDIT_GENERATION_STATUS_EVENT, { detail: payload })
+    );
+  } catch {
+    // Ignore cross-context notification failures.
+  }
+
+  try {
+    chrome.storage.local.set({ [VIDEO_EDIT_GENERATION_STATUS_KEY]: payload });
+  } catch {
+    // Ignore storage failures. The in-page event above is the primary signal.
+  }
+}
+
+function AppRoot() {
   useEffect(() => {
     generationStatusAPI = {
       setStatus: (status, data) => {
-        setGenStatus(status);
-        if (data) {
-          setGenData(prev => ({ ...prev, ...data }));
-        }
+        publishVideoEditGenerationStatus(status, data);
       }
     };
   }, []);
 
-  return (
-    <>
-      <Toaster 
-        position="bottom-right" 
-        richColors 
-        closeButton
-        toastOptions={{ style: { zIndex: 2147483647 } }}
-      />
-      <GenerationStatusPanel
-        status={genStatus}
-        title={genData.title}
-        error={genData.error}
-        blueprintId={genData.blueprintId}
-        onClose={() => setGenStatus('idle')}
-        onView={() => {
-          if (genData.blueprintId) {
-            window.open(chrome.runtime.getURL(`recording-detail.html?id=${genData.blueprintId}`), '_blank');
-          }
-          setGenStatus('idle');
-        }}
-      />
-    </>
-  );
+  return null;
 }
 
 async function setupToaster() {
@@ -176,7 +188,32 @@ async function doInitialize() {
     } else if (innerMessage?.type === 'GENERATION_STARTED') {
       const title = innerMessage.data?.title || 'Recording';
       if (generationStatusAPI) {
-        generationStatusAPI.setStatus('generating', { title });
+        generationStatusAPI.setStatus('generating', {
+          title,
+          recordingId: innerMessage.data?.recordingId,
+        });
+      } else {
+        publishVideoEditGenerationStatus('generating', {
+          title,
+          recordingId: innerMessage.data?.recordingId,
+        });
+      }
+      setIframeStyles('hidden');
+    } else if (innerMessage?.type === 'GENERATION_FAILED') {
+      const title = innerMessage.data?.title || 'Recording';
+      const error = innerMessage.data?.error || 'Failed to start generation';
+      if (generationStatusAPI) {
+        generationStatusAPI.setStatus('error', {
+          title,
+          error,
+          recordingId: innerMessage.data?.recordingId,
+        });
+      } else {
+        publishVideoEditGenerationStatus('error', {
+          title,
+          error,
+          recordingId: innerMessage.data?.recordingId,
+        });
       }
       setIframeStyles('hidden');
     } else if (innerMessage?.type === 'ACTUAL_START_RECORDING') {
@@ -283,14 +320,18 @@ async function doInitialize() {
       case MessageType.BLUEPRINT_PROCESSING:
         if (generationStatusAPI) {
           generationStatusAPI.setStatus('generating');
+        } else {
+          publishVideoEditGenerationStatus('generating');
         }
         break;
 
-      case MessageType.BLUEPRINT_GENERATED:
+      case MessageType.BLUEPRINT_GENERATED: {
         const blueprint = message.data?.blueprint;
-        if (blueprint?.status === 'error') {
+        if (blueprint?.status === 'error' || blueprint?.status === 'failed') {
           if (generationStatusAPI) {
             generationStatusAPI.setStatus('error', { error: blueprint.error });
+          } else {
+            publishVideoEditGenerationStatus('error', { error: blueprint.error });
           }
         } else {
           if (generationStatusAPI) {
@@ -298,9 +339,15 @@ async function doInitialize() {
               title: blueprint?.name,
               blueprintId: blueprint?.id 
             });
+          } else {
+            publishVideoEditGenerationStatus('success', {
+              title: blueprint?.name,
+              blueprintId: blueprint?.id,
+            });
           }
         }
         break;
+      }
     }
     return true;
   });

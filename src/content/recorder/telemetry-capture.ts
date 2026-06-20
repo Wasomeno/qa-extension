@@ -21,6 +21,7 @@ export class TelemetryCapture {
   private originalFetch: typeof fetch | null = null;
   private originalXHROpen: typeof XMLHttpRequest.prototype.open | null = null;
   private originalXHRSend: typeof XMLHttpRequest.prototype.send | null = null;
+  private mainWorldMessageHandler: ((event: MessageEvent) => void) | null = null;
   private startTime = 0;
   private recordingId = '';
 
@@ -48,6 +49,7 @@ export class TelemetryCapture {
     this.patchConsole();
     this.patchErrors();
     this.patchNetwork();
+    this.injectMainWorldNetworkBridge();
     this.startMutationObserver();
     this.captureStorageSnapshot();
 
@@ -444,65 +446,6 @@ export class TelemetryCapture {
       }
     }
 
-    // Use PerformanceObserver to catch resource timing
-    this.setupPerformanceObserver();
-  }
-
-  private setupPerformanceObserver() {
-    if (typeof PerformanceObserver === 'undefined') return;
-
-    try {
-      const self = this;
-      let requestId = 0;
-
-      const observer = new PerformanceObserver((list) => {
-        for (const entry of list.getEntries()) {
-          if (entry.entryType === 'resource') {
-            const resource = entry as PerformanceResourceTiming;
-            const url = resource.name;
-            const method = (resource as any).initiatorType || 'unknown';
-            
-            // Skip chrome-extension and non-http URLs
-            if (!url || url.includes('chrome-extension://') || !url.startsWith('http')) {
-              continue;
-            }
-
-            
-
-            // Only capture if we haven't captured this URL recently
-            const entryKey = `perf-${url}`;
-            if (!(window as any).__qaLastCapture || (Date.now() - ((window as any).__qaLastCapture[entryKey] || 0)) > 100) {
-              (window as any).__qaLastCapture = (window as any).__qaLastCapture || {};
-              (window as any).__qaLastCapture[entryKey] = Date.now();
-
-              // Check if we already have this via fetch/XHR
-              const alreadyCaptured = self.networkRequests.some(r => r.url === url);
-              if (!alreadyCaptured) {
-                
-                self.networkRequests.push({
-                  requestId: `perf-${++requestId}`,
-                  url,
-                  method: method.toUpperCase(),
-                  timestamp: Date.now() - resource.duration,
-                  durationMs: resource.duration,
-                  requestHeaders: {},
-                  responseHeaders: {},
-                });
-                
-              }
-            }
-          }
-        }
-      });
-
-      observer.observe({ entryTypes: ['resource'] });
-      
-      
-      // Store reference for cleanup
-      (this as any).__performanceObserver = observer;
-    } catch (e) {
-      
-    }
   }
 
   private patchNetwork() {
@@ -530,11 +473,6 @@ export class TelemetryCapture {
     
     // Test the fetch interception by making a test request
     
-    fetch('https://httpbin.org/get').then(() => {
-      
-    }).catch(e => {
-      
-    });
     window.fetch = async function(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
       const startTime = Date.now();
       const id = `fetch-${++requestId}`;
@@ -763,6 +701,47 @@ export class TelemetryCapture {
     
   }
 
+  private injectMainWorldNetworkBridge() {
+    if (typeof document === 'undefined' || typeof chrome === 'undefined') return;
+
+    if (this.mainWorldMessageHandler) {
+      window.removeEventListener('message', this.mainWorldMessageHandler);
+    }
+
+    this.mainWorldMessageHandler = this.handleMainWorldMessage.bind(this);
+    window.addEventListener('message', this.mainWorldMessageHandler);
+
+    const existing = document.getElementById('__qa-network-bridge__');
+    if (existing) return;
+
+    const script = document.createElement('script');
+    script.id = '__qa-network-bridge__';
+    script.src = chrome.runtime.getURL('main-world-network-bridge.js');
+    script.async = true;
+
+    const target = document.head || document.documentElement;
+    if (!target) return;
+
+    target.appendChild(script);
+    script.onload = () => script.remove();
+  }
+
+  private handleMainWorldMessage(event: MessageEvent) {
+    if (event.source !== window) return;
+    const data = event.data;
+    if (!data || data.source !== '__QA_EXTENSION_NETWORK_BRIDGE__' || !data.payload) {
+      return;
+    }
+
+    this.networkRequests.push(data.payload);
+
+    if (this.networkRequests.length % 20 === 0) {
+      this.flushToBackground();
+    } else if (this.onTelemetryUpdate) {
+      this.onTelemetryUpdate({ networkRequests: this.networkRequests });
+    }
+  }
+
   private restoreNetwork() {
     // Restore fetch
     if (this.originalFetch) {
@@ -776,6 +755,12 @@ export class TelemetryCapture {
       XMLHttpRequest.prototype.send = this.originalXHRSend;
       this.originalXHROpen = null;
       this.originalXHRSend = null;
+    }
+
+    // Stop listening to the main-world bridge
+    if (this.mainWorldMessageHandler) {
+      window.removeEventListener('message', this.mainWorldMessageHandler);
+      this.mainWorldMessageHandler = null;
     }
   }
 }
