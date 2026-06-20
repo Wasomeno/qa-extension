@@ -61,6 +61,8 @@ async function trimVideo(
 }
 import { MessageType } from '../types/messages';
 
+const MAX_RUNTIME_VIDEO_BYTES = 4 * 1024 * 1024;
+
 let mediaRecorder: MediaRecorder | null = null;
 let recordedChunks: BlobPart[] = [];
 let currentRecordingId: string | null = null;
@@ -94,8 +96,22 @@ async function storeVideoBlob(key: string, blob: Blob): Promise<void> {
     const store = transaction.objectStore(STORE_NAME);
     const request = store.put(blob, key);
     
-    request.onerror = () => reject(request.error);
-    request.onsuccess = () => resolve();
+    request.onerror = () => {
+      db.close();
+      reject(request.error);
+    };
+    transaction.oncomplete = () => {
+      db.close();
+      resolve();
+    };
+    transaction.onerror = () => {
+      db.close();
+      reject(transaction.error);
+    };
+    transaction.onabort = () => {
+      db.close();
+      reject(transaction.error);
+    };
   });
 }
 
@@ -168,6 +184,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     getVideoBlob(key)
       .then(blob => {
         if (blob) {
+          if (blob.size > MAX_RUNTIME_VIDEO_BYTES) {
+            sendResponse({
+              success: false,
+              error: 'Video is too large to transfer through runtime messaging; read it directly from IndexedDB'
+            });
+            return;
+          }
+
           // Use a faster way to transfer data: Base64 string or Uint8Array
           // Array.from() is extremely slow for large videos and crashes the browser
           blob.arrayBuffer().then(buffer => {
@@ -191,18 +215,21 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       .catch(err => sendResponse({ success: false, error: err.message }));
     return true;
   } else if (message.type === 'TRIM_VIDEO') {
-    const { key, trimStart, trimEnd } = message.data;
+    const { key, trimStart, trimEnd, outputKey } = message.data;
     trimVideo(key, trimStart, trimEnd)
       .then(blob => {
-        blob.arrayBuffer().then(buffer => {
+        const trimmedKey = outputKey || `${key}-trimmed-${Date.now()}`;
+        storeVideoBlob(trimmedKey, blob).then(() => {
           sendResponse({
             success: true,
             data: {
-              videoData: new Uint8Array(buffer),
+              videoBlobKey: trimmedKey,
               type: blob.type,
               size: blob.size
             }
           });
+        }).catch(err => {
+          sendResponse({ success: false, error: err.message });
         });
       })
       .catch(err => sendResponse({ success: false, error: err.message }));

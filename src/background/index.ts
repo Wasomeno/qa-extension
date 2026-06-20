@@ -15,6 +15,7 @@ import {
 import { api } from '../services/api';
 import { SAMPLE_BLUEPRINT } from '../lib/seed-data';
 import { isRestrictedUrl } from '../utils/domain-matcher';
+import { getQaWebAppMenuUrl } from '../utils/qa-web-app-url';
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 
 const accountId = process.env.R2_ACCOUNT_ID;
@@ -28,6 +29,11 @@ const s3Client = new S3Client({
     secretAccessKey: process.env.R2_SECRET_ACCESS_KEY || 'placeholder',
   },
 });
+
+const VIDEO_DB_NAME = 'flowg-video-storage';
+const VIDEO_DB_VERSION = 1;
+const VIDEO_STORE_NAME = 'video-blobs';
+const MAX_RUNTIME_VIDEO_BYTES = 4 * 1024 * 1024;
 
 export class CDPHandler {
   private static attachedTabs: Set<number> = new Set();
@@ -211,6 +217,8 @@ class BackgroundService {
     startUrl: string;
     startTime: number;
     endTime: number;
+    projectId?: number | string;
+    title?: string;
     telemetry: any;
   }> = new Map();
 
@@ -236,6 +244,108 @@ class BackgroundService {
     const publicDomain =
       process.env.R2_PUBLIC_DOMAIN || 'YOUR_R2_PUBLIC_DOMAIN_HERE';
     return `${publicDomain}/${fileName}`;
+  }
+
+  private async openVideoDB(): Promise<IDBDatabase> {
+    return new Promise((resolve, reject) => {
+      const request = indexedDB.open(VIDEO_DB_NAME, VIDEO_DB_VERSION);
+
+      request.onerror = () => reject(request.error);
+      request.onsuccess = () => resolve(request.result);
+
+      request.onupgradeneeded = event => {
+        const db = (event.target as IDBOpenDBRequest).result;
+        if (!db.objectStoreNames.contains(VIDEO_STORE_NAME)) {
+          db.createObjectStore(VIDEO_STORE_NAME);
+        }
+      };
+    });
+  }
+
+  private async getVideoBlobDirect(key: string): Promise<Blob | null> {
+    const db = await this.openVideoDB();
+
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction(VIDEO_STORE_NAME, 'readonly');
+      const store = transaction.objectStore(VIDEO_STORE_NAME);
+      const request = store.get(key);
+
+      request.onerror = () => {
+        db.close();
+        reject(request.error);
+      };
+      request.onsuccess = () => {
+        db.close();
+        resolve(request.result || null);
+      };
+    });
+  }
+
+  private async deleteVideoBlobDirect(key: string): Promise<void> {
+    const db = await this.openVideoDB();
+
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction(VIDEO_STORE_NAME, 'readwrite');
+      const store = transaction.objectStore(VIDEO_STORE_NAME);
+      const request = store.delete(key);
+
+      request.onerror = () => {
+        db.close();
+        reject(request.error);
+      };
+      request.onsuccess = () => {
+        db.close();
+        resolve();
+      };
+    });
+  }
+
+  private async trimVideoInOffscreen(
+    key: string,
+    trimStart: number,
+    trimEnd: number,
+    outputKey: string
+  ): Promise<{ key: string; type: string; size: number } | null> {
+    if (!(await chrome.offscreen.hasDocument())) {
+      await chrome.offscreen.createDocument({
+        url: 'offscreen.html',
+        reasons: [chrome.offscreen.Reason.DOM_SCRAPING],
+        justification: 'Trim recorded video before upload',
+      });
+    }
+
+    return new Promise(resolve => {
+      chrome.runtime.sendMessage(
+        {
+          type: 'TRIM_VIDEO',
+          data: { key, trimStart, trimEnd, outputKey },
+        },
+        response => {
+          if (chrome.runtime.lastError) {
+            console.error(
+              '[Background] Failed to trim video:',
+              chrome.runtime.lastError.message
+            );
+            resolve(null);
+            return;
+          }
+
+          if (response?.success && response.data?.videoBlobKey) {
+            resolve({
+              key: response.data.videoBlobKey,
+              type: response.data.type || 'video/webm',
+              size: response.data.size || 0,
+            });
+          } else {
+            console.error(
+              '[Background] Failed to trim video:',
+              response?.error || 'Unknown trim error'
+            );
+            resolve(null);
+          }
+        }
+      );
+    });
   }
 
   private broadcast(payload: any) {
@@ -322,227 +432,6 @@ class BackgroundService {
     // Port-based bridge
     chrome.runtime.onConnect.addListener(port => {
       if (!port) return;
-
-      if (port.name === 'agent-chat-sse') {
-        port.onMessage.addListener(async msg => {
-          if (msg.type !== MessageType.AGENT_CHAT_SSE) return;
-          const { input, session_id, attachments } = msg.data;
-
-          try {
-            const response = await fetch(
-              'https://playground-qa-extension.online/api/agent/chat',
-              {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                  input,
-                  session_id,
-                  attachments: attachments || [],
-                }),
-              }
-            );
-
-            if (!response.ok) {
-              port.postMessage({
-                event: 'error',
-                data: `HTTP error! status: ${response.status}`,
-              });
-              return;
-            }
-
-            const reader = response.body?.getReader();
-            if (!reader) {
-              port.postMessage({
-                event: 'error',
-                data: 'Failed to get reader from response body',
-              });
-              return;
-            }
-
-            const decoder = new TextDecoder();
-            let buffer = '';
-
-            const processBuffer = (text: string, isFinal: boolean = false) => {
-              buffer += text;
-
-              // Handle both \n\n and \r\n\r\n as event separators
-              const blocks = buffer.split(/\r?\n\r?\n/);
-
-              // If not final, the last block might be incomplete, keep it in buffer
-              if (!isFinal) {
-                buffer = blocks.pop() || '';
-              } else {
-                // If it is final, everything in buffer should be processed
-                buffer = '';
-              }
-
-              for (const eventBlock of blocks) {
-                const trimmedBlock = eventBlock.trim();
-                if (!trimmedBlock) continue;
-
-                const lines = trimmedBlock.split(/\r?\n/);
-                let eventType = 'message';
-                let dataString = '';
-
-                for (const line of lines) {
-                  const trimmedLine = line.trim();
-                  if (trimmedLine.startsWith('event:')) {
-                    eventType = trimmedLine.substring(6).trim();
-                  } else if (trimmedLine.startsWith('data:')) {
-                    dataString = trimmedLine.substring(5).trim();
-                  }
-                }
-
-                if (!dataString) {
-                  
-                  continue;
-                }
-
-                let data = null;
-                try {
-                  data = JSON.parse(dataString);
-                } catch (e) {
-                  data = dataString;
-                }
-
-                
-                port.postMessage({ event: eventType, data });
-              }
-            };
-
-            while (true) {
-              const { value, done } = await reader.read();
-              if (done) {
-                
-                processBuffer('', true);
-                break;
-              }
-
-              processBuffer(decoder.decode(value, { stream: true }));
-            }
-          } catch (error: any) {
-            port.postMessage({
-              event: 'error',
-              data: error.message || 'Unknown stream error',
-            });
-          }
-        });
-        return;
-      }
-
-      if (port.name === 'agent-fix-sse') {
-        port.onMessage.addListener(async msg => {
-          if (msg.type !== MessageType.AGENT_FIX_ISSUE_SSE) return;
-          const { project_id, issue_iid, repo_project_id, target_branch, runner } = msg.data;
-
-          try {
-            const response = await fetch(
-              'https://playground-qa-extension.online/api/agent/fix-issue',
-              {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                },
-                credentials: 'include',
-                body: JSON.stringify({
-                  project_id,
-                  issue_iid,
-                  repo_project_id,
-                  target_branch,
-                  runner,
-                }),
-              }
-            );
-
-            if (!response.ok) {
-              port.postMessage({
-                event: 'error',
-                data: `HTTP error! status: ${response.status}`,
-              });
-              return;
-            }
-
-            const reader = response.body?.getReader();
-            if (!reader) {
-              port.postMessage({
-                event: 'error',
-                data: 'Failed to get reader from response body',
-              });
-              return;
-            }
-
-            const decoder = new TextDecoder();
-            let buffer = '';
-
-            const processBuffer = (text: string, isFinal: boolean = false) => {
-              buffer += text;
-
-              // Handle both \n\n and \r\n\r\n as event separators
-              const blocks = buffer.split(/\r?\n\r?\n/);
-
-              // If not final, the last block might be incomplete, keep it in buffer
-              if (!isFinal) {
-                buffer = blocks.pop() || '';
-              } else {
-                // If it is final, everything in buffer should be processed
-                buffer = '';
-              }
-
-              for (const eventBlock of blocks) {
-                const trimmedBlock = eventBlock.trim();
-                if (!trimmedBlock) continue;
-
-                const lines = trimmedBlock.split(/\r?\n/);
-                let eventType = 'message';
-                let dataString = '';
-
-                for (const line of lines) {
-                  const trimmedLine = line.trim();
-                  if (trimmedLine.startsWith('event:')) {
-                    eventType = trimmedLine.substring(6).trim();
-                  } else if (trimmedLine.startsWith('data:')) {
-                    dataString = trimmedLine.substring(5).trim();
-                  }
-                }
-
-                if (!dataString) {
-                  
-                  continue;
-                }
-
-                let data = null;
-                try {
-                  data = JSON.parse(dataString);
-                } catch (e) {
-                  data = dataString;
-                }
-
-                
-                port.postMessage({ event: eventType, data });
-              }
-            };
-
-            while (true) {
-              const { value, done } = await reader.read();
-              if (done) {
-                
-                processBuffer('', true);
-                break;
-              }
-
-              processBuffer(decoder.decode(value, { stream: true }));
-            }
-          } catch (error: any) {
-            port.postMessage({
-              event: 'error',
-              data: error.message || 'Unknown stream error',
-            });
-          }
-        });
-        return;
-      }
 
       if (port.name !== 'bridge') return;
       port.onMessage.addListener(async msg => {
@@ -641,9 +530,10 @@ class BackgroundService {
     sender: chrome.runtime.MessageSender,
     sendResponse: (response?: any) => void
   ) {
-    // Handle direct messages from video-editor page
-    // These are internal messages that need to be forwarded to offscreen
-    if (message.type === 'GET_VIDEO_BLOB') {
+    // Handle direct messages from video-editor page. Large videos should be
+    // read by extension pages directly from IndexedDB; this fallback only
+    // returns small blobs to stay under Chrome's runtime message size limit.
+    if ((message as any).type === 'GET_VIDEO_BLOB') {
       const { key } = message.data || {};
       if (!key) {
         sendResponse({ success: false, error: 'Missing blob key' });
@@ -764,6 +654,8 @@ class BackgroundService {
               startUrl: pending.startUrl,
               startTime: pending.startTime,
               endTime: pending.endTime,
+              projectId: pending.projectId,
+              title: pending.title,
               telemetry: pending.telemetry,
             }
           });
@@ -869,66 +761,6 @@ class BackgroundService {
       case MessageType.AUTH_LOGOUT:
         this.broadcast({ type: MessageType.AUTH_SESSION_UPDATED, data: null });
         sendResponse({ success: true });
-        break;
-
-      case MessageType.TEST_SCENARIO_UPLOAD:
-        try {
-          const { projectId, base64, fileName, contentType, authConfig } =
-            message.data || {};
-          if (!projectId || !base64) {
-            sendResponse({
-              success: false,
-              error: 'Missing projectId or file data',
-            });
-            return;
-          }
-
-          // Convert base64 back to Blob manually to avoid MV3 fetch(dataURI) limits
-          const base64Data = base64.includes(',') ? base64.split(',')[1] : base64;
-          const binaryStr = atob(base64Data);
-          const bytes = new Uint8Array(binaryStr.length);
-          for (let i = 0; i < binaryStr.length; i++) {
-            bytes[i] = binaryStr.charCodeAt(i);
-          }
-          const blob = new Blob([bytes], {
-            type: contentType || 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-          });
-
-          const formData = new FormData();
-          formData.append('file', blob, fileName || 'scenario.xlsx');
-          formData.append('projectId', projectId);
-          if (authConfig) {
-            formData.append('authConfig', JSON.stringify(authConfig));
-          }
-
-          const authInit = await this.withAuthHeaders({
-            method: 'POST',
-            body: formData,
-          });
-
-          const uploadUrl = `https://playground-qa-extension.online/api/test-scenarios/upload`;
-          const uploadResp = await fetch(uploadUrl, authInit);
-
-          if (!uploadResp.ok) {
-            const errorData = await uploadResp.json().catch(() => ({}));
-            sendResponse({
-              success: false,
-              error:
-                errorData.error ||
-                errorData.message ||
-                `Upload failed: ${uploadResp.status} ${uploadResp.statusText}`,
-            });
-            return;
-          }
-
-          const data = await uploadResp.json();
-          sendResponse({ success: true, data });
-        } catch (e: any) {
-          sendResponse({
-            success: false,
-            error: e?.message || 'Scenario upload failed',
-          });
-        }
         break;
 
       case MessageType.FILE_UPLOAD:
@@ -1110,13 +942,18 @@ class BackgroundService {
             }
           }
 
+          const blueprintProjectId = blueprint.project_id ?? blueprint.projectId;
+
           // Map TestBlueprint to TestRecording if necessary, though they are very similar
           const recording: TestRecording = {
             id: blueprint.id,
             name: blueprint.name || 'Untitled Recording',
             description: blueprint.description || '',
             status: blueprint.status || 'ready',
-            project_id: blueprint.project_id || blueprint.projectId?.toString(),
+            project_id:
+              blueprintProjectId !== undefined && blueprintProjectId !== null
+                ? String(blueprintProjectId)
+                : undefined,
             issue_id: blueprint.issue_id || blueprint.issueId,
             created_at: new Date(
               blueprint.created_at || blueprint.createdAt || Date.now()
@@ -1239,6 +1076,14 @@ class BackgroundService {
 
       case MessageType.OPEN_MAIN_MENU_PAGE:
         try {
+          const webAppUrl = getQaWebAppMenuUrl(message.data || {});
+          if (webAppUrl) {
+            chrome.tabs.create({ url: webAppUrl, active: true });
+            sendResponse({ success: true });
+            break;
+          }
+
+          // Fallback for local/dev builds that have not configured QA_WEB_APP_URL.
           const { initialView, initialIssue } = message.data || {};
           const url = new URL(chrome.runtime.getURL('main-menu.html'));
           if (initialView) {
@@ -1682,7 +1527,7 @@ class BackgroundService {
     });
   }
   private async startRecordingFlow(
-    projectId: number | undefined,
+    projectId: number | string | undefined,
     targetTabId: number,
     recordingId?: string
   ) {
@@ -1816,13 +1661,15 @@ class BackgroundService {
     }
 
     // Get the pre-generated ID and start URL
-    const { currentRecordingId, currentRecordingStartUrl } =
+    const { currentRecordingId, currentRecordingStartUrl, currentRecordingProjectId } =
       await chrome.storage.local.get([
         'currentRecordingId',
         'currentRecordingStartUrl',
+        'currentRecordingProjectId',
       ]);
     const tempId = currentRecordingId || `rec-${Date.now()}`;
     const startUrl = currentRecordingStartUrl || tab?.url;
+    const projectId = currentRecordingProjectId || undefined;
     
 
     // Stop Video Capture (offscreen will store blob in IndexedDB and send VIDEO_CAPTURE_READY)
@@ -1930,6 +1777,11 @@ class BackgroundService {
       startUrl: startUrl || '',
       startTime: recordingStartTime,
       endTime: Date.now(),
+      projectId:
+        (typeof projectId === 'number' && Number.isFinite(projectId)) ||
+        (typeof projectId === 'string' && projectId.trim() !== '')
+          ? projectId
+          : undefined,
       title: defaultTitle,
       telemetry: { 
         ...this.telemetry,
@@ -1944,7 +1796,7 @@ class BackgroundService {
     // Clear recording state
     this.recordingEvents = [];
     await chrome.storage.session.remove('currentRecording');
-    await chrome.storage.local.remove(['currentRecordingId']);
+    await chrome.storage.local.remove(['currentRecordingId', 'currentRecordingProjectId']);
     
     // Open video editor as a modal in the content script instead of a new tab
     if (tab?.id) {
@@ -2008,13 +1860,24 @@ class BackgroundService {
       }
     }
 
+    const blueprintProjectId = blueprint.project_id ?? blueprint.projectId;
+
+    if (blueprintProjectId === undefined || blueprintProjectId === null) {
+      throw new Error(
+        'project_id is required. Please select a project before recording.'
+      );
+    }
+
     // Map to API format
     const recording: TestRecording = {
       id: blueprint.id,
       name: blueprint.name || 'Untitled Recording',
       description: blueprint.description || '',
       status: blueprint.status || 'ready',
-      project_id: blueprint.project_id || blueprint.projectId?.toString(),
+      project_id:
+        blueprintProjectId !== undefined && blueprintProjectId !== null
+          ? String(blueprintProjectId)
+          : undefined,
       issue_id: blueprint.issue_id || blueprint.issueId,
       created_at: new Date(
         blueprint.created_at || blueprint.createdAt || Date.now()
@@ -2048,7 +1911,15 @@ class BackgroundService {
       throw new Error(response.error || 'Failed to save recording to database');
     }
 
-    return response.data;
+    // Confirm the backend persisted the recording before showing success in the UI.
+    const verifyResponse = await api.get<any>(`/recordings/${recording.id}`);
+    if (!verifyResponse.success) {
+      throw new Error(
+        verifyResponse.error || 'Recording upload returned success but could not be verified'
+      );
+    }
+
+    return verifyResponse.data || response.data;
   }
 
   private async finalizeEditedRecording(
@@ -2059,6 +1930,7 @@ class BackgroundService {
       startUrl: string;
       startTime: number;
       endTime: number;
+      projectId?: number | string;
       telemetry: any;
     },
     trimStart: number,
@@ -2084,61 +1956,40 @@ class BackgroundService {
         data: { blueprint: processingBlueprint },
       });
 
-      // 1. Get trimmed video blob from offscreen document
-      
-      const videoBlob = await new Promise<Blob | null>((resolve) => {
-        chrome.runtime.sendMessage(
-          { 
-            type: 'TRIM_VIDEO', 
-            data: { 
-              key: pendingData.videoBlobKey,
-              trimStart,
-              trimEnd
-            } 
-          },
-          (response) => {
-            if (response?.success && response.data?.videoData) {
-              let rawData = response.data.videoData;
-              
-              // Fix object serialization if needed
-              if (rawData && typeof rawData === 'object' && !Array.isArray(rawData) && !(rawData instanceof Uint8Array)) {
-                const keys = Object.keys(rawData).map(Number).sort((a, b) => a - b);
-                const arr = new Uint8Array(keys.length);
-                for (let i = 0; i < keys.length; i++) {
-                  arr[i] = rawData[keys[i]];
-                }
-                rawData = arr;
-              }
-              
-              resolve(new Blob([rawData instanceof Uint8Array ? rawData : new Uint8Array(rawData)], {
-                type: response.data.type || 'video/webm'
-              }));
-            } else {
-              console.error('[Background] Failed to trim video:', response?.error);
-              resolve(null);
-            }
-          }
-        );
-      });
+      // 1. Ask the offscreen document to trim and store the result in IndexedDB.
+      // Passing video bytes through chrome.runtime messages can exceed Chrome's
+      // 64MiB message limit, so only exchange blob keys and read the Blob locally.
+      const trimmedVideoKey = `recording-${recordingId}-trimmed`;
+      const trimmedVideo = await this.trimVideoInOffscreen(
+        pendingData.videoBlobKey,
+        trimStart,
+        trimEnd,
+        trimmedVideoKey
+      );
       
       let videoUrl: string | undefined;
       
       // 2. Upload video to R2 if we have it
-      if (videoBlob) {
-        
+      if (trimmedVideo) {
         const fileName = `recordings/${recordingId}.webm`;
-        const buffer = await videoBlob.arrayBuffer();
+        const videoBlob = await this.getVideoBlobFromIndexedDB(trimmedVideo.key);
         
-        videoUrl = await this.uploadToR2(
-          new Uint8Array(buffer),
-          fileName,
-          'video/webm'
-        );
-        
-        
-        // Clean up the original blob from IndexedDB
-        await this.deleteVideoBlobFromIndexedDB(pendingData.videoBlobKey);
-      } else {
+        if (videoBlob) {
+          videoUrl = await this.uploadToR2(
+            new Uint8Array(await videoBlob.arrayBuffer()),
+            fileName,
+            trimmedVideo.type || 'video/webm'
+          );
+
+          await this.deleteVideoBlobFromIndexedDB(trimmedVideo.key);
+          await this.deleteVideoBlobFromIndexedDB(pendingData.videoBlobKey);
+        }
+      }
+
+      if (!videoUrl) {
+        if (trimmedVideo?.key) {
+          await this.deleteVideoBlobFromIndexedDB(trimmedVideo.key);
+        }
         console.warn(`[Background] Could not get trimmed video, falling back to original...`);
         // Fallback to original if trim failed
         const originalBlob = await this.getVideoBlobFromIndexedDB(pendingData.videoBlobKey);
@@ -2191,6 +2042,7 @@ class BackgroundService {
           steps: enrichedSteps,
           status: 'ready' as const,
           baseUrl: pendingData.startUrl,
+          project_id: pendingData.projectId,
           video_url: videoUrl,
           created_at: Date.now(),
           telemetry: pendingData.telemetry,
@@ -2211,8 +2063,19 @@ class BackgroundService {
           });
         } catch (apiError) {
           console.error(`[Background] Failed to auto-save to database:`, apiError);
-          // Fallback: still show in "Recent Draft" if save failed
-          await chrome.storage.local.set({ lastBlueprint: finalBlueprint });
+          const saveFailedBlueprint = {
+            ...finalBlueprint,
+            status: 'failed' as const,
+            error: `Recording generated but failed to upload to the backend: ${(apiError as Error)?.message || 'Unknown error'}`,
+          };
+          // Fallback: keep the generated draft locally, but do not report upload success.
+          await chrome.storage.local.set({ lastBlueprint: saveFailedBlueprint });
+          this.broadcast({
+            type: MessageType.BLUEPRINT_GENERATED,
+            data: { blueprint: saveFailedBlueprint },
+          });
+          this.pendingEditRecordings.delete(recordingId);
+          return;
         }
         
         this.broadcast({
@@ -2237,6 +2100,7 @@ class BackgroundService {
           }],
           status: 'ready' as const,
           baseUrl: pendingData.startUrl,
+          project_id: pendingData.projectId,
           video_url: videoUrl,
           created_at: Date.now(),
         };
@@ -2251,7 +2115,18 @@ class BackgroundService {
             data: { blueprint: emptyBlueprint },
           });
         } catch (e) {
-          await chrome.storage.local.set({ lastBlueprint: emptyBlueprint });
+          const saveFailedBlueprint = {
+            ...emptyBlueprint,
+            status: 'failed' as const,
+            error: `Recording generated but failed to upload to the backend: ${(e as Error)?.message || 'Unknown error'}`,
+          };
+          await chrome.storage.local.set({ lastBlueprint: saveFailedBlueprint });
+          this.broadcast({
+            type: MessageType.BLUEPRINT_GENERATED,
+            data: { blueprint: saveFailedBlueprint },
+          });
+          this.pendingEditRecordings.delete(recordingId);
+          return;
         }
 
         this.broadcast({
@@ -2278,94 +2153,51 @@ class BackgroundService {
       
       // Clear pending state even on error so user isn't stuck
       await chrome.storage.local.remove('pendingRecording');
+      this.pendingEditRecordings.delete(recordingId);
 
-      this.broadcast({
+      this.broadcast({ 
         type: MessageType.BLUEPRINT_GENERATED,
         data: { blueprint: failedBlueprint },
       });
     }
   }
 
-  /**
-   * Get video blob from IndexedDB via offscreen document
-   * Ensures offscreen document exists before querying
-   */
-  private async getVideoBlobFromOffscreen(key: string): Promise<{ success: boolean; data?: { videoData: Blob; type: string; size: number }; error?: string }> {
-    // Ensure offscreen document exists (required for IndexedDB access)
-    if (!(await chrome.offscreen.hasDocument())) {
-      await chrome.offscreen.createDocument({
-        url: 'offscreen.html',
-        reasons: [chrome.offscreen.Reason.DOM_SCRAPING],
-        justification: 'Access video blob from IndexedDB for video editor',
-      });
+  private async getVideoBlobFromOffscreen(key: string): Promise<{ success: boolean; data?: { videoData: Uint8Array; type: string; size: number }; error?: string }> {
+    const blob = await this.getVideoBlobDirect(key);
+
+    if (!blob) {
+      return { success: false, error: 'Video blob not found' };
     }
 
-    return new Promise((resolve) => {
-      chrome.runtime.sendMessage(
-        { type: 'GET_VIDEO_BLOB', data: { key } },
-        (response) => {
-          if (response?.success && response.data?.videoData) {
-            // videoData is already a Blob from offscreen
-            resolve({
-              success: true,
-              data: {
-                videoData: response.data.videoData,
-                type: response.data.type || 'video/webm',
-                size: response.data.size
-              }
-            });
-          } else {
-            resolve({ success: false, error: response?.error || 'Video blob not found' });
-          }
-        }
-      );
-    });
+    // Runtime messages are capped at 64MiB. Extension pages should read large
+    // videos directly from IndexedDB instead of asking the service worker to
+    // forward the bytes.
+    if (blob.size > MAX_RUNTIME_VIDEO_BYTES) {
+      return {
+        success: false,
+        error: 'Video is too large to transfer through runtime messaging; read it directly from IndexedDB',
+      };
+    }
+
+    return {
+      success: true,
+      data: {
+        videoData: new Uint8Array(await blob.arrayBuffer()),
+        type: blob.type || 'video/webm',
+        size: blob.size,
+      },
+    };
   }
 
-  /**
-   * Legacy method - kept for backward compatibility
-   */
   private async getVideoBlobFromIndexedDB(key: string): Promise<Blob | null> {
-    return new Promise((resolve) => {
-      chrome.runtime.sendMessage(
-        { type: 'GET_VIDEO_BLOB', data: { key } },
-        (response) => {
-          if (response?.success && response.data?.videoData) {
-            let rawData = response.data.videoData;
-            
-            // Handle potentially mangled serialization
-            if (rawData && typeof rawData === 'object' && !Array.isArray(rawData) && !(rawData instanceof Uint8Array)) {
-              
-              const keys = Object.keys(rawData).map(Number).sort((a, b) => a - b);
-              const arr = new Uint8Array(keys.length);
-              for (let i = 0; i < keys.length; i++) {
-                arr[i] = rawData[keys[i]];
-              }
-              rawData = arr;
-            }
-            
-            const blob = new Blob([rawData instanceof Uint8Array ? rawData : new Uint8Array(rawData)], {
-              type: response.data.type || 'video/webm'
-            });
-            resolve(blob);
-          } else {
-            resolve(null);
-          }
-        }
-      );
-    });
+    return this.getVideoBlobDirect(key);
   }
 
   /**
-   * Delete video blob from IndexedDB via offscreen document
+   * Delete video blob from IndexedDB
    */
   private async deleteVideoBlobFromIndexedDB(key: string): Promise<void> {
-    return new Promise((resolve) => {
-      chrome.runtime.sendMessage(
-        { type: 'DELETE_VIDEO_BLOB', data: { key } },
-        () => resolve()
-      );
-    });
+    await this.deleteVideoBlobDirect(key);
   }
 
   /**
