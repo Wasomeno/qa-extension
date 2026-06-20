@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Flowg",
   "version": "1.0.1",
-  "description": "Seamless GitLab integration for fast issue management and QA workflows",
+  "description": "Capture browser evidence, generate reproducible test recordings, and create QA-ready issues",
   "permissions": [
     "activeTab",
     "storage",
@@ -53,13 +53,12 @@
         "styles/*",
         "recording-detail.html",
         "recording-detail.js",
-        "generated-test-detail.html",
-        "generated-test-detail.js",
         "main-menu.html",
         "main-menu.js",
         "video-editor.html",
         "video-editor.js",
         "recorder-iframe.html",
+        "main-world-network-bridge.js",
         "*.js",
         "*.css"
       ],

@@ -20,9 +20,9 @@ module.exports = (env, argv) => {
       options: './src/options/index.tsx',
       'recorder-iframe': './src/recorder-iframe/index.tsx',
       'recording-detail': './src/pages/recordings/standalone.tsx',
-      'generated-test-detail': './src/pages/test-scenarios/generated-standalone.tsx',
       'main-menu': './src/pages/main-menu/standalone.tsx',
       'video-editor': './src/pages/video-editor/standalone.tsx',
+      'main-world-network-bridge': './src/content/recorder/main-world-network-bridge.ts',
       offscreen: './src/background/offscreen.ts',
       'shadow-dom-styles': './src/styles/shadow-dom.css',
     },
@@ -133,6 +133,12 @@ module.exports = (env, argv) => {
         'process.env.R2_PUBLIC_DOMAIN': JSON.stringify(
           process.env.R2_PUBLIC_DOMAIN || ''
         ),
+        'process.env.QA_WEB_APP_URL': JSON.stringify(
+          process.env.QA_WEB_APP_URL || process.env.VITE_QA_WEB_APP_URL || ''
+        ),
+        'process.env.VITE_QA_WEB_APP_URL': JSON.stringify(
+          process.env.VITE_QA_WEB_APP_URL || process.env.QA_WEB_APP_URL || ''
+        ),
       }),
       new rspack.CssExtractRspackPlugin({
         filename: '[name].css',
@@ -156,11 +162,6 @@ module.exports = (env, argv) => {
         template: './src/pages/recordings/standalone.html',
         filename: 'recording-detail.html',
         chunks: ['recording-detail', 'vendor'],
-      }),
-      new rspack.HtmlRspackPlugin({
-        template: './src/pages/test-scenarios/generated-standalone.html',
-        filename: 'generated-test-detail.html',
-        chunks: ['generated-test-detail', 'vendor'],
       }),
       new rspack.HtmlRspackPlugin({
         template: './src/pages/main-menu/standalone.html',
@@ -272,7 +273,8 @@ module.exports = (env, argv) => {
             chunk.name !== 'background' &&
             chunk.name !== 'recorder' &&
             chunk.name !== 'player' &&
-            chunk.name !== 'recorder-iframe'
+            chunk.name !== 'recorder-iframe' &&
+            chunk.name !== 'main-world-network-bridge'
           );
         },
         cacheGroups: {
@@ -285,7 +287,8 @@ module.exports = (env, argv) => {
                 chunk.name !== 'content' &&
                 chunk.name !== 'background' &&
                 chunk.name !== 'recorder' &&
-                chunk.name !== 'player'
+                chunk.name !== 'player' &&
+                chunk.name !== 'main-world-network-bridge'
               );
             },
           },
