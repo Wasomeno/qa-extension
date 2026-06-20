@@ -8,20 +8,14 @@ interface IssueListProps {
   issues: Issue[];
   isProjectFiltered: boolean;
   onIssueClick: (issue: Issue) => void;
-  onPin?: (issue: Issue) => void; // Assuming IssueWithPin is compatible or Issue is used
   isLoading?: boolean;
-  isPinned?: (issueIid: number, projectId: number) => boolean;
-  onFixIssue?: (issue: Issue) => void;
 }
 
 export const IssueList: React.FC<IssueListProps> = ({
   issues,
   isProjectFiltered,
   onIssueClick,
-  onPin,
   isLoading = false,
-  isPinned,
-  onFixIssue,
 }) => {
   const [collapsedProjects, setCollapsedProjects] = useState<
     Record<string, boolean>
@@ -90,12 +84,6 @@ export const IssueList: React.FC<IssueListProps> = ({
             key={issue.id}
             issue={issue}
             onClick={onIssueClick}
-            onPin={onPin}
-            onUnpin={onPin} // Both toggle
-            onFixIssue={onFixIssue}
-            variant={
-              isPinned?.(issue.iid, issue.project_id) ? 'pinned' : 'default'
-            }
           />
         ))}
       </div>
@@ -134,14 +122,6 @@ export const IssueList: React.FC<IssueListProps> = ({
                     key={issue.id}
                     issue={issue}
                     onClick={onIssueClick}
-                    onPin={onPin}
-                    onUnpin={onPin}
-                    onFixIssue={onFixIssue}
-                    variant={
-                      isPinned?.(issue.iid, issue.project_id)
-                        ? 'pinned'
-                        : 'default'
-                    }
                   />
                 ))}
               </div>

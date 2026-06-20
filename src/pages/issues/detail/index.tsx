@@ -3,7 +3,6 @@ import { motion } from 'framer-motion';
 import {
   ArrowLeft,
   ExternalLink,
-  Pin,
   GitPullRequest,
   Pencil,
   Save,
@@ -33,7 +32,6 @@ import {
 } from '@/components/ui/select';
 import { toast } from 'sonner';
 import { useQueryClient } from '@tanstack/react-query';
-import { usePinnedIssues } from '@/hooks/use-pinned-issues';
 import { useGetIssue } from '../hooks/use-get-issue';
 import { useGetIssueComments } from '../hooks/use-get-issue-comments';
 import { ChildIssuesList } from '@/pages/issues/detail/components/child-issues-list';
@@ -192,7 +190,6 @@ export const IssueDetailPage: React.FC<IssueDetailPageProps> = ({
   >(null);
   const [isSaving, setIsSaving] = useState(false);
   const [copied, setCopied] = useState(false);
-  const { togglePin, isPinned } = usePinnedIssues();
 
   const [description, setDescription] = useState(
     currentIssue?.description || ''
@@ -534,36 +531,6 @@ export const IssueDetailPage: React.FC<IssueDetailPageProps> = ({
                 </TooltipTrigger>
                 <TooltipContent side="bottom">
                   <p>Open in GitLab</p>
-                </TooltipContent>
-              </Tooltip>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <motion.button
-                    whileTap={{ scale: 0.9 }}
-                    transition={{ duration: 0.1 }}
-                    onClick={() => togglePin(currentIssue)}
-                    className={cn(
-                      'p-2 rounded-lg transition-colors',
-                      isPinned(currentIssue.iid, currentIssue.project_id)
-                        ? 'bg-amber-100 text-amber-500 hover:bg-amber-200 hover:text-amber-600'
-                        : 'text-gray-400 hover:bg-gray-100 hover:text-gray-900'
-                    )}
-                  >
-                    <Pin
-                      className={cn(
-                        'w-4 h-4',
-                        isPinned(currentIssue.iid, currentIssue.project_id) &&
-                          'fill-current'
-                      )}
-                    />
-                  </motion.button>
-                </TooltipTrigger>
-                <TooltipContent side="bottom">
-                  <p>
-                    {isPinned(currentIssue.iid, currentIssue.project_id)
-                      ? 'Unpin Issue'
-                      : 'Pin Issue'}
-                  </p>
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>

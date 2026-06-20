@@ -1,15 +1,13 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo } from 'react';
 import { AnimatePresence } from 'framer-motion';
 import { IssueFilterState } from '@/types/issues';
 import { useDebounce } from '@/utils/useDebounce';
 import { IssueDetailPage } from './detail';
 import { IssueFilterBar } from './components/filter-bar';
 import { IssueList } from './components/issue-list';
-import { FixIssueModal } from './components/fix-issue-modal';
 import { useGetLabels } from '@/hooks/use-get-labels';
 import { useGetIssues } from './hooks/use-get-issues';
 import { useGetLoggedInUser } from '@/hooks/use-get-logged-in-user';
-import { usePinnedIssues } from '@/hooks/use-pinned-issues';
 import { Issue } from '@/api/issue';
 import { useNavigation } from '@/contexts/navigation-context';
 import { useLocalStorage } from '@/hooks/use-local-storage';
@@ -62,10 +60,6 @@ export const IssuesPage: React.FC<IssuesPageProps> = ({
   );
 
   const issues = useGetIssues(memoizedFilters);
-  const { togglePin, isPinned } = usePinnedIssues();
-
-  // State for Fix with Agent modal
-  const [fixingIssue, setFixingIssue] = useState<Issue | null>(null);
 
   // Track if user is still loading - we need this to show proper loading state
   const isUserLoading = useGetLoggedInUser().isLoading;
@@ -133,19 +127,8 @@ export const IssuesPage: React.FC<IssuesPageProps> = ({
           isLoading={isInitialLoading}
           isProjectFiltered={filters.projectIds.length === 1}
           onIssueClick={issue => push('issue-detail', issue)}
-          onPin={togglePin}
-          isPinned={isPinned}
-          onFixIssue={setFixingIssue}
         />
       </div>
-      {fixingIssue && (
-        <FixIssueModal
-          issue={fixingIssue}
-          isOpen={true}
-          onClose={() => setFixingIssue(null)}
-          portalContainer={portalContainer}
-        />
-      )}
     </div>
   );
 };
