@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { 
-  Play, Pause, Scissors, Loader2, Check, X, Wand2, Clock, 
-  MousePointer2, AlertCircle, Globe, Terminal, Bug, Activity, 
-  ChevronRight, ChevronDown, ListFilter 
+  Play, Pause, Scissors, Loader2, Check, X, Save, Clock, 
+  MousePointer2, Terminal, Activity,
 } from 'lucide-react';
 import { MessageType } from '@/types/messages';
+import { getQaWebAppRecordingDetailUrl } from '@/utils/qa-web-app-url';
 import { TrimSlider } from './components/TrimSlider';
 
 interface PendingRecording {
@@ -14,6 +14,8 @@ interface PendingRecording {
   startUrl: string;
   startTime: number;
   endTime: number;
+  projectId?: number;
+  title?: string;
   telemetry?: any;
 }
 
@@ -99,6 +101,11 @@ const VideoEditorPage: React.FC<VideoEditorProps> = ({
       if (message.type === MessageType.BLUEPRINT_GENERATED) {
         const blueprint = message.data?.blueprint;
         if (blueprint && blueprint.id === recordingId) {
+          if (blueprint.status === 'failed' || blueprint.status === 'error') {
+            setError(blueprint.error || 'Recording processing failed');
+            setIsSubmitting(false);
+            return;
+          }
           
           setGeneratedBlueprint(blueprint);
           setIsGenerated(true);
@@ -169,8 +176,6 @@ const VideoEditorPage: React.FC<VideoEditorProps> = ({
           
           setIsLoading(false);
           return;
-        } else {
-          
         }
       } catch (idbError) {
         console.error('[VideoEditor] IndexedDB access failed, falling back:', idbError);
@@ -339,13 +344,13 @@ const VideoEditorPage: React.FC<VideoEditorProps> = ({
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
-  const handleGenerateTest = async () => {
+  const handleSaveRecording = async () => {
     if (!recordingData) return;
 
     setIsSubmitting(true);
     setError(null);
 
-    // If in modal mode, notify parent that generation started so it can show a toast
+    // If in modal mode, notify parent that saving started so it can show a toast
     if (finalIsModal) {
       window.parent.postMessage({ 
         type: '__QA_EXTENSION_MESSAGE__', 
@@ -376,8 +381,27 @@ const VideoEditorPage: React.FC<VideoEditorProps> = ({
       },
       (response) => {
         if (!response?.success) {
+          const generationError =
+            chrome.runtime.lastError?.message ||
+            response?.error ||
+            'Failed to start generation';
+
           setIsSubmitting(false);
-          setError(response?.error || 'Failed to start generation');
+          setError(generationError);
+
+          if (finalIsModal) {
+            window.parent.postMessage({ 
+              type: '__QA_EXTENSION_MESSAGE__', 
+              message: { 
+                type: 'GENERATION_FAILED',
+                data: {
+                  recordingId: recordingData.recordingId,
+                  title: title || recordingData.title,
+                  error: generationError,
+                }
+              } 
+            }, '*');
+          }
         }
       }
     );
@@ -454,15 +478,17 @@ const VideoEditorPage: React.FC<VideoEditorProps> = ({
             <div className="w-20 h-20 rounded-full bg-emerald-50 flex items-center justify-center mx-auto mb-6 border border-emerald-100">
               <Check className="w-10 h-10 text-emerald-600" />
             </div>
-            <h1 className="text-2xl font-bold mb-2">Test Blueprint Ready!</h1>
+            <h1 className="text-2xl font-bold mb-2">Recording Saved!</h1>
             <p className="text-zinc-500 mb-8">
-              Your recording has been processed and analyzed.
+              Your recording has been saved and is ready to view.
             </p>
             
             <div className="grid grid-cols-1 gap-4 w-full">
               <button
                 onClick={() => {
-                  const url = chrome.runtime.getURL(`recording-detail.html?id=${generatedBlueprint.id}`);
+                  const url =
+                    getQaWebAppRecordingDetailUrl(generatedBlueprint.id) ||
+                    chrome.runtime.getURL(`recording-detail.html?id=${generatedBlueprint.id}`);
                   if (finalIsModal) {
                     window.open(url, '_blank');
                     // Send message to content script to close the modal
@@ -514,25 +540,25 @@ const VideoEditorPage: React.FC<VideoEditorProps> = ({
           </div>
           <div>
             <h1 className="text-lg font-semibold tracking-tight text-zinc-900">Review & Trim</h1>
-            <p className="text-xs text-zinc-500">Refine your recording before generating</p>
+            <p className="text-xs text-zinc-500">Refine your recording before saving</p>
           </div>
         </div>
 
         <div className="flex items-center gap-3">
           <button
-            onClick={handleGenerateTest}
+            onClick={handleSaveRecording}
             disabled={isSubmitting}
             className="px-5 py-2.5 bg-zinc-900 hover:bg-zinc-800 disabled:bg-zinc-100 disabled:text-zinc-400 disabled:cursor-not-allowed text-white rounded-full font-medium transition-all flex items-center gap-2 shadow-sm"
           >
             {isSubmitting ? (
               <>
                 <Loader2 className="w-4 h-4 animate-spin" />
-                Processing...
+                Saving…
               </>
             ) : (
               <>
-                <Wand2 className="w-4 h-4" />
-                Generate Test Blueprint
+                <Save className="w-4 h-4" />
+                Save Recording
               </>
             )}
           </button>
@@ -639,10 +665,10 @@ const VideoEditorPage: React.FC<VideoEditorProps> = ({
                   </div>
                   <div className="h-8 w-px bg-zinc-100"></div>
                   <div className="text-right">
-                    <div className="text-sm font-bold text-blue-600 tabular-nums">
+                    <div className="text-sm font-bold text-zinc-900 tabular-nums">
                       {formatTime(trimEnd - trimStart)}
                     </div>
-                    <div className="text-[10px] text-blue-400 font-bold uppercase tracking-wider">Duration</div>
+                    <div className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider">Duration</div>
                   </div>
                 </div>
               </div>
@@ -719,7 +745,7 @@ const VideoEditorPage: React.FC<VideoEditorProps> = ({
                         </div>
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center justify-between mb-1">
-                            <span className="text-[10px] font-bold text-blue-600 uppercase tracking-wider">
+                            <span className="text-[10px] font-bold text-zinc-900 uppercase tracking-wider">
                               {event.type}
                             </span>
                             <span className="text-[10px] font-mono text-zinc-400">

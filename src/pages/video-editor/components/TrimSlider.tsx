@@ -5,8 +5,9 @@ interface TrimSliderProps {
   trimStart: number;
   trimEnd: number;
   currentTime: number;
-  onTrimStartChange: (val: number) => void;
-  onTrimEndChange: (val: number) => void;
+  onTrimStartChange?: (val: number) => void;
+  onTrimEndChange?: (val: number) => void;
+  onChange?: (start: number, end: number) => void;
   onSeek: (val: number) => void;
   events?: { timestamp: number; type: string }[];
   recordingStartTime?: number;
@@ -19,6 +20,7 @@ export const TrimSlider: React.FC<TrimSliderProps> = ({
   currentTime,
   onTrimStartChange,
   onTrimEndChange,
+  onChange,
   onSeek,
   events = [],
   recordingStartTime = 0,
@@ -45,17 +47,30 @@ export const TrimSlider: React.FC<TrimSliderProps> = ({
       percent = Math.max(0, Math.min(1, percent));
       const time = percent * duration;
 
+      let nextStart = trimStart;
+      let nextEnd = trimEnd;
+
       if (isDragging === 'start') {
-        onTrimStartChange(Math.min(time, trimEnd - 0.1));
+        nextStart = Math.min(time, trimEnd - 0.1);
+        onTrimStartChange?.(nextStart);
       } else if (isDragging === 'end') {
-        onTrimEndChange(Math.max(time, trimStart + 0.1));
+        nextEnd = Math.max(time, trimStart + 0.1);
+        onTrimEndChange?.(nextEnd);
       } else if (isDragging === 'playhead') {
         setLocalCurrentTime(time);
         onSeek(time);
+        return;
       }
+
+      onChange?.(nextStart, nextEnd);
     };
 
-    const handlePointerUp = () => setIsDragging(null);
+    const handlePointerUp = () => {
+      if (isDragging === 'start' || isDragging === 'end') {
+        onChange?.(trimStart, trimEnd);
+      }
+      setIsDragging(null);
+    };
 
     if (isDragging) {
       window.addEventListener('pointermove', handlePointerMove);
@@ -65,7 +80,7 @@ export const TrimSlider: React.FC<TrimSliderProps> = ({
       window.removeEventListener('pointermove', handlePointerMove);
       window.removeEventListener('pointerup', handlePointerUp);
     };
-  }, [isDragging, duration, trimStart, trimEnd, onTrimStartChange, onTrimEndChange, onSeek]);
+  }, [isDragging, duration, trimStart, trimEnd, onTrimStartChange, onTrimEndChange, onChange, onSeek]);
 
   const [localCurrentTime, setLocalCurrentTime] = useState(currentTime);
 
@@ -101,7 +116,7 @@ export const TrimSlider: React.FC<TrimSliderProps> = ({
           return (
             <div
               key={idx}
-              className="absolute top-1/2 -translate-y-1/2 w-[3px] h-3 rounded-full bg-blue-600 pointer-events-none"
+              className="absolute top-1/2 -translate-y-1/2 w-[3px] h-3 rounded-full bg-zinc-500 pointer-events-none"
               style={{ left: `${pos}%` }}
               title={ev.type}
             />
@@ -111,7 +126,7 @@ export const TrimSlider: React.FC<TrimSliderProps> = ({
 
       {/* Selected Trim Area */}
       <div
-        className="absolute inset-y-1 bg-blue-600/10 border-y-[1.5px] border-blue-600/30 pointer-events-none"
+        className="absolute inset-y-1 bg-zinc-900/10 border-y-[1.5px] border-zinc-900/20 pointer-events-none"
         style={{ left: `${startPercent}%`, width: `${endPercent - startPercent}%` }}
       />
 
@@ -127,7 +142,7 @@ export const TrimSlider: React.FC<TrimSliderProps> = ({
 
       {/* Handles */}
       <div
-        className="absolute top-0 bottom-0 w-5 -ml-[10px] bg-blue-600 rounded-md cursor-col-resize flex flex-col items-center justify-center hover:bg-blue-700 z-10 shadow-md border border-blue-700/20 transition-colors"
+        className="absolute top-0 bottom-0 w-5 -ml-[10px] bg-zinc-900 rounded-md cursor-col-resize flex flex-col items-center justify-center hover:bg-zinc-800 z-10 shadow-md border border-zinc-900/20 transition-colors"
         style={{ left: `${startPercent}%` }}
         onPointerDown={(e) => { e.stopPropagation(); setIsDragging('start'); }}
       >
@@ -136,7 +151,7 @@ export const TrimSlider: React.FC<TrimSliderProps> = ({
       </div>
 
       <div
-        className="absolute top-0 bottom-0 w-5 -ml-[10px] bg-blue-600 rounded-md cursor-col-resize flex flex-col items-center justify-center hover:bg-blue-700 z-10 shadow-md border border-blue-700/20 transition-colors"
+        className="absolute top-0 bottom-0 w-5 -ml-[10px] bg-zinc-900 rounded-md cursor-col-resize flex flex-col items-center justify-center hover:bg-zinc-800 z-10 shadow-md border border-zinc-900/20 transition-colors"
         style={{ left: `${endPercent}%` }}
         onPointerDown={(e) => { e.stopPropagation(); setIsDragging('end'); }}
       >
