@@ -24,8 +24,8 @@ import { downloadTextFile, downloadJsonFile } from '@/lib/download';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Separator } from '@/components/ui/separator';
-import { useNavigation } from '@/contexts/navigation-context';
 import { useLocalStorage } from '@/hooks/use-local-storage';
+import { getQaWebAppRecordingDetailUrl } from '@/utils/qa-web-app-url';
 
 import {
   Tooltip,
@@ -72,8 +72,6 @@ export const RecordingsPage: React.FC<{
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [isDeleting, setIsDeleting] = useState(false);
-  const { push } = useNavigation();
-
   // Track individual deletion states
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
@@ -260,12 +258,6 @@ export const RecordingsPage: React.FC<{
     downloadJsonFile(blueprint, filename);
   };
 
-  const handleRunInAgent = (blueprint: TestBlueprint) => {
-    push('agent', {
-      initialMessage: `I want to run the automation test "${blueprint.name}" (ID: ${blueprint.id}). Please execute it and let me know the result.`,
-    });
-  };
-
   const handleShareCopyScript = (blueprint: TestBlueprint) => {
     const code = generatePlaywrightTest(blueprint);
     navigator.clipboard.writeText(code);
@@ -305,7 +297,9 @@ export const RecordingsPage: React.FC<{
   };
 
   const handleViewDetails = (id: string) => {
-    const url = chrome.runtime.getURL(`recording-detail.html?id=${id}`);
+    const url =
+      getQaWebAppRecordingDetailUrl(id) ||
+      chrome.runtime.getURL(`recording-detail.html?id=${id}`);
     chrome.runtime.sendMessage({
       type: MessageType.OPEN_URL,
       data: { url },
@@ -320,9 +314,7 @@ export const RecordingsPage: React.FC<{
       chrome.runtime.sendMessage({
         type: MessageType.START_RECORDING,
         data: {
-          projectId: selectedProjectId
-            ? parseInt(selectedProjectId)
-            : undefined,
+          projectId: selectedProjectId || undefined,
         },
       });
     }, 300);
@@ -668,10 +660,6 @@ export const RecordingsPage: React.FC<{
                           onExportJson={e => {
                             e.stopPropagation();
                             handleExportJson(item);
-                          }}
-                          onRunInAgent={e => {
-                            e.stopPropagation();
-                            handleRunInAgent(item);
                           }}
                           onCopyScript={e => {
                             e.stopPropagation();

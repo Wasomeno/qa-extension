@@ -18,7 +18,6 @@ import {
   Eye,
   EyeOff,
   FileText,
-  User,
   Terminal,
   Globe,
   Bug,
@@ -368,30 +367,6 @@ export const RecordingDetailPage: React.FC<RecordingDetailProps> = ({
               <p className="text-sm text-gray-700 bg-gray-50 p-3 rounded-md border border-gray-100">
                 {blueprint.description}
               </p>
-            </section>
-          )}
-
-          
-              {/* Source Type Indicator */}
-          {blueprint.source_type && (
-            <section className="space-y-2">
-              <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider">
-                Source
-              </h2>
-              {blueprint.source_type === 'test_scenario' ? (
-                <Badge variant="secondary" className="gap-1 bg-purple-50 text-purple-700 border-purple-200">
-                  <FileText className="w-3 h-3" />
-                  Generated from Test Scenario
-                  {blueprint.source_id && (
-                    <span className="text-[10px] opacity-70 ml-1">({blueprint.source_id.slice(0, 8)}...)</span>
-                  )}
-                </Badge>
-              ) : (
-                <Badge variant="secondary" className="gap-1 bg-blue-50 text-blue-700 border-blue-200">
-                  <User className="w-3 h-3" />
-                  Manual Recording
-                </Badge>
-              )}
             </section>
           )}
 

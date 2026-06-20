@@ -1,5 +1,5 @@
 import { motion, AnimatePresence } from 'framer-motion';
-import React, { useState, useCallback, useRef, useEffect } from 'react';
+import React, { useState, useCallback, useRef, useEffect, useLayoutEffect } from 'react';
 import {
   FileText,
   Play,
@@ -33,6 +33,7 @@ import { storageService } from '@/services/storage';
 import { useSelectedProject } from '@/contexts/selected-project-context';
 import { TestBlueprint } from '@/types/recording';
 import { MessageType } from '@/types/messages';
+import { getQaWebAppRecordingDetailUrl } from '@/utils/qa-web-app-url';
 import { isRestrictedUrl } from '@/utils/domain-matcher';
 import { ProjectSelect } from '@/components/project-select';
 
@@ -87,6 +88,23 @@ export const CompactRecordingsList: React.FC<CompactRecordingsListProps> = ({
     return undefined;
   }, [portalContainer, portalReady]);
 
+  // Render the project dropdown into a sibling portal of the popup wrapper so it
+  // is not clipped by the popup's rounded/overflow bounds, and keep it above the popup.
+  const [projectDropdownPortal, setProjectDropdownPortal] = useState<HTMLElement | null>(null);
+  useLayoutEffect(() => {
+    if (!containerRef.current) return;
+    const root = containerRef.current.getRootNode();
+    const target = root instanceof ShadowRoot ? root : document.body;
+    const el = document.createElement('div');
+    el.id = 'qa-project-dropdown-portal';
+    el.style.cssText = 'position: relative; z-index: 1000001; pointer-events: none;';
+    target.appendChild(el);
+    setProjectDropdownPortal(el);
+    return () => {
+      el.remove();
+    };
+  }, []);
+
   const queryClient = useQueryClient();
   const { selectedProjectId, setSelectedProject } = useSelectedProject();
 
@@ -100,7 +118,6 @@ export const CompactRecordingsList: React.FC<CompactRecordingsListProps> = ({
       const params: any = {
         sort_by: 'created_at',
         order: 'desc',
-        source_type: 'manual', // Filter to show only manual recordings in compact list
       };
 
       if (selectedProjectId) {
@@ -182,8 +199,8 @@ export const CompactRecordingsList: React.FC<CompactRecordingsListProps> = ({
       const blueprintToSave = {
         ...latestBlueprint,
         projectId:
-          selectedProjectId !== 'all'
-            ? parseInt(selectedProjectId)
+          selectedProjectId && selectedProjectId !== 'all'
+            ? selectedProjectId
             : latestBlueprint.projectId,
       };
 
@@ -227,6 +244,12 @@ export const CompactRecordingsList: React.FC<CompactRecordingsListProps> = ({
 
   const handleStartRecording = () => {
     setError(null);
+
+    if (!selectedProjectId || selectedProjectId === 'all') {
+      setError('Please select a project before starting a recording.');
+      return;
+    }
+
     chrome.runtime.sendMessage({ type: MessageType.CLOSE_MAIN_MENU });
 
     setTimeout(() => {
@@ -235,10 +258,7 @@ export const CompactRecordingsList: React.FC<CompactRecordingsListProps> = ({
           {
             type: MessageType.START_RECORDING,
             data: {
-              projectId:
-                selectedProjectId
-                  ? parseInt(selectedProjectId)
-                  : undefined,
+              projectId: selectedProjectId,
             },
           },
           response => {
@@ -341,7 +361,7 @@ export const CompactRecordingsList: React.FC<CompactRecordingsListProps> = ({
   return (
     <div
       ref={containerRef}
-      className="flex flex-col h-[380px] w-full bg-white"
+      className="flex flex-col h-[380px] w-full bg-white rounded-2xl overflow-hidden"
       onMouseDown={e => e.stopPropagation()}
       onMouseUp={e => e.stopPropagation()}
       onClick={e => e.stopPropagation()}
@@ -350,26 +370,32 @@ export const CompactRecordingsList: React.FC<CompactRecordingsListProps> = ({
     >
       <div className="px-4 py-3 border-b bg-gray-50/50 flex items-center justify-end gap-3 shrink-0">
         <div className="flex items-center gap-2 flex-1 justify-end min-w-0">
-          <ProjectSelect
-            value={selectedProjectId}
-            onSelect={project => {
-              setSelectedProject(project);
-            }}
-            mode="single"
-            portalContainer={getPortalContainer()}
-            placeholder="All Projects"
-            extraOptions={{ allProjects: true }}
-          />
+          <div className="flex-1 min-w-0">
+            <ProjectSelect
+              value={selectedProjectId}
+              onSelect={project => {
+                setSelectedProject(project);
+              }}
+              mode="single"
+              portalContainer={projectDropdownPortal || getPortalContainer()}
+              placeholder="All Projects"
+              extraOptions={{ allProjects: true }}
+              className="h-auto min-h-[32px] py-1.5"
+              triggerLabelClassName="whitespace-normal break-words"
+            />
+          </div>
 
           <Button
             variant="default"
             size="sm"
             onClick={handleStartRecording}
-            disabled={isPageRestricted}
+            disabled={isPageRestricted || !selectedProjectId}
             title={
               isPageRestricted
                 ? 'Browser internal pages cannot be recorded'
-                : 'Start recording'
+                : !selectedProjectId
+                  ? 'Select a project to start recording'
+                  : 'Start recording'
             }
             className="h-8 px-2.5 text-xs gap-1.5 border-none shrink-0 shadow-sm flex items-center disabled:opacity-50 disabled:cursor-not-allowed"
           >
@@ -523,9 +549,9 @@ export const CompactRecordingsList: React.FC<CompactRecordingsListProps> = ({
                 className="px-4 py-3 hover:bg-gray-50/80 transition-colors group cursor-pointer relative"
                 onClick={() => {
                   if (editingId === rec.id) return;
-                  const url = chrome.runtime.getURL(
-                    `recording-detail.html?id=${rec.id}`
-                  );
+                  const url =
+                    getQaWebAppRecordingDetailUrl(rec.id) ||
+                    chrome.runtime.getURL(`recording-detail.html?id=${rec.id}`);
                   chrome.runtime.sendMessage({
                     type: MessageType.OPEN_URL,
                     data: { url, active: true },
@@ -700,7 +726,7 @@ export const CompactRecordingsList: React.FC<CompactRecordingsListProps> = ({
                     }}
                     mode="single"
                     size="compact"
-                    portalContainer={getPortalContainer()}
+                    portalContainer={projectDropdownPortal || getPortalContainer()}
                     stopPropagation
                   />
                   </div>
