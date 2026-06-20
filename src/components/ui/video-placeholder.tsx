@@ -1,7 +1,7 @@
 import React from 'react';
 import { Video, ExternalLink, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { useVideoThumbnail } from '@/pages/agent/hooks/use-video-thumbnail';
+import { useVideoThumbnail } from '@/hooks/use-video-thumbnail';
 
 interface VideoPlaceholderProps {
   url: string;

@@ -1180,3 +1180,5 @@ html[dir='rtl'],
   color: rgba(11, 18, 32, 0.65);
   opacity: 1;
 }
+[data-sonner-toast] { pointer-events: auto !important; }
+[data-sonner-toast] { pointer-events: auto !important; }

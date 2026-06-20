@@ -26,7 +26,10 @@
         </div>
       `;
       document.getElementById('start-btn').onclick = () => {
-        sendToParent({ type: 'ACTUAL_START_RECORDING', data: { id: data.id } });
+        sendToParent({
+          type: 'ACTUAL_START_RECORDING',
+          data: { id: data.id, projectId: data.projectId },
+        });
         render('none');
       };
       document.getElementById('cancel-btn').onclick = () => sendToParent({ type: 'IFRAME_CLOSED_OVERLAY' });

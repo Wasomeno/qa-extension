@@ -47,6 +47,8 @@ export interface ProjectSelectProps {
   };
   /** Extra CSS classes for the trigger button. */
   className?: string;
+  /** Extra CSS classes for the trigger label text. */
+  triggerLabelClassName?: string;
   /** Placeholder shown when nothing is selected. */
   placeholder?: string;
   /** Whether to stop click propagation on the trigger. Useful inside clickable list items. */
@@ -75,6 +77,7 @@ export const ProjectSelect: React.FC<ProjectSelectProps> = ({
   portalContainer,
   extraOptions,
   className,
+  triggerLabelClassName,
   placeholder = 'Select a project...',
   stopPropagation,
   projectName,
@@ -389,7 +392,7 @@ export const ProjectSelect: React.FC<ProjectSelectProps> = ({
               <Loader2 className="w-3 h-3 animate-spin" />
             ) : (
               <>
-                <span className="truncate max-w-[120px]">{triggerLabel}</span>
+                <span className={cn('truncate max-w-[120px]', triggerLabelClassName)}>{triggerLabel}</span>
                 <ChevronsUpDown className="w-3 h-3 shrink-0 opacity-60" />
               </>
             )}
@@ -410,6 +413,7 @@ export const ProjectSelect: React.FC<ProjectSelectProps> = ({
             <span
               className={cn(
                 'truncate',
+                triggerLabelClassName,
                 triggerLabel && triggerLabel !== placeholder
                   ? 'text-gray-900'
                   : 'text-gray-500'

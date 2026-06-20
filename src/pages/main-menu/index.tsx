@@ -2,16 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import {
   List,
-  Pin,
   PlusCircle,
-  SquareKanban,
-  Home,
   FileText as FileIcon,
-  Wrench,
 } from 'lucide-react';
 import { useKeyboardIsolation } from '@/hooks/use-keyboard-isolation';
 import { useSessionUser } from '@/hooks/use-session-user';
-import { MessageType } from '@/types/messages';
 import {
   NavigationProvider,
   useNavigation,
@@ -20,17 +15,9 @@ import { ViewType } from '@/types/navigation';
 import { useSession } from '@/contexts/session-context';
 
 import { IssuesPage } from '@/pages/issues';
-import { BoardsPage } from '@/pages/boards';
-import { PinnedPage } from '@/pages/pinned';
 import { CreateIssuePage } from '@/pages/issues/create';
 import { ProfilePage } from '@/pages/profile';
-import { AgentPage } from '@/pages/agent';
-import { SessionsListPage } from '@/pages/agent/sessions-list';
-import { FixSessionsListPage } from '@/pages/agent/fix-sessions-list';
-import { ChatViewPage } from '@/pages/agent/chat-view-page';
 import { RecordingsPage } from '@/pages/recordings';
-import { TestScenariosPage } from '@/pages/test-scenarios';
-import { ScenarioDetail } from '@/pages/test-scenarios/components/scenario-detail';
 
 import {
   SidebarProvider,
@@ -59,27 +46,28 @@ interface MenuItem {
 }
 
 const MENU_ITEMS: MenuItem[] = [
-  { id: 'agent', label: 'Homepage', icon: Home },
-  { id: 'issues', label: 'Issues', icon: List },
-  { id: 'boards', label: 'Issue Boards', icon: SquareKanban },
-  { id: 'pinned', label: 'Pinned Issues', icon: Pin },
-  { id: 'fix-sessions', label: 'Fix Sessions', icon: Wrench },
   { id: 'recordings', label: 'Recordings', icon: FileIcon },
-  { id: 'test-scenarios', label: 'Test Scenarios', icon: FileIcon },
   { id: 'create-issue', label: 'Create Issue', icon: PlusCircle },
+  { id: 'issues', label: 'Find Issue', icon: List },
 ];
 
+const EXTENSION_VIEWS = new Set<ViewType>([
+  'recordings',
+  'create-issue',
+  'issues',
+  'issue-detail',
+  'profile',
+]);
+
+const DEFAULT_EXTENSION_VIEW: ViewType = 'recordings';
+
 const MainMenuPageInner: React.FC = () => {
-  const { current, reset, push, pop } = useNavigation();
+  const { current, reset } = useNavigation();
   const keyboardIsolation = useKeyboardIsolation();
   const [container, setContainer] = useState<HTMLDivElement | null>(null);
   const session = useSession();
   const hookUser = useSessionUser();
   const { user } = session || hookUser;
-
-  const handleNavigateToIssue = (issue: any) => {
-    push('issue-detail', issue);
-  };
 
   const renderContent = () => {
     switch (current.view) {
@@ -91,53 +79,14 @@ const MainMenuPageInner: React.FC = () => {
             portalContainer={container}
           />
         );
-      case 'boards':
-        return (
-          <BoardsPage
-            portalContainer={container}
-            onNavigateToIssue={handleNavigateToIssue}
-          />
-        );
-      case 'pinned':
-        return <PinnedPage portalContainer={container} />;
       case 'create-issue':
         return <CreateIssuePage portalContainer={container} />;
       case 'profile':
         return <ProfilePage portalContainer={container} />;
-      case 'agent':
-        return <AgentPage portalContainer={container} />;
-      case 'chat-sessions':
-        return <SessionsListPage />;
-      case 'chat-view':
-        return <ChatViewPage sessionId={current.params?.sessionId} />;
-      case 'fix-sessions':
-        return <FixSessionsListPage portalContainer={container} />;
       case 'recordings':
         return <RecordingsPage portalContainer={container} />;
-      case 'test-scenarios':
-        return <TestScenariosPage portalContainer={container} />;
-      case 'test-scenario-detail':
-        return (
-          <ScenarioDetail
-            scenario={current.params}
-            onClose={() => pop()}
-            onGenerate={(sheets) => {
-              
-            }}
-            onDelete={() => {
-              pop();
-            }}
-            onViewGeneratedId={(id) => {
-              const url = chrome.runtime.getURL(`recording-detail.html?id=${id}`);
-              chrome.runtime.sendMessage({
-                type: MessageType.OPEN_URL,
-                data: { url },
-              });
-            }}
-          />
-        );
       default:
-        return <AgentPage portalContainer={container} />;
+        return <RecordingsPage portalContainer={container} />;
     }
   };
 
@@ -283,7 +232,7 @@ const MainMenuPageInner: React.FC = () => {
 };
 
 const MainMenuPage: React.FC = () => {
-  const [initialView, setInitialView] = useState<ViewType>('agent');
+  const [initialView, setInitialView] = useState<ViewType>(DEFAULT_EXTENSION_VIEW);
   const [initialIssue, setInitialIssue] = useState<any>(null);
 
   useEffect(() => {
@@ -291,7 +240,7 @@ const MainMenuPage: React.FC = () => {
     const viewParam = params.get('initialView') as ViewType | null;
     const issueParam = params.get('initialIssue');
 
-    if (viewParam) {
+    if (viewParam && EXTENSION_VIEWS.has(viewParam)) {
       setInitialView(viewParam);
     }
 
