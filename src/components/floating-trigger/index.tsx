@@ -9,8 +9,6 @@ import LoginPopup from './components/login-popup';
 
 // Updated imports from new page structure
 import CompactIssueCreator from '@/pages/issues/create/components/compact-creator';
-import CompactIssueList from '@/pages/issues/components/compact-list';
-import CompactPinnedIssues from '@/pages/pinned/components/compact-list';
 import { CompactRecordingsList } from '@/pages/recordings/components/compact-list';
 import { MessageType } from '@/types/messages';
 import { useSessionUser } from '@/hooks/use-session-user';
@@ -22,6 +20,16 @@ interface FloatingTriggerProps {
   initialIsRecording?: boolean;
   initialRecordingId?: string;
 }
+
+type VideoEditGenerationStatus = {
+  status?: 'idle' | 'generating' | 'success' | 'error';
+  title?: string;
+  updatedAt?: number;
+};
+
+const VIDEO_EDIT_GENERATION_STATUS_KEY = 'videoEditGenerationStatus';
+const VIDEO_EDIT_GENERATION_STATUS_EVENT = 'qa-video-edit-generation-status';
+const VIDEO_EDIT_GENERATION_STALE_MS = 30 * 60 * 1000;
 
 // Create a single QueryClient instance for the floating trigger
 const queryClient = new QueryClient({
@@ -37,7 +45,6 @@ const queryClient = new QueryClient({
 });
 
 const FloatingTriggerInner: React.FC<FloatingTriggerProps> = ({
-  onClose,
   initialIsRecording = false,
   initialRecordingId = null,
 }) => {
@@ -47,7 +54,7 @@ const FloatingTriggerInner: React.FC<FloatingTriggerProps> = ({
   const isLoading = sessionUser?.loading || hookUser?.loading || false;
 
   const [activeFeature, setActiveFeature] = useState<
-    'issue' | 'issues' | 'pinned' | 'menu' | 'login' | 'record' | 'start-recording' | null
+    'issue' | 'menu' | 'login' | 'record' | 'start-recording' | null
   >(null);
   const [isHovered, setIsHovered] = useState(false);
   const [popupPosition, setPopupPosition] = useState<{
@@ -71,6 +78,100 @@ const FloatingTriggerInner: React.FC<FloatingTriggerProps> = ({
   );
 
   const [isStopping, setIsStopping] = useState(false);
+  const [videoEditGeneration, setVideoEditGeneration] =
+    useState<VideoEditGenerationStatus | null>(null);
+  const videoEditTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const clearVideoEditTimeout = () => {
+    if (videoEditTimeoutRef.current) {
+      clearTimeout(videoEditTimeoutRef.current);
+      videoEditTimeoutRef.current = null;
+    }
+  };
+
+  useEffect(() => {
+    let mounted = true;
+
+    const applyStatus = (status?: VideoEditGenerationStatus | null) => {
+      if (!mounted) return;
+
+      clearVideoEditTimeout();
+
+      const isFresh =
+        !status?.updatedAt ||
+        Date.now() - status.updatedAt < VIDEO_EDIT_GENERATION_STALE_MS;
+
+      // Always set the state if fresh (for all statuses)
+      if (!status || !isFresh) {
+        setVideoEditGeneration(null);
+        return;
+      }
+
+      setVideoEditGeneration(status);
+
+      if (status.status === 'generating') {
+        setActiveFeature(null);
+        setPopupPosition(null);
+        setIsHovered(false);
+        setHiddenReason(null);
+      } else if (status.status === 'success' || status.status === 'error') {
+        // Auto-dismiss success/error after 5 seconds
+        videoEditTimeoutRef.current = setTimeout(() => {
+          if (mounted) {
+            setVideoEditGeneration(null);
+            // Also clear from storage so it doesn't reappear on next page load
+            chrome.storage.local.remove(VIDEO_EDIT_GENERATION_STATUS_KEY).catch(() => {});
+          }
+        }, 5000);
+      }
+    };
+
+    // On initial load, only 'generating' status should survive page refresh.
+    // Success/error are ephemeral — they were shown and should not reappear
+    // after a full page reload. Only real-time events (storage change, CustomEvent)
+    // will show them.
+    chrome.storage.local
+      .get([VIDEO_EDIT_GENERATION_STATUS_KEY])
+      .then(result => {
+        const stored = result[VIDEO_EDIT_GENERATION_STATUS_KEY];
+        if (stored && stored.status !== 'generating') {
+          // Ignore stale success/error on initial load
+          setVideoEditGeneration(null);
+        } else {
+          applyStatus(stored);
+        }
+      })
+      .catch(() => {});
+
+    const handleStorageChange = (
+      changes: { [key: string]: chrome.storage.StorageChange },
+      areaName: string
+    ) => {
+      if (areaName !== 'local') return;
+      if (changes[VIDEO_EDIT_GENERATION_STATUS_KEY]) {
+        applyStatus(changes[VIDEO_EDIT_GENERATION_STATUS_KEY].newValue);
+      }
+    };
+
+    const handleGenerationEvent = (event: Event) => {
+      applyStatus((event as CustomEvent<VideoEditGenerationStatus>).detail);
+    };
+
+    chrome.storage.onChanged.addListener(handleStorageChange);
+    window.addEventListener(
+      VIDEO_EDIT_GENERATION_STATUS_EVENT,
+      handleGenerationEvent as EventListener
+    );
+
+    return () => {
+      mounted = false;
+      chrome.storage.onChanged.removeListener(handleStorageChange);
+      window.removeEventListener(
+        VIDEO_EDIT_GENERATION_STATUS_EVENT,
+        handleGenerationEvent as EventListener
+      );
+    };
+  }, []);
 
   useEffect(() => {
     // Initial check (backup for the prop)
@@ -155,11 +256,12 @@ const FloatingTriggerInner: React.FC<FloatingTriggerProps> = ({
   const getCapsulePosition = useCallback(() => {
     const bottomGap = 24; // 24px from bottom
     return {
+      x: window.innerWidth / 2,
       y: window.innerHeight - bottomGap,
     };
   }, []);
 
-  const restingWidth = isRecording ? 220 : isLoading ? 40 : isSessionExists ? 100 : 40;
+  const isVideoSubmitProcessing = videoEditGeneration?.status === 'generating';
 
   useEffect(() => {
     const handleVisibilityEvent = (event: Event) => {
@@ -196,7 +298,7 @@ const FloatingTriggerInner: React.FC<FloatingTriggerProps> = ({
 
   // Handle action click - calculate popup position above the capsule
   const handleActionClick = (
-    action: 'issue' | 'issues' | 'pinned' | 'menu' | 'login' | 'record' | 'start-recording',
+    action: 'issue' | 'menu' | 'login' | 'record' | 'start-recording',
     iconRect: DOMRect,
     capsuleRect: DOMRect
   ) => {
@@ -255,24 +357,8 @@ const FloatingTriggerInner: React.FC<FloatingTriggerProps> = ({
     });
   };
 
-  const handleIssueSelect = (issue: any) => {
-    handleOpenMainMenu({ initialView: 'issues', initialIssue: issue });
-  };
-
   const handleGoToCreateIssue = () => {
     handleOpenMainMenu({ initialView: 'create-issue' });
-  };
-
-  const handleGoToIssues = () => {
-    handleOpenMainMenu({ initialView: 'issues' });
-  };
-
-  const handleGoToPinned = () => {
-    handleOpenMainMenu({ initialView: 'pinned' });
-  };
-
-  const handleGoToRecordings = () => {
-    handleOpenMainMenu({ initialView: 'recordings' });
   };
 
   const handleStopRecording = () => {
@@ -295,24 +381,6 @@ const FloatingTriggerInner: React.FC<FloatingTriggerProps> = ({
             portalContainer={popupContainer}
           />
         );
-      case 'issues':
-        return (
-          <CompactIssueList
-            onClose={handleClose}
-            onGoToMain={handleGoToIssues}
-            onSelect={handleIssueSelect}
-            portalContainer={popupContainer}
-          />
-        );
-      case 'pinned':
-        return (
-          <CompactPinnedIssues
-            onClose={handleClose}
-            onGoToMain={handleGoToPinned}
-            onSelect={handleIssueSelect}
-            portalContainer={popupContainer}
-          />
-        );
       case 'login':
         return (
           <LoginPopup
@@ -324,7 +392,6 @@ const FloatingTriggerInner: React.FC<FloatingTriggerProps> = ({
         return (
           <CompactRecordingsList
             onClose={handleClose}
-            onGoToMain={handleGoToRecordings}
             onViewAll={handleViewAllRecordings}
             portalContainer={popupContainer}
           />
@@ -352,6 +419,9 @@ const FloatingTriggerInner: React.FC<FloatingTriggerProps> = ({
         recordingStartTime={recordingStartTime}
         onStopRecording={handleStopRecording}
         isStopping={isStopping}
+        isVideoSubmitProcessing={isVideoSubmitProcessing}
+        videoSubmitTitle={videoEditGeneration?.title}
+        videoEditStatus={videoEditGeneration?.status === 'success' || videoEditGeneration?.status === 'error' ? videoEditGeneration?.status : undefined}
       />
 
       {activeFeature && activeFeature !== 'menu' && popupPosition && (
@@ -360,7 +430,7 @@ const FloatingTriggerInner: React.FC<FloatingTriggerProps> = ({
           onClose={handleClose}
           containerRef={{ current: popupContainer } as any}
           onContainerRef={el => setPopupContainer(el)}
-          width={360}
+          width={activeFeature === 'record' ? 420 : 360}
         >
           {renderPopupContent()}
         </PopupWrapper>

@@ -69,7 +69,7 @@ const PopupWrapper: React.FC<PopupWrapperProps> = ({
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.92, y: 12 }}
         transition={{ type: 'spring', stiffness: 400, damping: 25, mass: 0.9 }}
-        className="fixed bg-white rounded-2xl overflow-hidden shadow-2xl border border-gray-200 pointer-events-auto"
+        className="fixed bg-white rounded-2xl overflow-visible shadow-2xl border border-gray-200 pointer-events-auto"
         style={{
           left: position.x,
           bottom: window.innerHeight - position.y,
